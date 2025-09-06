@@ -114,6 +114,8 @@ export class WormholeScene extends KolownScene {
       this.scene = this.babylonEngine.getScene();
       console.log("Babylon engine and scene initialized", this.scene);
 
+  // Initialize camera
+
       // Initialize camera
       this.sceneCamera = new SceneCamera(this.scene, this.canvas);
       // DON'T enable torus mode - we want a free camera that will be controlled by the drone
@@ -316,6 +318,9 @@ export class WormholeScene extends KolownScene {
 
           const cam = this.scene.activeCamera;
           if (!cam) { this.cameraCoverDiv.style.display = 'none'; return; }
+
+          // prune obstacles that passed behind the active camera
+          try { if (this.obstacleManager) this.obstacleManager.prunePassed(cam, 0.6); } catch (e) { /* ignore */ }
 
           const camPos = cam.position;
           let covered = false;

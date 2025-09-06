@@ -7,6 +7,7 @@ export interface KeyboardDebugOptions {
   toggleFlightCamera?: () => void;
   clearScene?: () => void;
   spawnTransient?: () => void;
+  toggleHud?: () => void;
 }
 
 export function installKeyboardDebug(opts: KeyboardDebugOptions) {
@@ -15,6 +16,8 @@ export function installKeyboardDebug(opts: KeyboardDebugOptions) {
       const k = ev.key;
       if (k === 'i') {
         opts.toggleInspector?.();
+      } else if (k === 'h') {
+        opts.toggleHud?.();
       } else if (k === 'o') {
         opts.toggleExit?.();
       } else if (k === 'v') {

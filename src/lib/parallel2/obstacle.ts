@@ -30,7 +30,8 @@ export function addStaticCube(scene: BABYLON.Scene, position: BABYLON.Vector3, s
   box.metadata = { obstacle: true, spawnTime: Date.now() };
 
   try { box.setAbsolutePosition(position); } catch { box.position.copyFrom(position); }
-  try { box.freezeWorldMatrix(); } catch { /* ignore */ }
+  // Do not freeze the world matrix so we can reposition/reuse/dispose reliably later
+  // try { box.freezeWorldMatrix(); } catch { /* ignore */ }
 
   console.log('[Obstacle] created visible cube', id, 'at pos', [position.x.toFixed(2), position.y.toFixed(2), position.z.toFixed(2)], 'size', size);
   return box;
@@ -137,11 +138,13 @@ export class ObstacleManager {
   private created: BABYLON.Mesh[] = [];
   private R: number;
   private r: number;
+  private maxActive: number;
 
   constructor(scene: BABYLON.Scene, opts?: ObstacleManagerOptions) {
     this.scene = scene;
     this.R = opts?.R ?? 100;
     this.r = opts?.r ?? 23;
+    this.maxActive = opts?.maxActive ?? 60; // reuse pool size, Subway-Surfers style
     // legacy options are accepted but this simple manager ignores them
   }
 
@@ -149,6 +152,23 @@ export class ObstacleManager {
     const size = opts?.size ?? 0.25;
     const distance = opts?.distance ?? 2;
     // withPhysics is accepted for compatibility but ignored
+    // If we reached pool capacity, reuse the oldest obstacle instead of creating a new one
+    if (this.created.length >= this.maxActive) {
+      const oldest = this.created.shift();
+      if (oldest) {
+        try {
+          // reposition and refresh metadata
+          try { oldest.setAbsolutePosition(camera.position.add(camera.getForwardRay(1).direction.normalize().scale(distance))); } catch { /* ignore */ }
+          oldest.metadata = { obstacle: true, spawnTime: Date.now() };
+          oldest.isVisible = true;
+          // If caller asked for debug, create a temporary debug marker but don't create another obstacle
+          if (opts?.debug) spawnDebugMarker(this.scene, oldest.position, Math.max(0.5, size * 4));
+        } catch (e) { /* ignore reposition errors */ }
+        this.created.push(oldest);
+        return oldest;
+      }
+    }
+
     const m = spawnStaticInFrontOf(camera, this.scene, distance, size, { R: this.R, r: this.r, debug: opts?.debug });
     this.created.push(m);
     return m;
@@ -161,10 +181,91 @@ export class ObstacleManager {
     return m;
   }
 
+  /** Reposition a mesh to a torus UVR safely (used for pooling/reuse) */
+  public repositionToUVR(mesh: BABYLON.Mesh, u: number, v: number, rho: number) {
+    try {
+      const pos = torusToWorld(u, v, rho, this.R, this.r);
+      try { mesh.setAbsolutePosition(pos); } catch { mesh.position.copyFrom(pos); }
+      mesh.metadata = { obstacle: true, spawnTime: Date.now() };
+      mesh.isVisible = true;
+    } catch (e) { /* ignore reposition errors */ }
+  }
+
+  private ensureRemovedFromScene(mesh: BABYLON.Mesh) {
+    try {
+      const sc = mesh.getScene ? mesh.getScene() : this.scene;
+      if (sc && sc.removeMesh) {
+        try { sc.removeMesh(mesh, true); } catch { /* ignore */ }
+      }
+    } catch { /* ignore */ }
+  }
+
   public disposeAll() {
     for (const m of this.created) {
       try { m.dispose(); } catch { /* ignore */ }
     }
     this.created = [];
   }
+
+  /**
+   * Dispose obstacles that have passed behind the given camera.
+   * An obstacle is considered "passed" when it's behind the camera (dot < 0)
+   * and at least `minDistance` away from the camera to avoid disposing very near objects.
+   */
+  /**
+   * Prune obstacles that have passed the camera, are too old, or too far away.
+   * - camera: active camera used to determine "behind"
+   * - minDistance: ignore disposal if very close to camera
+   * - maxAgeSec: dispose obstacles older than this (seconds)
+   * - maxDistance: dispose obstacles farther than this from camera
+   */
+  public prunePassed(camera: BABYLON.Camera, minDistance = 0.5, maxAgeSec = 12, maxDistance = 200) {
+    try {
+      if (!camera) return;
+      const forward = camera.getForwardRay(1).direction.clone();
+      try { forward.normalize(); } catch (e) { /* ignore */ }
+      const camPos = camera.position;
+      const survivors: BABYLON.Mesh[] = [];
+
+      for (const m of this.created) {
+        try {
+          if (!m) continue;
+          // if mesh disposed already skip it
+          // @ts-ignore some versions have isDisposed
+          if ((m as any).isDisposed && (m as any).isDisposed()) continue;
+
+          const toObs = m.position.subtract(camPos);
+          const dist = toObs.length();
+          const dirTo = toObs.normalize();
+          const dot = BABYLON.Vector3.Dot(forward, dirTo);
+
+          // Age-based pruning (if metadata.spawnTime exists)
+          const spawnTime = m.metadata?.spawnTime as number | undefined;
+          const ageMs = spawnTime ? (Date.now() - spawnTime) : 0;
+          const tooOld = spawnTime ? (ageMs > (maxAgeSec * 1000)) : false;
+          const tooFar = dist > maxDistance;
+
+          // dispose if it's behind the camera (and not extremely close), or it's too old, or too far
+          if ((dot < 0 && dist > minDistance) || tooOld || tooFar) {
+            try {
+              // Ensure mesh is removed from the scene collection first
+              try { if (m.getScene) { const sc = m.getScene(); if (sc && sc.removeMesh) try { sc.removeMesh(m, true); } catch {} } } catch (e) {}
+              m.dispose();
+              // console.log('[Obstacle] disposed mesh', m.name || m.id);
+            } catch (e) { /* ignore */ }
+          } else {
+            survivors.push(m);
+          }
+        } catch (e) {
+          // on error keep the mesh to avoid accidental disposals
+          survivors.push(m);
+        }
+      }
+
+      this.created = survivors;
+    } catch (e) {
+      // swallow errors to keep runtime stable
+    }
+  }
 }
+

@@ -3,23 +3,8 @@ import { Scene } from '@babylonjs/core';
 import { Inspector } from '@babylonjs/inspector';
 
 export function setupDebugUI(scene: Scene, canvas: HTMLCanvasElement) {
-  // Try to show the embedded inspector and create a small HUD. Non-fatal if DOM not available.
-  try {
-    (Inspector as any)?.Show?.(scene, { embedMode: true });
-    // Diagnostic check for inspector DOM nodes; fallback to debugLayer if not present.
-    setTimeout(() => {
-      try {
-        const nodes = Array.from(document.querySelectorAll('[id*="inspector"], [class*="inspector"], [id*="Inspector"], [class*="Inspector"]')) as Element[];
-        if (nodes.length === 0) {
-          try { scene.debugLayer.show(); } catch (e) { /* ignore */ }
-        }
-      } catch (e) {
-        // ignore
-      }
-    }, 400);
-  } catch (e) {
-    // ignore if Inspector not available in this environment
-  }
+  // Do not auto-show the inspector or debugLayer here.
+  // The inspector will be toggled explicitly via the keyboard ('i') which calls `toggleInspector`.
 
   // Create or update a tiny HUD to show which camera is active
   try {
@@ -38,6 +23,8 @@ export function setupDebugUI(scene: Scene, canvas: HTMLCanvasElement) {
       hud.style.zIndex = '9999';
       hud.style.borderRadius = '4px';
       hud.innerText = `Active camera: ${scene.activeCamera ? (scene.activeCamera as any).name : 'none'}`;
+      // start hidden; user toggles HUD with 'h'
+      hud.style.display = 'none';
       document.body.appendChild(hud);
     }
   } catch (e) {
@@ -50,6 +37,30 @@ export function setupDebugUI(scene: Scene, canvas: HTMLCanvasElement) {
       try { (Inspector as any)?.Hide?.(scene); } catch (e) { /* ignore */ }
     }
   };
+}
+
+export function toggleHud() {
+  try {
+    let hud = document.getElementById('camera-hud');
+    // if HUD doesn't exist (e.g., setupDebugUI wasn't called), create a minimal one
+    if (!hud) {
+      hud = document.createElement('div');
+      hud.id = 'camera-hud';
+      hud.style.position = 'fixed';
+      hud.style.left = '8px';
+      hud.style.top = '8px';
+      hud.style.padding = '6px 10px';
+      hud.style.background = 'rgba(0,0,0,0.5)';
+      hud.style.color = 'white';
+      hud.style.fontFamily = 'monospace';
+      hud.style.fontSize = '12px';
+      hud.style.zIndex = '9999';
+      hud.style.borderRadius = '4px';
+      hud.innerText = 'Active camera: none';
+      document.body.appendChild(hud);
+    }
+    hud.style.display = hud.style.display === 'none' ? 'block' : 'none';
+  } catch (e) { /* ignore */ }
 }
 
 export function toggleInspector(scene: Scene) {

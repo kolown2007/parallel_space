@@ -75,8 +75,8 @@ export class Drone {
         const realUp = BABYLON.Vector3.Cross(right, forward).normalize();
 
         // Position camera behind and above the drone (video game style)
-        const cameraDistance = 8; // distance behind drone
-        const cameraHeight = 3;   // height above drone
+        const cameraDistance = 5; // distance behind drone
+        const cameraHeight = -1;   // height above drone
 
         const cameraPos = dronePos
           .subtract(forward.scale(cameraDistance))  // behind the drone
@@ -95,7 +95,7 @@ export class Drone {
         } catch (e) { /* ignore frame errors */ }
 
         // Look ahead along forward direction
-        const lookAheadDistance = 10;
+        const lookAheadDistance = 8;
         const lookTarget = dronePos.add(forward.scale(lookAheadDistance));
         if (this.camera && this.scene.activeCamera === this.camera) {
           if ((this.camera as BABYLON.FreeCamera).setTarget) {
