@@ -50,6 +50,12 @@ export class BallShooter {
             }, 
             this.scene
         );
+        // Ensure the mesh is considered for collisions by other impostors
+        try {
+            ball.checkCollisions = true;
+        } catch (e) {
+            // ignore if not supported
+        }
 
         // Apply shooting force
         ballPhysics.body.applyImpulse(
@@ -57,8 +63,11 @@ export class BallShooter {
             ball.getAbsolutePosition()
         );
 
-        // Add shadow casting
-        this.lighting.addShadowCaster(ball);
+    // Add shadow casting (no-op if shadows disabled)
+    this.lighting.addShadowCaster(ball);
+
+    // track ball for disposal
+    this.balls.push(ball);
 
         // shadowGenerator.addShadowCaster(ball);
     }
