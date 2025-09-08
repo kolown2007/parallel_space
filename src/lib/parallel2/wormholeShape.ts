@@ -1,5 +1,7 @@
 import * as BABYLON from '@babylonjs/core';
 import { Scene, Vector3, Mesh, StandardMaterial, Color3 } from '@babylonjs/core';
+import { createShaderMaterial, createStandardMaterial, createPBRMaterial, createTexture } from './materials/factories';
+import type { MaterialResult } from './materials/factories';
 
 // Import shader sources as raw text (Vite will inline these during dev/build)
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
@@ -32,6 +34,10 @@ export class WormholeShape {
   private scene: Scene;
   private torusMesh?: Mesh;
   private currentMaterial?: BABYLON.Material;
+  private currentMaterialDispose?: (() => void) | undefined;
+  // track currently-applied texture and its dispose callback
+  private currentTexture?: BABYLON.BaseTexture | undefined;
+  private currentTextureDispose?: (() => void) | undefined;
   private options: {
     diameter: number;
     thickness: number;
@@ -100,8 +106,8 @@ export class WormholeShape {
       this.torusMesh.checkCollisions = true; // allow physics collisions
       this.torusMesh.receiveShadows = false;
 
-      // Create material (shader or standard)
-      await this.createMaterial();
+  // Create material (shader or standard) only if none supplied externally
+  if (!this.currentMaterial) await this.createMaterial();
 
       // Setup physics impostor for collision detection
       this.setupPhysics();
@@ -116,148 +122,27 @@ export class WormholeShape {
   private async createMaterial(): Promise<void> {
     if (!this.torusMesh) return;
 
-    if (this.options.useCustomShader) {
-      await this.createShaderMaterial();
-    } else {
-      this.createStandardMaterial();
-    }
-  }
-
-  private async createShaderMaterial(): Promise<void> {
-    if (!this.torusMesh) return;
+    // Dispose previous material if any
+    try { if (this.currentMaterialDispose) { this.currentMaterialDispose(); this.currentMaterialDispose = undefined; } } catch (e) { /* ignore */ }
 
     try {
-      // Register imported shader strings (Vite inlines them via ?raw)
-      (BABYLON as any).Effect.ShadersStore = (BABYLON as any).Effect.ShadersStore || {};
-      (BABYLON as any).Effect.ShadersStore["torusVertexShader"] = vertexSrc as unknown as string;
-      (BABYLON as any).Effect.ShadersStore["torusFragmentShader"] = fragmentSrc as unknown as string;
-
-      const shaderMat = new (BABYLON as any).ShaderMaterial("wormholeShaderMat", this.scene, {
-        vertex: "torus",
-        fragment: "torus"
-      }, {
-        attributes: ["position", "normal", "uv"],
-        uniforms: ["worldViewProjection", "world", "cameraPosition", "iTime", "iResolution"],
-        samplers: ["uTexture"]
-      });
-      
-      shaderMat.backFaceCulling = false;
-      shaderMat.wireframe = this.options.material.wireframe;
-      
-      // Debug: log snippets of shader sources
-      console.log('wormhole vertex snippet:', (vertexSrc as string).slice(0, 300));
-      console.log('wormhole fragment snippet:', (fragmentSrc as string).slice(0, 300));
-
-      // Set initial resolution and camera position
-      const w = this.scene.getEngine().getRenderWidth();
-      const h = this.scene.getEngine().getRenderHeight();
-      const camera = this.scene.activeCamera;
-      
-      try {
-        const eff = (shaderMat as any).getEffect ? (shaderMat as any).getEffect() : null;
-        if (eff && eff.setFloat2) {
-          eff.setFloat2('iResolution', w, h);
-        } else if ((shaderMat as any).setVector2) {
-          (shaderMat as any).setVector2('iResolution', new (BABYLON as any).Vector2(w, h));
-        } else if ((shaderMat as any).setFloat) {
-          (shaderMat as any).setFloat('iResolution.x', w);
-          (shaderMat as any).setFloat('iResolution.y', h);
-        }
-        
-        // Set initial camera position
-        if (camera) {
-          (shaderMat as any).setVector3('cameraPosition', camera.position);
-        }
-        
-        // Set initial world matrix
-        if (this.torusMesh) {
-          (shaderMat as any).setMatrix('world', this.torusMesh.getWorldMatrix());
-        }
-      } catch (e) {
-        // ignore initial uniform set failures
-      }
-
-      // Setup shader observables
-      if ((shaderMat as any).onCompiledObservable) {
-        (shaderMat as any).onCompiledObservable.add(() => console.log('wormhole shader compiled'));
-      }
-      if ((shaderMat as any).onCompilationErrorObservable) {
-        (shaderMat as any).onCompilationErrorObservable.add((err: any) => console.error('wormhole shader compile error', err));
-      }
-
-      // Update time uniform every frame for subtle animation
-      this.scene.onBeforeRenderObservable.add(() => {
-        try {
-          const t = performance.now() / 1000;
-          shaderMat.setFloat('iTime', t);
-          
-          // Update camera position for fresnel calculations
-          const camera = this.scene.activeCamera;
-          if (camera) {
-            shaderMat.setVector3('cameraPosition', camera.position);
-          }
-          
-          // Update world matrix
-          if (this.torusMesh) {
-            shaderMat.setMatrix('world', this.torusMesh.getWorldMatrix());
-          }
-        } catch (e) {
-          // ignore shader update failures
-        }
-      });
-
-      // Handle resolution updates
-      const setResolution = () => {
-        try {
-          const w = this.scene.getEngine().getRenderWidth();
-          const h = this.scene.getEngine().getRenderHeight();
-          if ((shaderMat as any).setVector2) {
-            (shaderMat as any).setVector2('iResolution', new (BABYLON as any).Vector2(w, h));
-          } else if ((shaderMat as any).setFloat) {
-            (shaderMat as any).setFloat('iResolution.x', w);
-            (shaderMat as any).setFloat('iResolution.y', h);
-          }
-        } catch (e) {
-          // ignore
-        }
-      };
-
-      if ((shaderMat as any).onCompiledObservable) {
-        (shaderMat as any).onCompiledObservable.add(() => setResolution());
+      if (this.options.useCustomShader) {
+        const res = await createShaderMaterial(this.scene, this.torusMesh, { vertex: vertexSrc as string, fragment: fragmentSrc as string }, { wireframe: this.options.material.wireframe });
+        this.currentMaterial = res.material;
+        this.currentMaterialDispose = res.dispose;
       } else {
-        setResolution();
+        const res = await createStandardMaterial(this.scene, { diffuse: this.options.material.diffuseColor, emissive: this.options.material.emissiveColor, wireframe: this.options.material.wireframe, alpha: this.options.material.alpha });
+        this.currentMaterial = res.material;
+        this.currentMaterialDispose = res.dispose;
       }
-
-      window.addEventListener('resize', setResolution);
-
-      // Load metal texture for sectional details
-      const metalTexture = new BABYLON.Texture('/metal.jpg', this.scene);
-      metalTexture.wrapU = BABYLON.Texture.WRAP_ADDRESSMODE;
-      metalTexture.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE;
-      shaderMat.setTexture('uTexture', metalTexture);
-
-      this.currentMaterial = shaderMat;
-      this.torusMesh.material = shaderMat;
-
+      if (this.torusMesh && this.currentMaterial) this.torusMesh.material = this.currentMaterial;
     } catch (e) {
-      console.warn("Failed to create shader material, falling back to standard material:", e);
-      this.createStandardMaterial();
+      console.warn('Failed to create material, falling back to a basic StandardMaterial', e);
+      const res = await createStandardMaterial(this.scene, { diffuse: this.options.material.diffuseColor, emissive: this.options.material.emissiveColor, wireframe: this.options.material.wireframe, alpha: this.options.material.alpha });
+      this.currentMaterial = res.material;
+      this.currentMaterialDispose = res.dispose;
+      if (this.torusMesh && this.currentMaterial) this.torusMesh.material = this.currentMaterial;
     }
-  }
-
-  private createStandardMaterial(): void {
-    if (!this.torusMesh) return;
-
-    const material = new StandardMaterial("wormholeStandardMat", this.scene);
-    material.diffuseColor = this.options.material.diffuseColor;
-    material.emissiveColor = this.options.material.emissiveColor;
-    material.wireframe = this.options.material.wireframe;
-    material.alpha = this.options.material.alpha;
-    material.specularColor = new Color3(0.5, 0.8, 1.0);
-    material.specularPower = 16;
-
-    this.currentMaterial = material;
-    this.torusMesh.material = material;
   }
 
   private createNoiseTexture(): BABYLON.Texture | null {
@@ -361,6 +246,116 @@ export class WormholeShape {
     }
   }
 
+  /** Apply an externally created material to the mesh. Dispose callback will be stored and called when replaced. */
+  public applyMaterial(material: BABYLON.Material, disposeCallback?: () => void, takeOwnership: boolean = true): void {
+    try {
+      // If same material, noop
+      if (this.currentMaterial === material) return;
+      // dispose previous
+      try { if (this.currentMaterialDispose) { this.currentMaterialDispose(); this.currentMaterialDispose = undefined; } } catch (e) { /* ignore */ }
+      this.currentMaterial = material;
+      if (takeOwnership && disposeCallback) this.currentMaterialDispose = disposeCallback;
+      if (this.torusMesh) this.torusMesh.material = material;
+    } catch (e) {
+      console.warn('applyMaterial failed', e);
+    }
+  }
+
+  /**
+   * Layer a texture onto the currently applied material. Works with PBRMaterial, StandardMaterial and ShaderMaterial.
+   * - url: path to the texture (can be relative to /static)
+   * - options: asEmissive will set the texture as emissiveTexture instead of albedo/diffuse
+   */
+  public async applyTexture(url: string, options?: { asEmissive?: boolean; uScale?: number; vScale?: number; wrap?: boolean; forcePBR?: boolean }): Promise<void> {
+    try {
+      if (!this.torusMesh) return;
+      // ensure a material exists; await creation if necessary so we can reliably set textures
+      if (!this.currentMaterial) {
+        await this.createMaterial();
+      }
+
+      // dispose previous texture if any
+      try { if (this.currentTextureDispose) { this.currentTextureDispose(); this.currentTextureDispose = undefined; } } catch (e) { /* ignore */ }
+
+  console.log('WormholeShape: loading texture via factory', url);
+  const res = await createTexture(this.scene, url, { uScale: options?.uScale, vScale: options?.vScale, wrap: options?.wrap });
+  const tex = res.texture as BABYLON.BaseTexture;
+  // attach factory-provided dispose
+  const texDispose = res.dispose;
+      if (typeof options?.uScale === 'number') (tex as any).uScale = options!.uScale;
+      if (typeof options?.vScale === 'number') (tex as any).vScale = options!.vScale;
+      if (options?.wrap === false) {
+        try { tex.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE; tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE; } catch (e) { /* ignore */ }
+      } else {
+        try { tex.wrapU = BABYLON.Texture.WRAP_ADDRESSMODE; tex.wrapV = BABYLON.Texture.WRAP_ADDRESSMODE; } catch (e) { /* ignore */ }
+      }
+
+      // Apply depending on material type
+      try {
+        const PBR = (BABYLON as any).PBRMaterial as typeof BABYLON.PBRMaterial | undefined;
+        const ShaderMaterial = (BABYLON as any).ShaderMaterial as any;
+        // If shader material is active and caller requested forcePBR, create and switch to PBR first
+        if (options?.forcePBR && ShaderMaterial && this.currentMaterial instanceof ShaderMaterial) {
+          console.log('WormholeShape: forcing PBR material because shader may not show texture');
+          try {
+            const res = await createPBRMaterial(this.scene, { albedo: new BABYLON.Color3(0.1,0.1,0.1) });
+            this.applyMaterial(res.material, res.dispose, true);
+          } catch (e) { console.warn('WormholeShape: failed to create fallback PBR', e); }
+        }
+        if (PBR && this.currentMaterial instanceof PBR) {
+          const pbr = this.currentMaterial as unknown as any;
+          if (options?.asEmissive) pbr.emissiveTexture = tex; else pbr.albedoTexture = tex;
+        } else if (this.currentMaterial instanceof BABYLON.StandardMaterial) {
+          const std = this.currentMaterial as BABYLON.StandardMaterial;
+          if (options?.asEmissive) (std as any).emissiveTexture = tex; else std.diffuseTexture = tex;
+        } else if (ShaderMaterial && this.currentMaterial instanceof ShaderMaterial) {
+          try { (this.currentMaterial as any).setTexture('uTexture', tex); } catch (e) { /* ignore */ }
+        } else {
+          // fallback: try to set a diffuse/albedo property if present
+          try { (this.currentMaterial as any).albedoTexture = tex; } catch (e) { try { (this.currentMaterial as any).diffuseTexture = tex; } catch (e) { /* ignore */ } }
+        }
+      } catch (e) {
+        console.warn('Failed to assign texture to material', e);
+      }
+
+  this.currentTexture = tex as any;
+  this.currentTextureDispose = () => { try { texDispose && texDispose(); } catch (e) { /* ignore */ } };
+    } catch (e) {
+      console.warn('applyTexture failed', e);
+    }
+  }
+
+  public removeTexture(): void {
+    try {
+      if (!this.currentMaterial) return;
+      // clear texture references depending on material
+      const PBR = (BABYLON as any).PBRMaterial as typeof BABYLON.PBRMaterial | undefined;
+      const ShaderMaterial = (BABYLON as any).ShaderMaterial as any;
+      try {
+        if (PBR && this.currentMaterial instanceof PBR) {
+          const pbr = this.currentMaterial as unknown as any;
+          try { pbr.albedoTexture && pbr.albedoTexture.dispose(); } catch {}
+          try { pbr.emissiveTexture && pbr.emissiveTexture.dispose(); } catch {}
+          pbr.albedoTexture = null;
+          pbr.emissiveTexture = null;
+        } else if (this.currentMaterial instanceof BABYLON.StandardMaterial) {
+          const std = this.currentMaterial as BABYLON.StandardMaterial;
+          try { std.diffuseTexture && (std.diffuseTexture as any).dispose(); } catch {}
+          try { (std as any).emissiveTexture && (std as any).emissiveTexture.dispose(); } catch {}
+          std.diffuseTexture = null as any;
+          (std as any).emissiveTexture = null;
+        } else if (ShaderMaterial && this.currentMaterial instanceof ShaderMaterial) {
+          try { (this.currentMaterial as any).setTexture('uTexture', null); } catch (e) { /* ignore */ }
+        }
+      } catch (e) { /* ignore */ }
+
+      try { if (this.currentTextureDispose) { this.currentTextureDispose(); this.currentTextureDispose = undefined; } } catch (e) { /* ignore */ }
+      this.currentTexture = undefined;
+    } catch (e) {
+      /* swallow */
+    }
+  }
+
   public toggleWireframe(): void {
     this.setWireframe(!this.options.material.wireframe);
   }
@@ -404,5 +399,6 @@ export class WormholeShape {
       this.torusMesh.dispose();
       this.torusMesh = undefined;
     }
+  try { if (this.currentMaterialDispose) { this.currentMaterialDispose(); this.currentMaterialDispose = undefined; } } catch (e) { /* ignore */ }
   }
 }

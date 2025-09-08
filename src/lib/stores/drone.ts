@@ -1,16 +1,18 @@
 import { writable, get, type Unsubscriber } from 'svelte/store';
 
-// Drone speed store: keep a small number (world units per tick basis used by Drone)
-export const droneSpeed = writable<number>(0.01);
+// Drone speed store: three-step cycle (0 = stopped, very slow, faster)
+// Default is 0 (stopped)
+export const droneSpeed = writable<number>(0);
 
 export const setDroneSpeed = (s: number) => droneSpeed.set(s);
 export const getDroneSpeed = () => get(droneSpeed);
 export const toggleDroneSpeed = () => droneSpeed.update(s => {
-  // cycle typical values
-  if (s <= 0.005) return 0.01;
-  if (s <= 0.01) return 0.015;
-  if (s <= 0.015) return 0.02;
-  return 0.005;
+  // 3-step cycle: 0 (stopped) -> very slow -> medium slow -> back to 0
+  const verySlow = 0.00001; // matches Drone instance very slow default
+  const mediumSlow = 0.0005; // medium-slow speed
+  if (s === 0) return verySlow;
+  if (Math.abs(s - verySlow) < 1e-12) return mediumSlow;
+  return 0;
 });
 
 export function subscribeDroneSpeed(cb: (s: number) => void): Unsubscriber {

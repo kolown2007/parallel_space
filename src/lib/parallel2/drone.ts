@@ -14,7 +14,7 @@ export class Drone {
   private angle: number = 0; // current angle around torus major circle
   private height: number = 0; // height within tube (v parameter)
   private radius: number = 0; // distance from tube center (rho parameter)
-  private speed: number = 0.0005; // much slower rotation speed around torus
+  private speed: number = 0.00001; // very slow rotation speed around torus (reduced)
   private isActive: boolean = false;
   private pathLine?: BABYLON.Mesh; // reference to the green path visualization
   // manual offset applied by brief user input (WASD nudges)

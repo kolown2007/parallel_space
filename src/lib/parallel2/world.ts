@@ -1,6 +1,8 @@
 import * as BABYLON from "@babylonjs/core";
 import { WormholeShape } from './wormholeShape';
 import type { WormholeShapeOptions } from './wormholeShape';
+import { materialManager } from './materials/MaterialManager';
+import { createPBRMaterial } from './materials/factories';
 
 export interface WorldOptions {
   disableShadows?: boolean;
@@ -40,6 +42,20 @@ export class World {
         if (this.wormholeShape) {
             await this.wormholeShape.initialize();
             console.log("WormholeShape initialized");
+            try {
+                // Create a PBR material directly with the correct scene and apply it to the wormhole.
+                // This avoids the MaterialManager using a global fallback scene reference.
+                const res = await createPBRMaterial(this.scene, {
+                    albedo: new BABYLON.Color3(0.02, 0.02, 0.04),
+                    emissive: new BABYLON.Color3(0.01, 0.01, 0.03),
+                    alpha: 1.0
+                });
+                const mat = res.material;
+                const dispose = res.dispose;
+                this.wormholeShape.applyMaterial(mat, () => { try { dispose && dispose(); } catch (e) { /* ignore */ } });
+            } catch (e) {
+                console.warn('Failed to create or apply PBR material', e);
+            }
         }
 
         // Setup additional features

@@ -10,19 +10,20 @@ function torusToWorld(u: number, v: number, rho: number, R: number, r: number) {
   return new BABYLON.Vector3((R + rho * cv) * cu, rho * sv, (R + rho * cv) * su);
 }
 
-export function addStaticCube(scene: BABYLON.Scene, position: BABYLON.Vector3, size = 0.25) {
+export function addStaticCube(scene: BABYLON.Scene, position: BABYLON.Vector3, size = 0.25, colorOpts?: { emissive?: BABYLON.Color3; diffuse?: BABYLON.Color3; disableLighting?: boolean; wireframe?: boolean }) {
   const id = `cube_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
   // Create a rectangular box that's taller than it is wide so obstacles are more visible
   const height = Math.max(size * 2.0, 0.5);
   const box = BABYLON.MeshBuilder.CreateBox(id, { width: size, depth: size, height }, scene);
 
-  // Make obstacle very visible - bright red/orange cube
+  // Make obstacle visible; allow caller to override emissive/diffuse
   const mat = new BABYLON.StandardMaterial(`${id}_mat`, scene);
-  mat.emissiveColor = new BABYLON.Color3(1.0, 0.3, 0.0); // bright orange-red
-  mat.diffuseColor = new BABYLON.Color3(0.8, 0.2, 0.0);
+  mat.emissiveColor = colorOpts?.emissive ?? new BABYLON.Color3(1.0, 0.3, 0.0); // bright orange-red default
+  mat.diffuseColor = colorOpts?.diffuse ?? new BABYLON.Color3(0.8, 0.2, 0.0);
   mat.specularColor = BABYLON.Color3.Black();
-  mat.disableLighting = true; // always visible regardless of lighting
+  mat.disableLighting = typeof colorOpts?.disableLighting === 'boolean' ? !!colorOpts?.disableLighting : true; // default to visible regardless of lighting
   mat.backFaceCulling = false; // visible from all angles
+  mat.wireframe = !!colorOpts?.wireframe;
   box.material = mat;
 
   box.isPickable = false;
@@ -77,7 +78,7 @@ export type ObstacleManagerOptions = {
   enableDebug?: boolean;
 };
 
-export function spawnStaticInFrontOf(camera: BABYLON.Camera, scene: BABYLON.Scene, distance = 2, size = 0.25, opts?: { R?: number; r?: number; debug?: boolean }) {
+export function spawnStaticInFrontOf(camera: BABYLON.Camera, scene: BABYLON.Scene, distance = 2, size = 0.25, opts?: { R?: number; r?: number; debug?: boolean; emissiveColor?: BABYLON.Color3; diffuseColor?: BABYLON.Color3 }) {
   // Temple Run style: spawn directly in the camera's forward direction, then adjust to stay inside torus
   const forward = camera.getForwardRay(1).direction.normalize();
   let pos = camera.position.add(forward.scale(distance));
@@ -119,18 +120,18 @@ export function spawnStaticInFrontOf(camera: BABYLON.Camera, scene: BABYLON.Scen
     size, distance, sdf: torusSignedDistance(pos, R, r)
   });
   
-  const cube = addStaticCube(scene, pos, size);
+  const cube = addStaticCube(scene, pos, size, { emissive: opts?.emissiveColor, diffuse: opts?.diffuseColor });
   if (opts?.debug) spawnDebugMarker(scene, pos, Math.max(0.5, size * 4));
   return cube;
 }
 
-export function spawnStaticAtTorus(scene: BABYLON.Scene, u: number, v: number, rho: number, opts?: { R?: number; r?: number; size?: number }) {
+export function spawnStaticAtTorus(scene: BABYLON.Scene, u: number, v: number, rho: number, opts?: { R?: number; r?: number; size?: number; emissiveColor?: BABYLON.Color3; diffuseColor?: BABYLON.Color3 }) {
   const R = opts?.R ?? 100;
   const r = opts?.r ?? 23;
   const size = opts?.size ?? 0.25;
   const clampedRho = Math.min(Math.max(0, rho), Math.max(0, r - 1e-2));
   const pos = torusToWorld(u, v, clampedRho, R, r);
-  return addStaticCube(scene, pos, size);
+  return addStaticCube(scene, pos, size, { emissive: opts?.emissiveColor, diffuse: opts?.diffuseColor });
 }
 
 export class ObstacleManager {
@@ -161,6 +162,15 @@ export class ObstacleManager {
           try { oldest.setAbsolutePosition(camera.position.add(camera.getForwardRay(1).direction.normalize().scale(distance))); } catch { /* ignore */ }
           oldest.metadata = { obstacle: true, spawnTime: Date.now() };
           oldest.isVisible = true;
+          // Update material colors if provided
+          try {
+            const mat = oldest.material as BABYLON.StandardMaterial | null;
+            if (mat && opts?.size !== undefined) {
+              // prefer explicit colors from opts
+              if ((opts as any).emissiveColor) mat.emissiveColor = (opts as any).emissiveColor;
+              if ((opts as any).diffuseColor) mat.diffuseColor = (opts as any).diffuseColor;
+            }
+          } catch (e) { /* ignore material update errors */ }
           // If caller asked for debug, create a temporary debug marker but don't create another obstacle
           if (opts?.debug) spawnDebugMarker(this.scene, oldest.position, Math.max(0.5, size * 4));
         } catch (e) { /* ignore reposition errors */ }
@@ -179,6 +189,65 @@ export class ObstacleManager {
     const m = spawnStaticAtTorus(this.scene, u, v, rho, { R: this.R, r: this.r, size });
     this.created.push(m);
     return m;
+  }
+
+  /**
+   * Scatter a number of static cubes along the inner surface of the torus (the "floor").
+   * - count: number of cubes to spawn
+   * - opts.size: cube size
+   * - opts.minOffset: how far inside the tube to place cubes (0..r). Smaller = closer to wall.
+   * - opts.emissiveColor / diffuseColor: optional color overrides
+   */
+  public spawnRandomOnFloor(count: number, opts?: { size?: number; minOffset?: number; emissiveColor?: BABYLON.Color3; diffuseColor?: BABYLON.Color3 }) {
+    const spawned: BABYLON.Mesh[] = [];
+    const size = opts?.size ?? 0.25;
+    const minOffset = typeof opts?.minOffset === 'number' ? opts!.minOffset : 0.2;
+    for (let i = 0; i < count; i++) {
+      // sample random u,v around torus
+      const u = Math.random() * Math.PI * 2;
+      const v = Math.random() * Math.PI * 2;
+      // place near the inner tube wall by using rho = r - small random offset
+      const offset = minOffset + Math.random() * 0.8; // small jitter
+      const rho = Math.max(0, this.r - offset);
+      const m = spawnStaticAtTorus(this.scene, u, v, rho, { R: this.R, r: this.r, size, emissiveColor: opts?.emissiveColor, diffuseColor: opts?.diffuseColor });
+      this.created.push(m);
+      spawned.push(m);
+    }
+    return spawned;
+  }
+
+  /**
+   * Evenly distribute up to `count` cubes across the torus surface.
+   * This fills the torus more uniformly than random sampling.
+   * - count: total number of cubes to place
+   * - opts.minOffset: how far inside the tube to place cubes (0..r)
+   * - opts.size, emissiveColor, diffuseColor
+   */
+  public spawnFillTorus(count: number = 30, opts?: { size?: number; minOffset?: number; emissiveColor?: BABYLON.Color3; diffuseColor?: BABYLON.Color3 }) {
+    const spawned: BABYLON.Mesh[] = [];
+    if (count <= 0) return spawned;
+    const size = opts?.size ?? 0.25;
+    const minOffset = typeof opts?.minOffset === 'number' ? opts!.minOffset : 0.5;
+
+    // Choose grid dimensions that approximate 'count'
+    const rows = Math.ceil(Math.sqrt(count));
+    const cols = Math.ceil(count / rows);
+    let placed = 0;
+
+    for (let rIdx = 0; rIdx < rows && placed < count; rIdx++) {
+      for (let cIdx = 0; cIdx < cols && placed < count; cIdx++) {
+        const u = (cIdx / cols) * Math.PI * 2;
+        const v = (rIdx / rows) * Math.PI * 2;
+        const offset = minOffset + (Math.random() * 0.2); // small jitter inward
+        const rho = Math.max(0, this.r - offset);
+        const m = spawnStaticAtTorus(this.scene, u, v, rho, { R: this.R, r: this.r, size, emissiveColor: opts?.emissiveColor, diffuseColor: opts?.diffuseColor });
+        this.created.push(m);
+        spawned.push(m);
+        placed++;
+      }
+    }
+
+    return spawned;
   }
 
   /** Reposition a mesh to a torus UVR safely (used for pooling/reuse) */

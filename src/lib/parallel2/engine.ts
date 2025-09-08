@@ -74,10 +74,15 @@ export class BabylonEngine {
             // force lower rendering resolution to improve FPS on slower GPUs
             try {
                 const dpr = window.devicePixelRatio || 1;
-                // force half-resolution rendering (good first-pass optimization)
-                this.hardwareScaling = 2;
+                // Use full-resolution rendering by default to avoid pixelation.
+                // Increase hardware scaling only on very high-DPR devices to limit VRAM usage.
+                this.hardwareScaling = 1; // 1 = full resolution
+                if (dpr >= 3) {
+                    // on extremely high DPR devices, scale down modestly
+                    this.hardwareScaling = Math.min(2, Math.round(dpr / 2));
+                }
                 this.engine.setHardwareScalingLevel(this.hardwareScaling);
-                console.info(`Forced hardware scaling=${this.hardwareScaling} (devicePixelRatio=${dpr}) to improve FPS`);
+                console.info(`Hardware scaling=${this.hardwareScaling} (devicePixelRatio=${dpr})`);
             } catch (e) {
                 // ignore if engine doesn't implement setHardwareScalingLevel
             }

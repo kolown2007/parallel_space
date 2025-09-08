@@ -5,11 +5,13 @@
   import {VideoScene} from '$lib/video/video1';
   import { DOMScene } from '$lib/dom/domScene';
   import { onMount } from 'svelte';
+  import {FlowScene} from '$lib/flow/flowScene';
 
   // Scene Manager
   const sceneManager = new SceneManager();
 
   let canvas: HTMLCanvasElement;
+  let flowCanvas: HTMLCanvasElement;
   let domElement: HTMLElement;
   let videoElement: HTMLVideoElement;
   let isLoading = true;
@@ -21,6 +23,7 @@
   let domScene: DOMScene;
   let videoscene: VideoScene;
   let wormholeScene: WormholeScene;
+  let flowScene: FlowScene;
 
   onMount(() => {
     let handleKeydown: (event: KeyboardEvent) => void;
@@ -33,6 +36,16 @@
       try {
        
         wormholeScene = new WormholeScene('wormhole', canvas);
+        // FlowScene uses its own canvas so it can run independently
+        if (flowCanvas) {
+            // Set canvas buffer size to match window size and device pixel ratio for sharp rendering
+            const dpr = window.devicePixelRatio || 1;
+            flowCanvas.width = Math.round(window.innerWidth * dpr);
+            flowCanvas.height = Math.round(window.innerHeight * dpr);
+            flowScene = new FlowScene('flow', flowCanvas);
+            await flowScene.initialize();
+            sceneManager.addScene(flowScene);
+        }
      
    
         await wormholeScene.initialize();
@@ -40,9 +53,9 @@
         videoscene = new VideoScene('video', videoElement);
 
      
-        sceneManager.addScene(domScene);
-        sceneManager.addScene(videoscene);
-        sceneManager.addScene(wormholeScene);
+  sceneManager.addScene(domScene);
+  sceneManager.addScene(videoscene);
+  sceneManager.addScene(wormholeScene);
 
         // Start with wormhole scene
         sceneManager.switchTo('wormhole');
@@ -52,6 +65,7 @@
         const updateVisibility = (activeScene: string) => {
           // canvas now represents the wormhole scene
           if (canvas) canvas.style.display = (activeScene === 'wormhole') ? 'block' : 'none';
+          if (flowCanvas) flowCanvas.style.display = (activeScene === 'flow') ? 'block' : 'none';
           if (domElement) domElement.style.display = (activeScene === 'dom') ? 'block' : 'none';
           if (videoElement) videoElement.style.display = (activeScene === 'video') ? 'block' : 'none';
         };
@@ -75,14 +89,15 @@
             updateVisibility('video');
             console.log('video scene');
           } else if (event.key === '4') {
-            sceneManager.switchTo('wormhole');
-            updateVisibility('wormhole');
-            console.log('wormhole scene');
+            // 4 -> flow scene (separate canvas)
+            sceneManager.switchTo('flow');
+            updateVisibility('flow');
+            console.log('flow scene');
           }
         };
 
         // Native swipe up detection for random scene switching
-  const sceneNames = ['dom', 'video', 'wormhole'];
+  const sceneNames = ['dom', 'video', 'wormhole', 'flow'];
         let startY = 0;
 
         handleTouchStart = (e: TouchEvent) => {
@@ -158,6 +173,7 @@
 }
 </style>
 <canvas id="sceneCanvas" bind:this={canvas}></canvas>
+<canvas id="flowCanvas" bind:this={flowCanvas} style="display:none; position:absolute; left:0; top:0; width:100vw; height:100vh;"></canvas>
 <div id="domScene" bind:this={domElement}>
 </div>
 <div>

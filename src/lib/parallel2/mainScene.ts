@@ -93,17 +93,17 @@ export class WormholeScene extends KolownScene {
 
   private adjustDroneSpeed(): void {
     if (this.drone) {
-      const currentSpeed = this.drone.getSpeed();
-      // Cycle through slower speeds: 0.005 → 0.01 → 0.015 → 0.02 → back to 0.005
-      let newSpeed: number;
-      if (currentSpeed <= 0.005) newSpeed = 0.01;
-      else if (currentSpeed <= 0.01) newSpeed = 0.015;
-      else if (currentSpeed <= 0.015) newSpeed = 0.02;
-      else newSpeed = 0.005;
-      
+  const currentSpeed = this.drone.getSpeed();
+  const verySlow = 0.00001;
+  const mediumSlow = 0.0005;
+  let newSpeed: number;
+  if (currentSpeed === 0) newSpeed = verySlow;
+  else if (Math.abs(currentSpeed - verySlow) < 1e-12) newSpeed = mediumSlow;
+  else newSpeed = 0;
+
   this.drone.setSpeed(newSpeed);
   try { setDroneSpeed(newSpeed); } catch (e) { /* ignore */ }
-      console.log(`Drone speed: ${newSpeed.toFixed(3)} (${newSpeed < 0.01 ? 'very slow' : newSpeed < 0.015 ? 'slow' : newSpeed < 0.02 ? 'medium' : 'fast'})`);
+  console.log(`Drone speed set to ${newSpeed} (${newSpeed === 0 ? 'stopped' : newSpeed === verySlow ? 'very slow' : 'medium slow'})`);
     }
   }
 
