@@ -58,7 +58,8 @@ self.addEventListener('fetch', (event) => {
 				throw new Error('invalid response from fetch');
 			}
 
-			if (response.status === 200) {
+			// Only cache HTTP/HTTPS requests, skip chrome-extension and other schemes
+			if (response.status === 200 && url.protocol.startsWith('http')) {
 				cache.put(event.request, response.clone());
 			}
 

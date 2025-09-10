@@ -37,7 +37,8 @@
 		"@babylonjs/inspector": "^8.10.0",
 		"@babylonjs/loaders": "^8.10.0",
 		"@babylonjs/materials": "^8.10.0",
+		"@kolown/scene-manager": "^0.0.1",
 		"babylonjs": "^8.10.0",
-		"@kolown/scene-manager": "^0.0.1"
+		"bitecs": "^0.3.40"
 	}
 }

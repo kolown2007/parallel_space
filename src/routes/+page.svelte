@@ -1,183 +1,96 @@
 <script lang="ts">
-  import { SceneManager } from '@kolown/scene-manager';
- 
-  import { WormholeScene } from '$lib/parallel2/mainScene';
-  import {VideoScene} from '$lib/video/video1';
-  import { DOMScene } from '$lib/dom/domScene';
-  import { onMount } from 'svelte';
-  import {FlowScene} from '$lib/flow/flowScene';
+  import { onMount, onDestroy } from 'svelte';
+  import * as BABYLON from 'babylonjs';
+  import { CustomLoadingScreen } from '$lib/customLoadingScreen';
+  import { WormHoleScene } from '$lib/scenes/wormhole';
+  import { WormHoleScene2 } from '$lib/scenes/wormhole2';
 
-  // Scene Manager
-  const sceneManager = new SceneManager();
+  let canvas: HTMLCanvasElement | null = null;
+  let engine: any = null;
+  let scene1: any = null;
+  let scene2: any = null;
 
-  let canvas: HTMLCanvasElement;
-  let flowCanvas: HTMLCanvasElement;
-  let domElement: HTMLElement;
-  let videoElement: HTMLVideoElement;
-  let isLoading = true;
 
- 
-
-  // Initialize scenes after DOM is ready
-  
-  let domScene: DOMScene;
-  let videoscene: VideoScene;
-  let wormholeScene: WormholeScene;
-  let flowScene: FlowScene;
+  let sceneMode = $state('scene1');
 
   onMount(() => {
-    let handleKeydown: (event: KeyboardEvent) => void;
-    let handleTouchStart: (e: TouchEvent) => void;
-    let handleTouchEnd: (e: TouchEvent) => void;
+    if (!canvas) return;
 
-    async function initializeScenes() {
-      if (!canvas) return;
+    engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
 
-      try {
-       
-        wormholeScene = new WormholeScene('wormhole', canvas);
-        // FlowScene uses its own canvas so it can run independently
-        if (flowCanvas) {
-            // Set canvas buffer size to match window size and device pixel ratio for sharp rendering
-            const dpr = window.devicePixelRatio || 1;
-            flowCanvas.width = Math.round(window.innerWidth * dpr);
-            flowCanvas.height = Math.round(window.innerHeight * dpr);
-            flowScene = new FlowScene('flow', flowCanvas);
-            await flowScene.initialize();
-            sceneManager.addScene(flowScene);
-        }
-     
-   
-        await wormholeScene.initialize();
-        domScene = new DOMScene('dom', domElement);
-        videoscene = new VideoScene('video', videoElement);
+    // set up and show custom loading screen before creating the scene
+    const loadingScreen = new CustomLoadingScreen("I'm loading!!");
+    engine.loadingScreen = loadingScreen;
+    engine.displayLoadingUI();
 
-     
-  sceneManager.addScene(domScene);
-  sceneManager.addScene(videoscene);
-  sceneManager.addScene(wormholeScene);
+    
+    // create scene
+    scene1 = WormHoleScene.CreateScene(engine, canvas);
+    scene2 = WormHoleScene2.CreateScene(engine, canvas);
 
-        // Start with wormhole scene
-        sceneManager.switchTo('wormhole');
-        isLoading = false;
+    // hide loading UI after a short delay so the spinner is visible
+    setTimeout(() => engine.hideLoadingUI(), 600);
 
-        // Function to manage element visibility
-        const updateVisibility = (activeScene: string) => {
-          // canvas now represents the wormhole scene
-          if (canvas) canvas.style.display = (activeScene === 'wormhole') ? 'block' : 'none';
-          if (flowCanvas) flowCanvas.style.display = (activeScene === 'flow') ? 'block' : 'none';
-          if (domElement) domElement.style.display = (activeScene === 'dom') ? 'block' : 'none';
-          if (videoElement) videoElement.style.display = (activeScene === 'video') ? 'block' : 'none';
-        };
-
-        // Set initial visibility to wormhole
-        updateVisibility('wormhole');
-
-        // keyboard controls for scene switching
-        handleKeydown = (event: KeyboardEvent) => {
-          if (event.key === '1') {
-            // 1 -> wormhole (canvas)
-            sceneManager.switchTo('wormhole');
-            updateVisibility('wormhole');
-            console.log('wormhole scene');
-          } else if (event.key === '2') {
-            sceneManager.switchTo('dom');
-            updateVisibility('dom');
-            console.log('dom scene');
-          } else if (event.key === '3') {
-            sceneManager.switchTo('video');
-            updateVisibility('video');
-            console.log('video scene');
-          } else if (event.key === '4') {
-            // 4 -> flow scene (separate canvas)
-            sceneManager.switchTo('flow');
-            updateVisibility('flow');
-            console.log('flow scene');
-          }
-        };
-
-        // Native swipe up detection for random scene switching
-  const sceneNames = ['dom', 'video', 'wormhole', 'flow'];
-        let startY = 0;
-
-        handleTouchStart = (e: TouchEvent) => {
-          startY = e.touches[0].clientY;
-        };
-
-        handleTouchEnd = (e: TouchEvent) => {
-          const endY = e.changedTouches[0].clientY;
-          if (startY - endY > 50) { // 50px threshold for swipe up
-            // Pick a random scene
-            const randomIndex = Math.floor(Math.random() * sceneNames.length);
-            const randomScene = sceneNames[randomIndex];
-            sceneManager.switchTo(randomScene);
-            updateVisibility(randomScene);
-            console.log(`Switched to random scene: ${randomScene}`);
-          }
-        };
-
-        // Attach to document.body so it works on all scenes
-        document.body.addEventListener('touchstart', handleTouchStart);
-        document.body.addEventListener('touchend', handleTouchEnd);
-        window.addEventListener('keydown', handleKeydown);
-
-      } catch (error) {
-        console.error('Scene initialization error:', error);
-        isLoading = false;
+    // render only the active scene
+    engine.runRenderLoop(() => {
+      if (sceneMode === 'scene1') {
+        if (scene1 && typeof scene1.render === 'function') scene1.render();
+      } else {
+        if (scene2 && typeof scene2.render === 'function') scene2.render();
       }
+    });
+
+    const handleResize = () => engine && engine.resize();
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      if (engine) {
+        try {
+          engine.stopRenderLoop();
+          engine.dispose();
+        } finally {
+          engine = null;
+          scene1 = null;
+          scene2 = null;
+        }
+      }
+    };
+  });
+
+  onDestroy(() => {
+    if (engine) {
+      engine.stopRenderLoop();
+      engine.dispose();
+      engine = null;
+      scene1 = null;
+      scene2 = null;
+    }
+  });
+
+  $inspect(sceneMode);
+
+  window.addEventListener('keydown', (event) => {
+    if (event.key === '1') {
+      sceneMode = 'scene1';
+    } else if (event.key === '2') {
+      sceneMode = 'scene2';
     }
 
-    initializeScenes();
 
-    // Cleanup function
-    return () => {
-      if (handleKeydown) window.removeEventListener('keydown', handleKeydown);
-      if (handleTouchStart) document.body.removeEventListener('touchstart', handleTouchStart);
-      if (handleTouchEnd) document.body.removeEventListener('touchend', handleTouchEnd);
-    };
   });
 </script>
 
 <style>
-    :global(html, body) {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-  }
-  #sceneCanvas {
+  .babylon-canvas {
+    width: 100%;
     height: 100vh;
-    width: 100vw;
     display: block;
   }
 
-  #domScene {
-    display: none;
-    background-color: chartreuse;
-    width: 100%;
-    height: 100%;
-    margin: 0;
-    padding: 0;
-  }
-
-  #videoScene {
-    display: none;
-    width: 100%;
-    height: 100%;
-    background-color: black; /* Optional: Add a background color */
-}
-
-:global(.video-active) #videoScene {
-    display: block; /* Make the video visible when active */
-}
+  :global(body) { margin: 0; }
 </style>
-<canvas id="sceneCanvas" bind:this={canvas}></canvas>
-<canvas id="flowCanvas" bind:this={flowCanvas} style="display:none; position:absolute; left:0; top:0; width:100vw; height:100vh;"></canvas>
-<div id="domScene" bind:this={domElement}>
-</div>
-<div>
-    <video id="videoScene" bind:this={videoElement} >
-      <track kind="captions" label="English captions" src="" srclang="en" default>
-    </video>
-  </div>
+
+
+
+<canvas bind:this={canvas} class="babylon-canvas"></canvas>
