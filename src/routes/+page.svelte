@@ -10,9 +10,9 @@
   let scene1: any = null;
   let scene2: any = null;
 
+  let sceneMode = $state('scene2');
 
-  let sceneMode = $state('scene1');
-
+  // run async work inside an IIFE so onMount returns the cleanup function synchronously
   onMount(() => {
     if (!canvas) return;
 
@@ -23,27 +23,33 @@
     engine.loadingScreen = loadingScreen;
     engine.displayLoadingUI();
 
-    
-    // create scene
-    scene1 = WormHoleScene.CreateScene(engine, canvas);
-    scene2 = WormHoleScene2.CreateScene(engine, canvas);
-
-    // hide loading UI after a short delay so the spinner is visible
-    setTimeout(() => engine.hideLoadingUI(), 600);
-
-    // render only the active scene
-    engine.runRenderLoop(() => {
-      if (sceneMode === 'scene1') {
-        if (scene1 && typeof scene1.render === 'function') scene1.render();
-      } else {
-        if (scene2 && typeof scene2.render === 'function') scene2.render();
-      }
-    });
-
     const handleResize = () => engine && engine.resize();
     window.addEventListener('resize', handleResize);
 
+    let disposed = false;
+
+    (async () => {
+      // create scenes
+      scene1 = WormHoleScene.CreateScene(engine, canvas);
+      // AWAIT the async scene creation
+      scene2 = await WormHoleScene2.CreateScene(engine, canvas);
+
+      // hide loading UI after a short delay so the spinner is visible
+      setTimeout(() => engine && engine.hideLoadingUI(), 600);
+
+      // render only the active scene
+      engine.runRenderLoop(() => {
+        if (disposed) return;
+        if (sceneMode === 'scene1') {
+          if (scene1 && typeof scene1.render === 'function') scene1.render();
+        } else {
+          if (scene2 && typeof scene2.render === 'function') scene2.render();
+        }
+      });
+    })();
+
     return () => {
+      disposed = true;
       window.removeEventListener('resize', handleResize);
       if (engine) {
         try {
@@ -76,8 +82,6 @@
     } else if (event.key === '2') {
       sceneMode = 'scene2';
     }
-
-
   });
 </script>
 
@@ -90,7 +94,5 @@
 
   :global(body) { margin: 0; }
 </style>
-
-
 
 <canvas bind:this={canvas} class="babylon-canvas"></canvas>
