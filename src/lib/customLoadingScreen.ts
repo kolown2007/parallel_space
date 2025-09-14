@@ -1,4 +1,4 @@
-import * as BABYLON from 'babylonjs';
+import * as BABYLON from '@babylonjs/core';
 
 export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
   // use a solid red background for loading

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import * as BABYLON from 'babylonjs';
+import * as BABYLON from '@babylonjs/core';
   import { CustomLoadingScreen } from '$lib/customLoadingScreen';
   import { WormHoleScene } from '$lib/scenes/wormhole';
   import { WormHoleScene2 } from '$lib/scenes/wormhole2';
