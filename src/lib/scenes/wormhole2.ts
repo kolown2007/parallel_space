@@ -1,6 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import HavokPhysics from '@babylonjs/havok';
-// import { createFloatingCubes } from './floatingCubes';
+ import { createFloatingCubes } from './floatingCubes';
 import '@babylonjs/loaders/glTF';
 import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
 
@@ -74,7 +74,15 @@ export class WormHoleScene2 {
 
 		//light
 		const light = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(0, 1, 0), scene);
-		light.intensity = 0.4;
+		light.intensity = 0.2;
+
+
+		   scene.fogMode = BABYLON.Scene.FOGMODE_EXP;
+
+				scene.fogColor = new BABYLON.Color3(0.9, 0.9, 0.85);
+				scene.fogDensity = 0.0001;
+
+
 
 		//wormhole shape
 		const torus = BABYLON.MeshBuilder.CreateTorus(
@@ -249,8 +257,8 @@ export class WormHoleScene2 {
 		const droneLight = new BABYLON.PointLight('droneLight', new BABYLON.Vector3(0, 0, 0), scene);
 		droneLight.diffuse = new BABYLON.Color3(0.1, 0.6, 1.0); // cyan-ish
 		droneLight.specular = new BABYLON.Color3(0.6, 0.9, 1.0);
-		droneLight.intensity = 1.2;
-		droneLight.range = 12;
+		droneLight.intensity = 3.0;
+		droneLight.range = 11;
 
 		// position the light slightly in front/top of the drone so it casts visible highlights
 		droneLight.parent = drone;
@@ -307,84 +315,17 @@ for (let i = 0; i < indices.length; i++) {
 
 
 // Create floating cubes via helper module (keeps this scene file small)
-// const floating = createFloatingCubes(scene, WormHoleScene2.pathPoints, {
-// 	count: 10,
-// 	jitter: 0.5,
-// 	verticalOffset: 0.5,
-// 	sizeRange: [1.2, 3.2],
-// 	massRange: [0.008, 0.8],
-// 	antiGravityFactor: 2.0,
-// 	linearDamping: 0.985
-// });
+const floating = createFloatingCubes(scene, WormHoleScene2.pathPoints, {
+	count: 10,
+	jitter: 0.5,
+	verticalOffset: 0.5,
+	sizeRange: [1.2, 3.2],
+	massRange: [0.008, 0.8],
+	antiGravityFactor: 2.0,
+	linearDamping: 0.985
+});
 
 
-
- 
- // Load GLB once, then create instances positioned along the flight path
-//  try {
-// 	 const url = modelUrl;
-// 	 const beforeCount = scene.meshes.length;
-// 	 console.log('Appending GLB:', url);
-// 	 await (BABYLON as any).AppendSceneAsync(url, scene);
-// 	 const added = scene.meshes.slice(beforeCount);
-// 	 const template = added.find((m: any) => m && m.geometry);
-// 	 if (template) {
-// 		 template.setEnabled(false);
-// 		 const instanceCount = Math.min(20, Math.max(1, Math.floor(WormHoleScene2.pathPoints.length / 8)));
-// 		 const step = Math.max(1, Math.floor(WormHoleScene2.pathPoints.length / instanceCount));
-// 		 const visualOffset = new BABYLON.Vector3(0, 0.5, 0);
-// 		 const colliderSize = 1.4;
-
-// 		const glbColliders: BABYLON.PhysicsAggregate[] = [];
-// 		for (let i = 0; i < instanceCount; i++) {
-// 			 const idx = (i * step) % WormHoleScene2.pathPoints.length;
-// 			 const pos = WormHoleScene2.pathPoints[idx].clone().add(visualOffset);
-
-// 			 const inst = (template as any).createInstance(`glbInst_${i}`);
-// 			 inst.position.copyFrom(pos);
-
-// 			try {
-// 				const dir = getDirectionOnPath(idx / Math.max(1, WormHoleScene2.pathPoints.length - 1));
-// 				// orient the instance to look along the path direction
-// 				inst.lookAt(pos.add(dir));
-// 			} catch (e) {
-// 				// ignore orientation errors
-// 			}
-
-// 	        		// Build a collider that better matches the visual by using the template bounding box
-// 	        		const bboxSource: any = (template && typeof template.getBoundingInfo === 'function') ? template : inst;
-// 	        		let width = colliderSize, height = colliderSize, depth = colliderSize;
-// 	        		try {
-// 	        			const bb = bboxSource.getBoundingInfo().boundingBox;
-// 	        			const sizeVec = bb.maximum.subtract(bb.minimum);
-// 	        			// Slightly shrink collider to avoid early collisions
-// 	        			width = Math.max(0.05, sizeVec.x * 0.95);
-// 	        			height = Math.max(0.05, sizeVec.y * 0.95);
-// 	        			depth = Math.max(0.05, sizeVec.z * 0.95);
-// 	        		} catch (err) {
-// 	        			// fallback to uniform box size on error
-// 	        			width = height = depth = colliderSize;
-// 	        		}
-
-// 	        		const collider = BABYLON.MeshBuilder.CreateBox(`glbCol_${i}`, { width, height, depth }, scene);
-// 	        		collider.position.copyFrom(pos);
-// 	        		// copy rotation from the instance so collider aligns with visual
-// 	        		if ((inst as any).rotationQuaternion) {
-// 	        			collider.rotationQuaternion = (inst as any).rotationQuaternion.clone();
-// 	        		} else if ((inst as any).rotation) {
-// 	        			collider.rotation = (inst as any).rotation.clone();
-// 	        		}
-// 	        		collider.isVisible = false;
-// 	        		const agg = new BABYLON.PhysicsAggregate(collider, BABYLON.PhysicsShapeType.MESH, { mass: 0.06, restitution: 0.2, friction: 0.6 }, scene);
-// 	        		glbColliders.push(agg);
-// 					glbColliders.push(agg);
-// 		 }
-// 	 } else {
-// 		 console.warn('GLB appended but no mesh template found');
-// 	 }
-//  } catch (e) {
-// 	 console.error('Failed to append GLB or create instances:', e);
-//  }
 
 try {
   console.log('Loading Jollibee model...');
@@ -410,7 +351,7 @@ try {
 	  // Physics - directly on the instance (modern approach)
 	  new BABYLON.PhysicsAggregate(instance, BABYLON.PhysicsShapeType.SPHERE, {
 		mass: 0.05,           // Static
-		restitution: 0.9,  // Bounce
+		restitution: 0.3,  // Bounce
 		friction: 0.05
 	  }, scene);
 	}
@@ -437,16 +378,13 @@ try {
 
 
 		// update floating cubes module (handles anti-gravity, centering, damping)
-		// const dt = engine.getDeltaTime() / 1000;
-		// if (floating && typeof floating.update === 'function') {
-		// 	floating.update(dt);
-		// 	floating.update(dt);
-		// }
+		const dt = engine.getDeltaTime() / 1000;
+		if (floating && typeof floating.update === 'function') {
+			floating.update(dt);
+			floating.update(dt);
+		}
 
-		// if (floatingj && typeof floatingj.update === 'function') {
-		// 	floatingj.update(dt);
-		// }
-
+	
 
 
 
