@@ -258,7 +258,7 @@ export class WormHoleScene2 {
 		droneLight.diffuse = new BABYLON.Color3(0.1, 0.6, 1.0); // cyan-ish
 		droneLight.specular = new BABYLON.Color3(0.6, 0.9, 1.0);
 		droneLight.intensity = 3.0;
-		droneLight.range = 11;
+		droneLight.range = 12;
 
 		// position the light slightly in front/top of the drone so it casts visible highlights
 		droneLight.parent = drone;
@@ -334,6 +334,18 @@ try {
   
   if (template) {
     template.setEnabled(false); // Hide original
+
+
+const jolliPBR = new BABYLON.PBRMaterial('jolliPBR', scene);
+    jolliPBR.metallic = 0.0;            // non-metal for plasticy response
+   jolliPBR.roughness = 0.25;         // some gloss (lower = shinier)
+   jolliPBR.directIntensity = 2.0;    // amplify direct lights (drone)
+    jolliPBR.environmentIntensity = 1.0; // reflections from env (if set)
+    jolliPBR.emissiveColor = BABYLON.Color3.Black(); // avoid neutral emissive wash
+    jolliPBR.backFaceCulling = true;
+
+
+
     
     // Create instances along path
     const instanceCount = 5;
@@ -347,6 +359,8 @@ try {
 	  const instance = (template as unknown as BABYLON.Mesh).createInstance(`jollibee_${i}`);
 	  instance.position.copyFrom(pos);
 	  instance.scaling.setAll(10); // Scale down
+
+	     instance.material = jolliPBR;
 	  
 	  // Physics - directly on the instance (modern approach)
 	  new BABYLON.PhysicsAggregate(instance, BABYLON.PhysicsShapeType.SPHERE, {
