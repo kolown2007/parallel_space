@@ -1,6 +1,7 @@
 import * as BABYLON from '@babylonjs/core';
 import HavokPhysics from '@babylonjs/havok';
- import { createFloatingCubes } from './floatingCubes';
+import { createFloatingCubes } from './floatingCubes';
+import { createSolidParticleSystem } from '../particles/solidParticleSystem';
 import '@babylonjs/loaders/glTF';
 import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
 
@@ -324,6 +325,19 @@ const floating = createFloatingCubes(scene, WormHoleScene2.pathPoints, {
 	antiGravityFactor: 2.0,
 	linearDamping: 0.985
 });
+
+// Create a SolidParticleSystem and attach it to a point on the vector line (use the first marker)
+const spsFx = createSolidParticleSystem(scene, { particleNb: 800, particleSize: 1.0, maxDistance: 220 });
+// choose the path point for the effect - use indices[0] if available, otherwise center point
+const spsPointIndex = indices && indices.length > 0 ? indices[0] : Math.floor(WormHoleScene2.pathPoints.length / 2);
+const spsPosition = WormHoleScene2.pathPoints[spsPointIndex] ? WormHoleScene2.pathPoints[spsPointIndex].clone() : new BABYLON.Vector3(0, 0, 0);
+// nudge up a bit so particles are visible above the path
+spsPosition.y += 1.2;
+spsFx.mesh.position.copyFrom(spsPosition);
+// parent to drone so it moves with the scene origin if needed
+spsFx.attachTo(torus);
+// start updating SPS
+spsFx.start();
 
 
 
