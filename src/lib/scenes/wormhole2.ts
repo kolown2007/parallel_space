@@ -118,6 +118,46 @@ export class WormHoleScene2 {
 		//torusMaterial.backFaceCulling = false;
 		torus.material = torusMaterial;
 
+		// Function to create stalactites inside the torus
+		function createTorusStalactites(scene: BABYLON.Scene, torusMainRadius: number, torusTubeRadius: number) {
+			const stalactiteCount = 24;
+			
+			for (let i = 0; i < stalactiteCount; i++) {
+				// Position around the torus ring
+				const mainAngle = (i / stalactiteCount) * Math.PI * 2;
+				
+				// Create a hanging cone (stalactite)
+				const stalactite = BABYLON.MeshBuilder.CreateCylinder(`stalactite_${i}`, {
+					diameterTop: 0.8,     // thick at top (attached to ceiling)
+					diameterBottom: 0.1,  // sharp point at bottom
+					height: 2 + Math.random() * 3, // 2-5 units long
+					tessellation: 6
+				}, scene);
+				
+				// Position it hanging from the torus ceiling
+				const attachX = Math.cos(mainAngle) * torusMainRadius;
+				const attachZ = Math.sin(mainAngle) * torusMainRadius;
+				const attachY = 1 + torusTubeRadius * 0.7; // upper part of torus tube
+				
+				stalactite.position.x = attachX;
+				stalactite.position.z = attachZ;
+				stalactite.position.y = attachY - stalactite.getBoundingInfo().boundingBox.extendSize.y; // hang down
+				
+				// Material (rocky look)
+				const mat = new BABYLON.StandardMaterial(`stalMat_${i}`, scene);
+				mat.diffuseColor = new BABYLON.Color3(0.4, 0.35, 0.3); // brown rock
+				mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1); // low shine
+				stalactite.material = mat;
+				
+				// Physics (static obstacle)
+				new BABYLON.PhysicsAggregate(stalactite, BABYLON.PhysicsShapeType.MESH, {
+					mass: 0, // static
+					restitution: 0.3,
+					friction: 0.8
+				}, scene);
+			}
+		}
+
 		// const sphere = BABYLON.MeshBuilder.CreateSphere('sphere', { diameter: 2, segments: 32 }, scene);
 		const drone = BABYLON.MeshBuilder.CreateCapsule(
 			'capsule',
@@ -144,6 +184,9 @@ export class WormHoleScene2 {
 		const torusTubeRadius = torusThickness / 2; // 5
 		const torusMainRadius = torusOuterRadius - torusTubeRadius; // 40 (center of tube)
 		const lineRadius = torusTubeRadius * 0.0; // Position inside the tube (0.8 = 80% of tube radius)
+
+		// Create stalactites inside the torus
+		createTorusStalactites(scene, torusMainRadius, torusTubeRadius);
 
 		// Position drone at the start of the path (same as sphere in wormhole.ts)
 		const startProgress = 0; // Start at beginning of path
@@ -328,6 +371,8 @@ const floating = createFloatingCubes(scene, WormHoleScene2.pathPoints, {
 
 // Create a SolidParticleSystem and attach it to a point on the vector line (use the first marker)
 const spsFx = createSolidParticleSystem(scene, { particleNb: 800, particleSize: 1.0, maxDistance: 220 });
+
+
 // choose the path point for the effect - use indices[0] if available, otherwise center point
 const spsPointIndex = indices && indices.length > 0 ? indices[0] : Math.floor(WormHoleScene2.pathPoints.length / 2);
 const spsPosition = WormHoleScene2.pathPoints[spsPointIndex] ? WormHoleScene2.pathPoints[spsPointIndex].clone() : new BABYLON.Vector3(0, 0, 0);
@@ -338,6 +383,11 @@ spsFx.mesh.position.copyFrom(spsPosition);
 spsFx.attachTo(torus);
 // start updating SPS
 spsFx.start();
+
+// auto-dispose after 60s (optional)
+const spsAutoHandle = window.setTimeout(() => {
+  try { spsFx.stop(); spsFx.dispose(); } catch (e) { /* ignore */ }
+}, 60_000);
 
 
 
