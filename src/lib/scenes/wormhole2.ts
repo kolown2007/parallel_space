@@ -4,6 +4,8 @@ import { createFloatingCubes } from './floatingCubes';
 import { createSolidParticleSystem } from '../particles/solidParticleSystem';
 import '@babylonjs/loaders/glTF';
 import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
+import { ModelActor } from '../ModelActor';
+import { BillboardManager } from '../BillboardManager';
 
 
 
@@ -440,6 +442,33 @@ const jolliPBR = new BABYLON.PBRMaterial('jolliPBR', scene);
   console.error('Failed to load Jollibee model:', error);
 }
 
+// Non-destructive: also demonstrate loading the same model via ModelActor helper.
+// This doesn't replace the previous loader; it coexists and is optional.
+// try {
+// 	(async () => {
+// 		try {
+// 			console.log('ModelActor: attempting to load model via ModelActor...');
+// 			const actor = new ModelActor(scene, { name: 'jollibee_actor' });
+// 				const root = await actor.load(modelUrl);
+
+// 			  // Pick a safe path point to position the actor: use the middle of the path.
+// 			  const step2 = Math.floor(WormHoleScene2.pathPoints.length / 2);
+// 			  const posSource = WormHoleScene2.pathPoints[step2];
+// 			  const pos = posSource ? posSource.clone() : new BABYLON.Vector3(-10, 0, 0);
+// 			  pos.y += -1; // Lift slightly
+// 			if (root) {
+// 				actor.setScale(20);
+// 				// position a single actor instance to the side so it doesn't overlap the template instances
+// 				actor.setPosition(new BABYLON.Vector3(pos.x + 10, pos.y, pos.z));
+// 				actor.addPhysicsAggregate(BABYLON.PhysicsShapeType.BOX, { mass: 0 });
+// 				actor.makeClickable();
+// 				actor.setEmissive(new BABYLON.Color3(0.02, 0.08, 0.02));
+// 				console.log('ModelActor loaded model at', actor);
+// 			}
+// 		} catch (e) { console.warn('ModelActor loader failed', e); }
+// 	})();
+// } catch (e) { /* ignore */ }
+
 
 
  
@@ -450,6 +479,14 @@ const jolliPBR = new BABYLON.PBRMaterial('jolliPBR', scene);
 
 
 
+
+
+// create multiple textured billboard planes along the drone track (via BillboardManager)
+try {
+	const bm = new BillboardManager(scene, { count: 8, size: { width: 30, height: 30 }, textureUrl: '/malunggay.png', parent: torus });
+	await bm.createAlongPath(WormHoleScene2.pathPoints);
+	// Optionally store bm somewhere if you want to dispose later. For now it will be GC'd when scene disposes.
+} catch (e) { console.warn('Failed to create malunggay planes via BillboardManager', e); }
 
 		scene.registerBeforeRender(() => {
 
