@@ -473,20 +473,17 @@ const jolliPBR = new BABYLON.PBRMaterial('jolliPBR', scene);
 
  
 
-
-
-
-
-
-
-
-
 // create multiple textured billboard planes along the drone track (via BillboardManager)
 try {
-	const bm = new BillboardManager(scene, { count: 8, size: { width: 30, height: 30 }, textureUrl: '/malunggay.png', parent: torus });
+	const bm = new BillboardManager(scene, { count: 5, size: { width: 30, height: 30 }, textureUrl: '/splat.png', parent: torus });
 	await bm.createAlongPath(WormHoleScene2.pathPoints);
 	// Optionally store bm somewhere if you want to dispose later. For now it will be GC'd when scene disposes.
 } catch (e) { console.warn('Failed to create malunggay planes via BillboardManager', e); }
+
+
+
+
+
 
 		scene.registerBeforeRender(() => {
 
