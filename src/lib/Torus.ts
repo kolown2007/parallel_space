@@ -1,0 +1,101 @@
+import * as BABYLON from '@babylonjs/core';
+
+export interface TorusOptions {
+  diameter?: number;
+  thickness?: number;
+  tessellation?: number;
+  sideOrientation?: number;
+  positionY?: number;
+  lineRadiusFactor?: number; // 0..1 (where 1 == full tube radius)
+  turns?: number;
+  spiralTurns?: number;
+  segments?: number;
+  materialTextureUrl?: string;
+}
+
+export interface TorusResult {
+  torus: BABYLON.Mesh;
+  torusAggregate: BABYLON.PhysicsAggregate;
+  torusMainRadius: number;
+  torusTubeRadius: number;
+  pathPoints: BABYLON.Vector3[];
+}
+
+export function createTorus(scene: BABYLON.Scene, opts: TorusOptions = {}): TorusResult {
+  const diameter = opts.diameter ?? 80;
+  const thickness = opts.thickness ?? 30;
+  const tessellation = opts.tessellation ?? 80;
+  const sideOrientation = opts.sideOrientation ?? BABYLON.Mesh.DOUBLESIDE;
+  const positionY = opts.positionY ?? 1;
+  const lineRadiusFactor = opts.lineRadiusFactor ?? 0.0;
+  const turns = opts.turns ?? 1;
+  const spiralTurns = opts.spiralTurns ?? 3;
+  const segments = opts.segments ?? 128;
+
+  const torus = BABYLON.MeshBuilder.CreateTorus(
+    'torus',
+    { diameter, thickness, tessellation, sideOrientation },
+    scene
+  );
+  torus.position.y = positionY;
+
+  const torusAggregate = new BABYLON.PhysicsAggregate(
+    torus,
+    BABYLON.PhysicsShapeType.MESH,
+    { mass: 0, restitution: 0.8, friction: 0.5 },
+    scene
+  );
+
+  const mat = new BABYLON.StandardMaterial('materialTorus', scene);
+  if (opts.materialTextureUrl) {
+    mat.diffuseTexture = new BABYLON.Texture(opts.materialTextureUrl, scene);
+  }
+  mat.emissiveColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+  torus.material = mat;
+
+  // Recompute radii from the actual mesh bounding box so the path aligns
+  // with the rendered torus even if the geometry or transforms differ.
+  const boundingInfo = torus.getBoundingInfo();
+  const bbox = boundingInfo.boundingBox;
+  const torusDiameter = bbox.maximumWorld.x - bbox.minimumWorld.x;
+  const torusThickness = Math.abs(bbox.maximumWorld.y - bbox.minimumWorld.y);
+  const torusOuterRadius = torusDiameter / 2;
+  const torusTubeRadius = torusThickness / 2;
+  const torusMainRadius = torusOuterRadius - torusTubeRadius;
+  const torusTubeRadiusActual = torusTubeRadius;
+
+  const lineRadius = torusTubeRadiusActual * lineRadiusFactor;
+  const points: BABYLON.Vector3[] = [];
+  const torusCenter = torus.getAbsolutePosition();
+  for (let i = 0; i <= segments; i++) {
+    const t = i / segments;
+    const mainAngle = t * Math.PI * 2 * turns;
+    const tubeAngle = t * Math.PI * 2 * spiralTurns;
+
+    // Position on the main torus ring relative to torus center
+    const mainX = torusCenter.x + Math.cos(mainAngle) * torusMainRadius;
+    const mainZ = torusCenter.z + Math.sin(mainAngle) * torusMainRadius;
+    const mainY = torusCenter.y;
+
+    // Offset within the tube
+    const tubeX = Math.cos(tubeAngle) * lineRadius;
+    const tubeY = Math.sin(tubeAngle) * lineRadius;
+
+    // Combine main position + tube offset (radial offset along torus local radial)
+    const x = mainX + Math.cos(mainAngle) * tubeX;
+    const z = mainZ + Math.sin(mainAngle) * tubeX;
+    const y = mainY + tubeY;
+
+    points.push(new BABYLON.Vector3(x, y, z));
+  }
+
+
+
+  return {
+    torus,
+    torusAggregate,
+    torusMainRadius,
+    torusTubeRadius: torusTubeRadiusActual,
+    pathPoints: points
+  };
+}

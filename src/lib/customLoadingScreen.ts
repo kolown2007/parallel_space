@@ -54,6 +54,28 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
     // console.log('CustomLoadingScreen appended, computed background:', getComputedStyle(container).backgroundColor);
 
     this._container = container;
+
+    // Add centered title text
+    try {
+      const title = document.createElement('div');
+      title.textContent = 'ChronoEscape 2050';
+      title.setAttribute('aria-hidden', 'false');
+      title.style.position = 'absolute';
+      title.style.left = '50%';
+      title.style.top = '50%';
+      title.style.transform = 'translate(-50%, -50%)';
+      title.style.pointerEvents = 'none';
+      title.style.color = '#FFFFFF';
+      title.style.fontFamily = 'Inter, Roboto, Arial, sans-serif';
+      title.style.fontWeight = '700';
+      title.style.fontSize = '48px';
+      title.style.letterSpacing = '1px';
+      title.style.textAlign = 'center';
+      title.style.textShadow = '0 2px 10px rgba(0,0,0,0.6)';
+      container.appendChild(title);
+    } catch (e) {
+      // ignore DOM errors in non-browser environments
+    }
   }
 
   public hideLoadingUI() {

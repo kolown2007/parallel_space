@@ -1,11 +1,15 @@
 import * as BABYLON from '@babylonjs/core';
 import HavokPhysics from '@babylonjs/havok';
-import { createFloatingCubes } from './floatingCubes';
+import { createFloatingCubes } from '../floatingCubes';
 import { createSolidParticleSystem } from '../particles/solidParticleSystem';
 import '@babylonjs/loaders/glTF';
 import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
 import { ModelActor } from '../ModelActor';
 import { BillboardManager } from '../BillboardManager';
+import { createDrone } from '../Drone';
+import { createTorus } from '../Torus';
+import { getPositionOnPath, getDirectionOnPath } from '../PathUtils';
+import { ObstaclesManager } from '../Obstacles';
 
 
 
@@ -79,189 +83,81 @@ export class WormHoleScene2 {
 		const light = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(0, 1, 0), scene);
 		light.intensity = 0.2;
 
+		//fog
+		scene.fogMode = BABYLON.Scene.FOGMODE_EXP;
 
-		   scene.fogMode = BABYLON.Scene.FOGMODE_EXP;
-
-				scene.fogColor = new BABYLON.Color3(0.9, 0.9, 0.85);
-				scene.fogDensity = 0.0001;
-
-
-
-		//wormhole shape
-		const torus = BABYLON.MeshBuilder.CreateTorus(
-			'torus',
-			{ diameter: 80, thickness: 30, tessellation: 80, sideOrientation: BABYLON.Mesh.DOUBLESIDE },
-			scene
-		);
-
-		//TORUS KNOT
-		//const torus = BABYLON.MeshBuilder.CreateTorusKnot("tk", {radius: 90, tube: 10, radialSegments: 100, p:5, q:2});
-
-		torus.position.y = 1;
-
-		// Use PhysicsAggregate for torus (static body) - CHANGED TO MESH for accurate torus collision
-		const torusAggregate = new BABYLON.PhysicsAggregate(
-			torus,
-			BABYLON.PhysicsShapeType.MESH,
-			{
-				mass: 0, // static (doesn't move)
-				restitution: 0.8, // bounciness
-				friction: 0.5
-			},
-			scene
-		);
-
-		var torusMaterial = new BABYLON.StandardMaterial('materialTorus1', scene);
-		const torusTexture = new BABYLON.Texture('/metal.jpg', scene);
-		torusMaterial.wireframe = false;
-
-		torusMaterial.diffuseTexture = torusTexture;
-		torusMaterial.emissiveColor = new BABYLON.Color3(0.2, 0.2, 0.2); // Add slight glow
-		//torusMaterial.backFaceCulling = false;
-		torus.material = torusMaterial;
+			scene.fogColor = new BABYLON.Color3(0.9, 0.9, 0.85);
+			scene.fogDensity = 0.001;
 
 
 
+		// Create torus via component (encapsulates mesh, material, physics and path generation)
+		const torusResult = createTorus(scene, {
+			diameter: 80,
+			thickness: 30,
+			tessellation: 80,
+			positionY: 1,
+			lineRadiusFactor: 0.0,
+			turns: 1,
+			spiralTurns: 3,
+			segments: 128,
+			materialTextureUrl: '/metal.jpg'
+		});
+		const torus = torusResult.torus;
+		const torusAggregate = torusResult.torusAggregate;
+		const torusMainRadius = torusResult.torusMainRadius;
+		const torusTubeRadius = torusResult.torusTubeRadius;
+		const points = torusResult.pathPoints;
+		WormHoleScene2.pathPoints = points;
+		const lineRadius = torusTubeRadius * 0.0; // position inside tube (adjust if needed)
+		const torusMaterial = torus.material as BABYLON.StandardMaterial;
 
+		// DEBUG: draw path and compute statistics to verify centering
+		{
+			// const debugLine = BABYLON.MeshBuilder.CreateLines('pathDebug', { points }, scene);
+			// debugLine.color = new BABYLON.Color3(0, 1, 1);
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+			const center = torus.getAbsolutePosition();
+			let minRad = Number.POSITIVE_INFINITY, maxRad = 0;
+			let minY = Number.POSITIVE_INFINITY, maxY = Number.NEGATIVE_INFINITY;
+			for (let i = 0; i < points.length; i++) {
+				const p = points[i];
+				const dx = p.x - center.x;
+				const dz = p.z - center.z;
+				const radial = Math.sqrt(dx * dx + dz * dz);
+				minRad = Math.min(minRad, radial);
+				maxRad = Math.max(maxRad, radial);
+				minY = Math.min(minY, p.y - center.y);
+				maxY = Math.max(maxY, p.y - center.y);
+			}
+			console.log('Path debug — torus center:', center);
+			console.log(`Path radial distance (min, max): ${minRad.toFixed(4)}, ${maxRad.toFixed(4)} (expected ~${torusMainRadius.toFixed(4)})`);
+			console.log(`Path Y offset from torus center (min, max): ${minY.toFixed(4)}, ${maxY.toFixed(4)} (expected within +/-${torusTubeRadius.toFixed(4)})`);
 
 		
-
-		// Function to create stalactites inside the torus
-		function createTorusStalactites(scene: BABYLON.Scene, torusMainRadius: number, torusTubeRadius: number) {
-			const stalactiteCount = 24;
-			
-			for (let i = 0; i < stalactiteCount; i++) {
-				// Position around the torus ring
-				const mainAngle = (i / stalactiteCount) * Math.PI * 2;
-				
-				// Create a hanging cone (stalactite)
-				const stalactite = BABYLON.MeshBuilder.CreateCylinder(`stalactite_${i}`, {
-					diameterTop: 0.8,     // thick at top (attached to ceiling)
-					diameterBottom: 0.1,  // sharp point at bottom
-					height: 2 + Math.random() * 3, // 2-5 units long
-					tessellation: 6
-				}, scene);
-				
-				// Position it hanging from the torus ceiling
-				const attachX = Math.cos(mainAngle) * torusMainRadius;
-				const attachZ = Math.sin(mainAngle) * torusMainRadius;
-				const attachY = 1 + torusTubeRadius * 0.7; // upper part of torus tube
-				
-				stalactite.position.x = attachX;
-				stalactite.position.z = attachZ;
-				stalactite.position.y = attachY - stalactite.getBoundingInfo().boundingBox.extendSize.y; // hang down
-				
-				// Material (rocky look)
-				const mat = new BABYLON.StandardMaterial(`stalMat_${i}`, scene);
-				mat.diffuseColor = new BABYLON.Color3(0.4, 0.35, 0.3); // brown rock
-				mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1); // low shine
-				stalactite.material = mat;
-				
-				// Physics (static obstacle)
-				new BABYLON.PhysicsAggregate(stalactite, BABYLON.PhysicsShapeType.MESH, {
-					mass: 0, // static
-					restitution: 0.3,
-					friction: 0.8
-				}, scene);
-			}
 		}
 
-		// const sphere = BABYLON.MeshBuilder.CreateSphere('sphere', { diameter: 2, segments: 32 }, scene);
-		const drone = BABYLON.MeshBuilder.CreateCapsule(
-			'capsule',
+
+
+		// Drone setup
+	
+		const { drone, droneVisual } = await createDrone(scene, '/glb/usb.glb');
+		drone.rotation.z = -Math.PI / 2;
+
+	
+		drone.position = getPositionOnPath(WormHoleScene2.pathPoints, 0);
+	
+		const droneAggregate = new BABYLON.PhysicsAggregate(
+			drone,
+			BABYLON.PhysicsShapeType.MESH,
 			{
-				radius: 0.5,
-				capSubdivisions: 1,
-				height: 2,
-				tessellation: 4,
-				topCapSubdivisions: 12
+				mass: 10, // dynamic (can move)
+				restitution: 1, // bounciness
+				friction: 0.3
 			},
 			scene
 		);
-
-		drone.rotation.z = -Math.PI / 2;
-		//  drone.isVisible = false;
-
-		// Get torus dimensions from bounding box (same as wormhole.ts)
-		const boundingInfo = torus.getBoundingInfo();
-		const boundingBox = boundingInfo.boundingBox;
-		const torusDiameter = boundingBox.maximumWorld.x - boundingBox.minimumWorld.x;
-		const torusThickness = Math.abs(boundingBox.maximumWorld.y - boundingBox.minimumWorld.y);
-		const points = [];
-		const torusOuterRadius = torusDiameter / 2; // 45
-		const torusTubeRadius = torusThickness / 2; // 5
-		const torusMainRadius = torusOuterRadius - torusTubeRadius; // 40 (center of tube)
-		const lineRadius = torusTubeRadius * 0.0; // Position inside the tube (0.8 = 80% of tube radius)
-
-		// Create stalactites inside the torus
-		createTorusStalactites(scene, torusMainRadius, torusTubeRadius);
-
-		// Position drone at the start of the path (same as sphere in wormhole.ts)
-		const startProgress = 0; // Start at beginning of path
-		const mainAngle = startProgress * Math.PI * 2; // angle around main torus
-		const tubeAngle = startProgress * Math.PI * 4; // spiral angle (2 turns like original)
-
-		// Position on the main torus ring
-		const mainX = Math.cos(mainAngle) * torusMainRadius;
-		const mainZ = Math.sin(mainAngle) * torusMainRadius;
-		const mainY = 1; // same as torus center
-
-		// Offset within the tube (same spiral logic as wormhole.ts)
-		const tubeX = Math.cos(tubeAngle) * lineRadius;
-		const tubeY = Math.sin(tubeAngle) * lineRadius;
-
-		// Combine main position + tube offset
-		const x = mainX + Math.cos(mainAngle) * tubeX;
-		const z = mainZ + Math.sin(mainAngle) * tubeX;
-		const y = mainY + tubeY;
-
-		drone.position = new BABYLON.Vector3(x, y, z);
-		//console.log('Drone positioned using wormhole.ts formula:', drone.position);
-
-		const turns = 1; // CONTROL: loops around main torus (1, 2, 3...)
-		const spiralTurns = 3; // CONTROL: how many times it spirals inside tube (2, 4, 8...)
-		const segments = 128; // CONTROL: smoothness (64=rough, 256=very smooth)
-
-		for (let i = 0; i <= segments; i++) {
-			const t = i / segments;
-			const mainAngle = t * Math.PI * 2 * turns; // angle around main torus
-			const tubeAngle = t * Math.PI * 2 * spiralTurns; // CONTROL: spiral frequency
-
-			// Position on the main torus ring
-			const mainX = Math.cos(mainAngle) * torusMainRadius;
-			const mainZ = Math.sin(mainAngle) * torusMainRadius;
-			const mainY = 1; // same as torus center
-
-			// Offset within the tube
-			const tubeX = Math.cos(tubeAngle) * lineRadius;
-			const tubeY = Math.sin(tubeAngle) * lineRadius;
-
-			// Combine main position + tube offset
-			const x = mainX + Math.cos(mainAngle) * tubeX; // offset in radial direction
-			const z = mainZ + Math.sin(mainAngle) * tubeX; // offset in radial direction
-			const y = mainY + tubeY; // offset vertically
-
-			points.push(new BABYLON.Vector3(x, y, z));
-		}
-
-		// Store path points for navigation
-		WormHoleScene2.pathPoints = points;
+	
 
 
 		// vectorline
@@ -269,50 +165,26 @@ export class WormHoleScene2 {
 		// // Lines use Color3 for color and a separate alpha value for transparency
 		// vectorLine.color = new BABYLON.Color3(0, 1, 1);
 
-		// Navigation system functions (exact copy from wormhole.ts)
-		function getPositionOnPath(progress: number): BABYLON.Vector3 {
-			const clampedProgress = Math.max(0, Math.min(1, progress));
-			const index = clampedProgress * (WormHoleScene2.pathPoints.length - 1);
-			const lowerIndex = Math.floor(index);
-			const upperIndex = Math.min(lowerIndex + 1, WormHoleScene2.pathPoints.length - 1);
-			const t = index - lowerIndex;
 
-			const lower = WormHoleScene2.pathPoints[lowerIndex];
-			const upper = WormHoleScene2.pathPoints[upperIndex];
 
-			return BABYLON.Vector3.Lerp(lower, upper, t);
-		}
-
-		function getDirectionOnPath(progress: number): BABYLON.Vector3 {
-			const epsilon = 0.01;
-			const currentPos = getPositionOnPath(progress);
-			const nextPos = getPositionOnPath(progress + epsilon);
-			return nextPos.subtract(currentPos).normalize();
-		}
-
-		// Use PhysicsAggregate for sphere (dynamic body)
-		const droneAggregate = new BABYLON.PhysicsAggregate(
-			drone,
-			BABYLON.PhysicsShapeType.MESH,
-			{
-				mass: 10, // dynamic (can move)
-				restitution: 1, // bouncinessc
-				friction: 0.3
-			},
-			scene
-		);
 
 		// Drone material with emissive color so GlowLayer can highlight it
 		const droneMaterial = new BABYLON.StandardMaterial('droneMat', scene);
 		droneMaterial.diffuseColor = new BABYLON.Color3(0.05, 0.05, 0.05);
 		droneMaterial.emissiveColor = new BABYLON.Color3(0.1, 0.6, 1.0); // cyan-ish glow
-		drone.material = droneMaterial;
+		// assign material to the visual mesh if available, otherwise to the collider mesh
+		if (droneVisual) {
+			droneVisual.material = droneMaterial;
+		} else {
+			(drone as BABYLON.Mesh).material = droneMaterial;
+		}
 
 		// Create a GlowLayer and make it only pick up the drone's emissive color
 		const gl = new BABYLON.GlowLayer('glow', scene);
 		gl.intensity = 0.6;
 		gl.customEmissiveColorSelector = (mesh, subMesh, material, result) => {
-			if (mesh === drone) {
+			// highlight only the actual visual mesh from the GLB (or drone collider if no visual)
+			if (mesh === droneVisual || mesh === drone) {
 				const mat = material as BABYLON.StandardMaterial | null;
 				const em = mat && mat.emissiveColor ? mat.emissiveColor : new BABYLON.Color3(0.1, 0.6, 1.0);
 				result.set(em.r, em.g, em.b, 1.0);
@@ -354,42 +226,37 @@ export class WormHoleScene2 {
 
 const markerSize = 4;
 const indices = [
-  Math.floor(points.length * 0.25),
-  Math.floor(points.length * 0.5),
-  Math.floor(points.length * 0.75)
+	Math.floor(points.length * 0.25),
+	Math.floor(points.length * 0.5),
+	Math.floor(points.length * 0.75)
 ];
 
+// Use ObstaclesManager to create orange marker cubes at the indices
+const obstacles = new ObstaclesManager(scene, points);
+await obstacles.registerType('orangeCube', async (sc) => {
+	const tpl = BABYLON.MeshBuilder.CreateBox('orangeCube_tpl', { size: markerSize }, sc);
+	const mat = new BABYLON.StandardMaterial('orangeCubeMat_tpl', sc);
+	mat.diffuseColor = new BABYLON.Color3(0.92, 0.45, 0.07); // orange
+	tpl.material = mat;
+	tpl.isVisible = false; // hide template
+	return tpl;
+});
+
 for (let i = 0; i < indices.length; i++) {
-  const p = points[indices[i]];
-  if (!p) { continue; }
-  const box = BABYLON.MeshBuilder.CreateBox('pathCube' + i, { size: markerSize }, scene);
-  box.position = p.clone();
-  // lift cube half its height so it sits nicely on the path (tweak if needed)
-  box.position.y += markerSize / 2;
-
-  const mat = new BABYLON.StandardMaterial('pathCubeMat' + i, scene);
-  mat.diffuseColor = new BABYLON.Color3(0.8, 0.2, 0.2);
-  box.material = mat;
-
-  // Add physics collider so the drone will collide with the box.
-  // mass = 0 makes the cube static; set mass > 0 if you want it to be movable.
-  new BABYLON.PhysicsAggregate(box, BABYLON.PhysicsShapeType.BOX, {
-    mass: 0.02,
-    restitution: 0.2,
-    friction: 0.6
-  }, scene);
-
+	const idx = indices[i];
+	// place the cube; ObstaclesManager will set position and metadata
+	await obstacles.place('orangeCube', { index: idx, offsetY: markerSize / 2, physics: { mass: 0.02, shape: BABYLON.PhysicsShapeType.BOX } });
 }
 
 
 // Create floating cubes via helper module (keeps this scene file small)
 const floating = createFloatingCubes(scene, WormHoleScene2.pathPoints, {
-	count: 10,
-	jitter: 0.5,
+	count: 3,
+	jitter: .05,
 	verticalOffset: 0.5,
 	sizeRange: [1.2, 3.2],
 	massRange: [0.008, 0.8],
-	antiGravityFactor: 2.0,
+	antiGravityFactor: 1.0,
 	linearDamping: 0.985
 });
 
@@ -464,40 +331,13 @@ const jolliPBR = new BABYLON.PBRMaterial('jolliPBR', scene);
   console.error('Failed to load Jollibee model:', error);
 }
 
-// Non-destructive: also demonstrate loading the same model via ModelActor helper.
-// This doesn't replace the previous loader; it coexists and is optional.
-// try {
-// 	(async () => {
-// 		try {
-// 			console.log('ModelActor: attempting to load model via ModelActor...');
-// 			const actor = new ModelActor(scene, { name: 'jollibee_actor' });
-// 				const root = await actor.load(modelUrl);
-
-// 			  // Pick a safe path point to position the actor: use the middle of the path.
-// 			  const step2 = Math.floor(WormHoleScene2.pathPoints.length / 2);
-// 			  const posSource = WormHoleScene2.pathPoints[step2];
-// 			  const pos = posSource ? posSource.clone() : new BABYLON.Vector3(-10, 0, 0);
-// 			  pos.y += -1; // Lift slightly
-// 			if (root) {
-// 				actor.setScale(20);
-// 				// position a single actor instance to the side so it doesn't overlap the template instances
-// 				actor.setPosition(new BABYLON.Vector3(pos.x + 10, pos.y, pos.z));
-// 				actor.addPhysicsAggregate(BABYLON.PhysicsShapeType.BOX, { mass: 0 });
-// 				actor.makeClickable();
-// 				actor.setEmissive(new BABYLON.Color3(0.02, 0.08, 0.02));
-// 				console.log('ModelActor loaded model at', actor);
-// 			}
-// 		} catch (e) { console.warn('ModelActor loader failed', e); }
-// 	})();
-// } catch (e) { /* ignore */ }
 
 
 
  
-
 // create multiple textured billboard planes along the drone track (via BillboardManager)
 try {
-	const bm = new BillboardManager(scene, { count: 5, size: { width: 30, height: 30 }, textureUrl: '/tribal.png', parent: torus });
+	const bm = new BillboardManager(scene, { count: 3, size: { width: 30, height: 30 }, textureUrl: '/tribal.png', parent: torus });
 	await bm.createAlongPath(WormHoleScene2.pathPoints);
 	// Optionally store bm somewhere if you want to dispose later. For now it will be GC'd when scene disposes.
 } catch (e) { console.warn('Failed to create malunggay planes via BillboardManager', e); }
@@ -530,7 +370,7 @@ try {
 			}
 
 			// Move the drone via physics (do NOT teleport the mesh each frame)
-			const targetPos = getPositionOnPath(WormHoleScene2.sphereProgress);
+			const targetPos = getPositionOnPath(WormHoleScene2.pathPoints, WormHoleScene2.sphereProgress);
 			const toTarget = targetPos.subtract(drone.position);
 			const distance = toTarget.length();
 
@@ -556,10 +396,10 @@ try {
 					1,
 					currentProgress + gimbal.lookAheadDistance / WormHoleScene2.pathPoints.length
 				);
-				const lookAtPoint = getPositionOnPath(lookAheadProgress);
+				const lookAtPoint = getPositionOnPath(WormHoleScene2.pathPoints, lookAheadProgress);
 
 				// desired camera position: behind the drone along forward direction
-				const forward = getDirectionOnPath(WormHoleScene2.sphereProgress);
+				const forward = getDirectionOnPath(WormHoleScene2.pathPoints, WormHoleScene2.sphereProgress);
 				const desiredCamPos = drone.position
 					.add(forward.scale(-gimbal.followDistance))
 					.add(new BABYLON.Vector3(0, gimbal.followHeight, 0));
