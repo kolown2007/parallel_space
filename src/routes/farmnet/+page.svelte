@@ -11,7 +11,7 @@ import { updateOrbits } from '$lib/farmnet/orbit';
 
 onMount(() => {
   // 1. Ably orientation ingestion
-  const apiKey = 'Yb71sw.QZOH2w:zr9J3Yub0IxlwZMzRa2TEoaBigpKXqDjHHxQjMrbN9E'; // TODO: move to env
+  const apiKey = ''; // TODO: move to env
   const ably = new Ably.Realtime({ key: apiKey });
   const channel = ably.channels.get('channel1');
   const targetRotation = new BABYLON.Vector3();
