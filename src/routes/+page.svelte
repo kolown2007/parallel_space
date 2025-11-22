@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
 import * as BABYLON from '@babylonjs/core';
-  import { CustomLoadingScreen } from '$lib/customLoadingScreen';
+  import { CustomLoadingScreen } from '$lib/chronoescape/customLoadingScreen';
   import { WormHoleScene } from '$lib/scenes/wormhole';
   import { WormHoleScene2 } from '$lib/scenes/wormhole2';
 
@@ -19,9 +19,9 @@ import * as BABYLON from '@babylonjs/core';
     engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
 
     // set up and show custom loading screen before creating the scene
-    const loadingScreen = new CustomLoadingScreen("I'm loading!!");
+    const loadingScreen = new CustomLoadingScreen("Loading...");
     engine.loadingScreen = loadingScreen;
-    engine.displayLoadingUI();
+    try { engine.displayLoadingUI(); } catch {}
 
     const handleResize = () => engine && engine.resize();
     window.addEventListener('resize', handleResize);
@@ -29,13 +29,30 @@ import * as BABYLON from '@babylonjs/core';
     let disposed = false;
 
     (async () => {
-      // create scenes
+
+      // create scenes (WormHoleScene2 will run preload but page owns the loading UI)
       scene1 = WormHoleScene.CreateScene(engine, canvas);
-      // AWAIT the async scene creation
       scene2 = await WormHoleScene2.CreateScene(engine, canvas);
 
-      // hide loading UI after a short delay so the spinner is visible
-      setTimeout(() => engine && engine.hideLoadingUI(), 600);
+      // Render a few frames of the created scene, then hide the loading UI to avoid flashes
+      try {
+        const active = sceneMode === 'scene1' ? scene1 : scene2;
+        requestAnimationFrame(() => {
+          try { active && typeof active.render === 'function' && active.render(); } catch {}
+          requestAnimationFrame(() => {
+            try { active && typeof active.render === 'function' && active.render(); } catch {}
+            requestAnimationFrame(() => {
+              try { active && typeof active.render === 'function' && active.render(); } catch {}
+              // small timeout to allow compositor
+              setTimeout(() => {
+                try { engine && engine.hideLoadingUI(); } catch {}
+              }, 50);
+            });
+          });
+        });
+      } catch (e) {
+        try { engine && engine.hideLoadingUI(); } catch {}
+      }
 
       // render only the active scene
       engine.runRenderLoop(() => {

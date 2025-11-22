@@ -1,6 +1,7 @@
 import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
-import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
+// Use the SceneLoader available on the BABYLON namespace to avoid importing
+// from internal loader paths which may be considered non-public.
 
 export interface ModelActorOptions {
   name?: string;
@@ -44,12 +45,11 @@ export class ModelActor {
         return null;
       }
 
-  // Use SceneLoader.ImportMeshAsync to load the mesh. This matches the usage
-  // in other scenes in this project and avoids ambiguous overloads.
-  // Pass `undefined` for pluginExtension so onProgress is correctly assigned.
-  const result = await SceneLoader.ImportMeshAsync('', rootUrl, fileName, this.scene, undefined, onProgress as any);
+    // Load the model into an AssetContainer using the public API, then add to scene
+    const container = await BABYLON.SceneLoader.LoadAssetContainerAsync(rootUrl, fileName, this.scene);
+    container.addAllToScene();
       // choose a sensible root: prefer a node named the same as file, else first mesh
-      const meshes = result.meshes.filter(m => m instanceof BABYLON.AbstractMesh) as BABYLON.AbstractMesh[];
+      const meshes = container.meshes.filter(m => m instanceof BABYLON.AbstractMesh) as BABYLON.AbstractMesh[];
       if (meshes.length === 0) return null;
       // create a parent transform node so we can move/scale the whole model
       const root = new BABYLON.TransformNode(this.name + '_root', this.scene);

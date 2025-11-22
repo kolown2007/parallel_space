@@ -1,20 +1,14 @@
 import * as BABYLON from '@babylonjs/core';
 import HavokPhysics from '@babylonjs/havok';
-import { createFloatingCubes } from '../floatingCubes';
+import { createFloatingCubes } from '../chronoescape/floatingCubes';
 import { createSolidParticleSystem } from '../particles/solidParticleSystem';
 import '@babylonjs/loaders/glTF';
-import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
-import { ModelActor } from '../ModelActor';
-import { BillboardManager } from '../BillboardManager';
-import { createDrone } from '../Drone';
-import { createTorus } from '../Torus';
-import { getPositionOnPath, getDirectionOnPath } from '../PathUtils';
-import { ObstaclesManager } from '../Obstacles';
-
-
-
-
-const modelUrl = "https://kolown.net/assets/p1sonet/jollibee.glb";
+import { BillboardManager } from '../chronoescape/BillboardManager';
+import { createDrone } from '../chronoescape/Drone';
+import { createTorus } from '../chronoescape/Torus';
+import { getPositionOnPath, getDirectionOnPath } from '../chronoescape/PathUtils';
+import { ObstaclesManager } from '../chronoescape/Obstacles';
+import preloadContainers, { defaultAssetList } from '../chronoescape/assetContainers';
 
 
 export class WormHoleScene2 {
@@ -34,11 +28,28 @@ export class WormHoleScene2 {
 		scene.enablePhysics(gravityVector, havokPlugin);
 	}
 
-	static async CreateScene(engine: any, canvas: HTMLCanvasElement): Promise<BABYLON.Scene> {
-		const scene = new BABYLON.Scene(engine);
-		console.log('wormhole2 scene created');
+	 static async CreateScene(engine: any, canvas: HTMLCanvasElement): Promise<BABYLON.Scene> {
+			// Preload required assets using a short-lived scene to provide an AssetsManager context
+			try {
+				const preloadScene = new BABYLON.Scene(engine);
+				try {
+					await preloadContainers(preloadScene, defaultAssetList, (loaded: number, total: number, last?: string) => {
+						try { (engine as any)?.loadingScreen?.setLoadingText?.(`Loading ${loaded}/${total} ${last ?? ''}`); } catch {}
+					});
+				} catch (e) {
+					console.warn('preloadContainers threw', e);
+				} finally {
+					try { preloadScene.dispose(); } catch (e) { /* ignore */ }
+				}
+			} catch (e) {
+				console.warn('Preload failed or was skipped', e);
+			}
 
-		await WormHoleScene2.setupPhysics(scene);
+			// Create the actual scene after preload completes
+			const scene = new BABYLON.Scene(engine);
+			console.log('wormhole2 scene created');
+
+			await WormHoleScene2.setupPhysics(scene);
 
 		//camera 1
 		const arcCamera = new BABYLON.ArcRotateCamera(
@@ -87,11 +98,14 @@ export class WormHoleScene2 {
 		scene.fogMode = BABYLON.Scene.FOGMODE_EXP;
 
 			scene.fogColor = new BABYLON.Color3(0.9, 0.9, 0.85);
-			scene.fogDensity = 0.001;
+			scene.fogDensity = 0.0001;
 
 
 
 		// Create torus via component (encapsulates mesh, material, physics and path generation)
+
+		
+
 		const torusResult = createTorus(scene, {
 			diameter: 80,
 			thickness: 30,
@@ -284,11 +298,40 @@ const spsAutoHandle = window.setTimeout(() => {
 
 try {
   console.log('Loading Jollibee model...');
-  const result = await SceneLoader.ImportMeshAsync("", "https://kolown.net/assets/p1sonet/", "jollibee.glb", scene);
-  const template = result.meshes.find(mesh => mesh.geometry);
-  
-  if (template) {
-    template.setEnabled(false); // Hide original
+	
+	const rootUrl = "https://kolown.net/assets/p1sonet/";
+	const fileName = "jollibee.glb";
+	let container: any = null;
+	const pluginOptions = {
+		// example glTF plugin options; adjust if you need specific behavior
+		gltf: {
+			// skipMaterials: false,
+			// extensionOptions: { MSFT_lod: { maxLODsToLoad: 1 } }
+		}
+	};
+
+	// Use the module-level loader only (no fallback to SceneLoader).
+	const moduleLoader = (BABYLON as any).loadAssetContainerAsync || (BABYLON as any).loadAssetContainer;
+	if (typeof moduleLoader !== 'function') {
+		throw new Error('module-level loadAssetContainerAsync not available; project requires module-level loader API');
+	}
+
+	try {
+		container = await moduleLoader.call(BABYLON, fileName, scene, { rootUrl, pluginOptions });
+	} catch (e) {
+		console.error('module-level loadAssetContainerAsync failed', e);
+		throw e;
+	}
+
+	try { if (container && typeof container.addAllToScene === 'function') container.addAllToScene(); } catch (e) { /* ignore */ }
+
+	let template = container && Array.isArray(container.meshes) ? container.meshes.find((m: any) => m.geometry) as BABYLON.Mesh | undefined : undefined;
+	if (!template) {
+		template = scene.meshes.find(m => m.geometry && /jolli|jollibee/i.test(m.name)) as BABYLON.Mesh | undefined;
+	}
+
+	if (template) {
+		try { template.setEnabled(false); } catch (e) { /* ignore if not applicable */ }
 
 
 const jolliPBR = new BABYLON.PBRMaterial('jolliPBR', scene);
@@ -330,6 +373,18 @@ const jolliPBR = new BABYLON.PBRMaterial('jolliPBR', scene);
 } catch (error) {
   console.error('Failed to load Jollibee model:', error);
 }
+
+		// Render two frames to ensure the GPU has presented the scene, then hide loading UI
+		try {
+			requestAnimationFrame(() => {
+				try { scene.render(); } catch (e) { /* ignore */ }
+				requestAnimationFrame(() => {
+					try { scene.render(); } catch (e) { /* ignore */ }
+				});
+			});
+		} catch (e) {
+			// loader hide is handled by the main page
+		}
 
 
 

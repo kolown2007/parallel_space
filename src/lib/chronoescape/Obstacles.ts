@@ -1,5 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-import { SceneLoader } from '@babylonjs/core/Loading/sceneLoader';
+// Avoid importing internal SceneLoader path; use `BABYLON.SceneLoader` when needed.
 import { getPositionOnPath, getDirectionOnPath } from './PathUtils';
 import '@babylonjs/loaders/glTF';
 
