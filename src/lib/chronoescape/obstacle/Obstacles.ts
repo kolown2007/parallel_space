@@ -1,6 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 // Avoid importing internal SceneLoader path; use `BABYLON.SceneLoader` when needed.
-import { getPositionOnPath, getDirectionOnPath } from './PathUtils';
+import { getPositionOnPath, getDirectionOnPath } from '../world/PathUtils';
 import '@babylonjs/loaders/glTF';
 
 type TemplateFactory = (scene: BABYLON.Scene) => Promise<BABYLON.Mesh | BABYLON.TransformNode | null>;
