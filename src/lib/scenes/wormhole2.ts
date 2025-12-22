@@ -19,6 +19,8 @@ import { createFloatingCubes } from '../chronoescape/obstacle/floatingCubes';
 import { ObstaclesManager } from '../chronoescape/obstacle/Obstacles';
 import { BillboardManager } from '../chronoescape/obstacle/BillboardManager';
 import { createSolidParticleSystem } from '../particles/solidParticleSystem';
+import { Portal } from '../chronoescape/obstacle/Portal';
+
 
 // System
 import preloadContainers, { getDefaultAssetList } from '../chronoescape/assetContainers';
@@ -499,12 +501,44 @@ export class WormHoleScene2 {
 			// Loader hide is handled by the main page
 		}
 
+		// Create a Portal positioned on the same track as the other billboards
+		let portal: Portal | undefined;
+		try {
+			// Choose a billboard index (use first marker index if available)
+			const portalIdx = indices && indices.length > 0 ? indices[0] : Math.floor(WormHoleScene2.pathPoints.length / 2);
+			const portalPos = WormHoleScene2.pathPoints[portalIdx].clone();
+			// lift the portal slightly above the path so it's visible
+			portalPos.y += 0.5;
+
+			const posterArg = await getTextureUrl('metal');
+			portal = new Portal(posterArg, 'plant2', { x: portalPos.x, y: portalPos.y, z: portalPos.z }, { x: 3, y: 4, z: 0.5 }, scene, { width: 9, height: 12 });
+		} catch (e) {
+			console.warn('Portal setup failed', e);
+		}
+
 		// ====================================================================
 		// RENDER LOOP
 		// ====================================================================
 
 		scene.registerBeforeRender(() => {
 			const dt = engine.getDeltaTime() / 1000;
+
+
+
+			// Portal collision check (approximate USB AABB from drone position)
+			if (typeof portal !== 'undefined' && portal) {
+				try {
+					const usbAabb = {
+						min: { x: drone.position.x - 0.5, y: drone.position.y - 0.5, z: drone.position.z - 0.5 },
+						max: { x: drone.position.x + 0.5, y: drone.position.y + 0.5, z: drone.position.z + 0.5 }
+					};
+					portal.checkCollisionAndHandle(usbAabb).then((triggered) => {
+						if (triggered) console.log('Portal activated — videoScene mounted');
+					}).catch(() => {});
+				} catch (e) {
+					/* ignore transient errors */
+				}
+			}
 
 			// Update floating cubes
 			if (floating && typeof floating.update === 'function') {

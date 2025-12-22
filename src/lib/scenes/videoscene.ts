@@ -16,7 +16,8 @@ import { getVideoUrl } from '../assetsConfig';
 export function mountVideoScene(
     container?: HTMLElement,
     src?: string,
-    onEnd?: () => void
+    onEnd?: () => void,
+    poster?: string
 ): VideoMount {
     const parent = container ?? document.body;
 
@@ -33,15 +34,37 @@ export function mountVideoScene(
     });
     parent.appendChild(root);
 
+    // Optional poster image shown while video loads/before play
+    let posterImg: HTMLImageElement | undefined;
+    const showPoster = (url: string) => {
+        posterImg = document.createElement('img');
+        posterImg.src = url;
+        Object.assign(posterImg.style, {
+            position: 'absolute',
+            inset: '0',
+            margin: 'auto',
+            width: 'auto',
+            height: '100%',
+            objectFit: 'contain',
+            zIndex: '9998',
+            background: 'black'
+        });
+        root.appendChild(posterImg!);
+    };
+
     // Video element - muted for instant autoplay
     const video = document.createElement('video');
+    if (poster) {
+        try { video.poster = poster; showPoster(poster); } catch {};
+    }
+
     // If caller didn't pass a src, try to load from centralized assets.json
     if (src) {
         video.src = src;
     } else {
         video.src = '';
-        try {
-            getVideoUrl('intro').then(u => {
+        try {1
+            getVideoUrl('plant2').then(u => {
                 if (u) {
                     video.src = u;
                     // try to autoplay once src arrives
@@ -68,6 +91,12 @@ export function mountVideoScene(
     // Force play after a brief delay
         setTimeout(() => video.play().catch(() => {}), 100);
 
+    // Hide poster once video starts playing
+    const handlePlaying = () => {
+        if (posterImg && posterImg.parentElement) posterImg.remove();
+    };
+    video.addEventListener('playing', handlePlaying);
+
     // Call onEnd callback when video finishes
     const handleEnded = () => {
         if (onEnd) {
@@ -92,9 +121,11 @@ export function mountVideoScene(
     const cleanup = () => {
         document.removeEventListener('visibilitychange', handleVisibility);
         video.removeEventListener('ended', handleEnded);
+        video.removeEventListener('playing', handlePlaying);
         video.pause();
         video.src = '';
         video.load(); // Release resources
+        if (posterImg && posterImg.parentElement) posterImg.remove();
         root.remove();
     };
 
@@ -102,3 +133,22 @@ export function mountVideoScene(
 }
 
 export default mountVideoScene;
+
+/**
+ * Play a video by switching to the full-screen video scene.
+ * `videoRef` may be a direct URL or an asset id resolvable by `getVideoUrl`.
+ * Returns the mounted VideoMount (resolved promise) so caller can cleanup if needed.
+ */
+export async function playVideoScene(videoRef: string, onEnd?: () => void, poster?: string): Promise<VideoMount> {
+    let src = videoRef;
+    try {
+        if (!/^https?:\/\//i.test(videoRef)) {
+            const u = await getVideoUrl(videoRef);
+            if (u) src = u;
+        }
+    } catch {}
+
+    const mount = mountVideoScene(undefined, src, onEnd, poster);
+    setTimeout(() => mount.video.play().catch(() => {}), 50);
+    return mount;
+}

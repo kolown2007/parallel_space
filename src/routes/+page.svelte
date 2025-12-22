@@ -148,8 +148,12 @@ import * as BABYLON from '@babylonjs/core';
     display: block;
   }
 
-  :global(body) { margin: 0; 
-    cursor: none;}
+  /* :global(body) { margin: 0; 
+    cursor: none;} */
+
+
+      :global(body) { margin: 0; 
+  }
     
 </style>
 
