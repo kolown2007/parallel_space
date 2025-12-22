@@ -1,0 +1,53 @@
+{
+  "models": {
+    "jollibee": {
+      "rootUrl": "https://kolown.net/storage/library/chronoescape/",
+      "filename": "glb/jollibee.glb",
+      "type": "mesh"
+    },
+    "drone": {
+      "rootUrl": "https://kolown.net/storage/library/chronoescape/",
+      "filename": "glb/usb.glb",
+      "type": "mesh"
+    }
+  },
+  "textures": {
+    "metal": {
+      "rootUrl": "https://kolown.net/storage/library/chronoescape/",
+      "filename": "metal.jpg",
+      "type": "texture"
+    },
+    "tribal": {
+      "rootUrl": "https://kolown.net/storage/library/chronoescape/",
+      "filename": "tribal.png",
+      "type": "texture"
+    },
+    "heightmap": {
+      "rootUrl": "/heightmaps/",
+      "filename": "heightmap.png",
+      "type": "texture"
+    },
+    "malunggay": {
+      "rootUrl": "https://kolown.net/storage/library/chronoescape/",
+      "filename": "malunggay.png",
+      "type": "texture"
+    }
+  },
+  "shaders": {
+    "universe": {
+      "vertex": "/shaders/universe.vert.glsl",
+      "fragment": "/shaders/universe.frag.glsl"
+    }
+  },
+  "videos": {
+    "intro": {
+      "url": "https://videos.pexels.com/video-files/35037587/14842032_1920_1080_25fps.mp4"
+    }
+  },
+  "loading": {
+    "backgroundImage": "https://kolown.net/storage/library/chronoescape/parallel3.jpg"
+  },
+  "physics": {
+    "havokWasm": "https://kolown.net/storage/library/chronoescape/HavokPhysics.wasm"
+  }
+}

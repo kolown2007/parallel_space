@@ -21,8 +21,9 @@ import { BillboardManager } from '../chronoescape/obstacle/BillboardManager';
 import { createSolidParticleSystem } from '../particles/solidParticleSystem';
 
 // System
-import preloadContainers, { defaultAssetList } from '../chronoescape/assetContainers';
+import preloadContainers, { getDefaultAssetList } from '../chronoescape/assetContainers';
 import { installKeyboardControls } from '../input/keyboardControls';
+import { getPhysicsWasmUrl, getTextureUrl, getModelUrl, loadAssetsConfig, getTextureUrl as _getTextureUrl } from '../assetsConfig';
 
 // ============================================================================
 // SCENE CLASS
@@ -39,8 +40,9 @@ export class WormHoleScene2 {
 	// ========================================================================
 
 	private static async setupPhysics(scene: BABYLON.Scene) {
+		const wasmUrl = await getPhysicsWasmUrl();
 		const havok = await HavokPhysics({
-			locateFile: () => '/HavokPhysics.wasm'
+			locateFile: () => wasmUrl
 		});
 		const gravityVector = new BABYLON.Vector3(0, 0, 0);
 		const havokPlugin = new BABYLON.HavokPlugin(true, havok);
@@ -58,9 +60,10 @@ export class WormHoleScene2 {
 		try {
 			const preloadScene = new BABYLON.Scene(engine);
 			try {
+				const assetList = await getDefaultAssetList();
 				await preloadContainers(
 					preloadScene,
-					defaultAssetList,
+					assetList,
 					(loaded: number, total: number, last?: string) => {
 						try {
 							(engine as any)?.loadingScreen?.setLoadingText?.(
@@ -147,6 +150,7 @@ export class WormHoleScene2 {
 		// WORLD: TORUS TRACK
 		// ====================================================================
 
+		const metalTextureUrl = await getTextureUrl('metal');
 		const torusResult = createTorus(scene, {
 			diameter: 80,
 			thickness: 30,
@@ -156,7 +160,7 @@ export class WormHoleScene2 {
 			turns: 1,
 			spiralTurns: 3,
 			segments: 128,
-			materialTextureUrl: '/metal.jpg'
+			materialTextureUrl: metalTextureUrl || '/metal.jpg'
 		});
 		const torus = torusResult.torus;
 		const torusAggregate = torusResult.torusAggregate;
@@ -200,8 +204,9 @@ export class WormHoleScene2 {
 		// ====================================================================
 
 		const initialPosition = getPositionOnPath(WormHoleScene2.pathPoints, 0);
+		const droneGlbUrl = await getModelUrl('drone');
 		const { drone, droneAggregate } = await setupSceneDrone(scene, {
-			glbUrl: '/glb/usb.glb',
+			glbUrl: droneGlbUrl || '/glb/usb.glb',
 			initialPosition: initialPosition,
 			initialRotation: new BABYLON.Vector3(0, 0, -Math.PI / 2),
 			mass: 2,
@@ -344,8 +349,10 @@ export class WormHoleScene2 {
 		try {
 			console.log('Loading Jollibee model...');
 
-			const rootUrl = 'https://kolown.net/assets/p1sonet/';
-			const fileName = 'jollibee.glb';
+			const cfg = await loadAssetsConfig();
+			const jolli = cfg.models?.jollibee;
+			const rootUrl = (jolli && jolli.rootUrl) ? jolli.rootUrl : 'https://kolown.net/assets/p1sonet/';
+			const fileName = (jolli && jolli.filename) ? jolli.filename : 'jollibee.glb';
 			let container: any = null;
 			const pluginOptions = {
 				// example glTF plugin options; adjust if you need specific behavior
@@ -460,10 +467,11 @@ export class WormHoleScene2 {
 
 		// create multiple textured billboard planes along the drone track (via BillboardManager)
 		try {
+			const tribalTex = await getTextureUrl('tribal');
 			const bm = new BillboardManager(scene, {
 				count: 3,
 				size: { width: 30, height: 30 },
-				textureUrl: '/tribal.png',
+				textureUrl: tribalTex || '/tribal.png',
 				parent: torus
 			});
 			await bm.createAlongPath(WormHoleScene2.pathPoints);

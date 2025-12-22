@@ -9,11 +9,32 @@ const ASSETS = [
 	...files  // everything in `static`
 ];
 
+// External assets to cache (optional - only if you want offline support for these)
+const EXTERNAL_ASSETS = [
+	'https://kolown.net/storage/library/chronoescape/parallel3.jpg',
+	// Add other critical external assets here
+	// Note: Large files like videos may hit cache limits
+];
+
 self.addEventListener('install', (event) => {
 	// Create a new cache and add all files to it
 	async function addFilesToCache() {
 		const cache = await caches.open(CACHE);
+		
+		// Cache local assets first
 		await cache.addAll(ASSETS);
+		
+		// Try to cache external assets (fail silently if CORS or network issues)
+		for (const url of EXTERNAL_ASSETS) {
+			try {
+				const response = await fetch(url, { mode: 'cors' });
+				if (response.ok) {
+					await cache.put(url, response);
+				}
+			} catch (err) {
+				console.warn(`Failed to cache external asset: ${url}`, err);
+			}
+		}
 	}
 
 	event.waitUntil(addFilesToCache());
@@ -58,9 +79,17 @@ self.addEventListener('fetch', (event) => {
 				throw new Error('invalid response from fetch');
 			}
 
-			// Only cache HTTP/HTTPS requests, skip chrome-extension and other schemes
+			// Only cache successful HTTP/HTTPS requests
+			// Skip very large files (>50MB) to avoid quota issues
+			const contentLength = response.headers.get('content-length');
+			const sizeMB = contentLength ? parseInt(contentLength) / (1024 * 1024) : 0;
+			
 			if (response.status === 200 && url.protocol.startsWith('http')) {
-				cache.put(event.request, response.clone());
+				if (sizeMB === 0 || sizeMB < 50) {
+					cache.put(event.request, response.clone());
+				} else {
+					console.log(`Skipping cache for large file (${sizeMB.toFixed(2)}MB): ${url.pathname}`);
+				}
 			}
 
 			return response;

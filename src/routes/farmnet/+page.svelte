@@ -168,7 +168,9 @@ onMount(() => {
     // 9. Physics + hoe + falling cubes (spawner)
     (async () => {
       try {
-        const havok = await HavokPhysics({ locateFile: () => '/HavokPhysics.wasm' });
+        const { getPhysicsWasmUrl } = await import('$lib/assetsConfig');
+        const wasmUrl = await getPhysicsWasmUrl();
+        const havok = await HavokPhysics({ locateFile: () => wasmUrl });
         const plugin = new (BABYLON as any).HavokPlugin(true, havok);
   const gravity = new BABYLON.Vector3(0, -9.81, 0);
   scene.enablePhysics(gravity, plugin);

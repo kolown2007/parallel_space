@@ -1,19 +1,30 @@
 import * as BABYLON from '@babylonjs/core';
+import { getLoadingImageUrl } from '../assetsConfig';
 
 export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
   // use a solid red background for loading
   public loadingUIBackgroundColor: string = '#BB464B';
   public loadingUIText: string;
   // optional background image for loader (full cover)
-  public loadingUIImageUrl: string | null = 'https://streetkonect.com/storage/kolown/parallel2018/parallel3.jpg';
+  public loadingUIImageUrl: string | null = null;
 
   private _container: HTMLDivElement | null = null;
   private _textElement: HTMLDivElement | null = null;
   private _shownAt: number | null = null;
   private _hideTimeoutHandle: number | null = null;
 
-  constructor(loadingUIText: string) {
+  constructor(loadingUIText: string, imageUrl?: string) {
     this.loadingUIText = loadingUIText;
+    if (imageUrl !== undefined) {
+      this.loadingUIImageUrl = imageUrl;
+    } else {
+      // attempt to load loading image from centralized assets.json
+      try {
+        getLoadingImageUrl().then((u) => {
+          if (u) this.loadingUIImageUrl = u;
+        }).catch(() => {});
+      } catch (e) {}
+    }
   }
 
   public displayLoadingUI() {

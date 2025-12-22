@@ -1,5 +1,6 @@
 import { AssetsManager, Scene, AssetContainer, TransformNode, Mesh, AbstractMesh } from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
+import { getAssetList } from '../assetsConfig';
 
 export type AssetItem = {
   id: string;
@@ -131,5 +132,17 @@ export const defaultAssetList: AssetItem[] = [
   { id: 'heightmap', rootUrl: '/heightmaps/', filename: 'heightmap.png' },
 
 ];
+
+/**
+ * Load assets from JSON config
+ */
+export async function getDefaultAssetList(): Promise<AssetItem[]> {
+  try {
+    return await getAssetList();
+  } catch (error) {
+    console.warn('Failed to load assets from config, using hardcoded defaults:', error);
+    return defaultAssetList;
+  }
+}
 
 export default preloadContainers;
