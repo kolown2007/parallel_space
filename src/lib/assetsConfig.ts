@@ -141,7 +141,28 @@ export async function getVideoUrl(id: string): Promise<string> {
 
 export async function getPhysicsWasmUrl(): Promise<string> {
   const config = await loadAssetsConfig();
-  return config.physics?.havokWasm || '/HavokPhysics.wasm';
+  const wasmUrl = config.physics?.havokWasm || '/HavokPhysics.wasm';
+
+  // Try to fetch the wasm and ensure it's served with the correct MIME type.
+  // If the server responds without 'application/wasm', create a blob URL
+  // with the proper MIME so `WebAssembly.compileStreaming` succeeds.
+  try {
+    const resp = await fetch(wasmUrl, { cache: 'no-cache' });
+    if (!resp.ok) return wasmUrl;
+    const ctype = resp.headers.get('content-type') || '';
+    if (ctype.includes('application/wasm')) {
+      return wasmUrl;
+    }
+
+    // Server didn't provide correct content-type — create blob URL
+    const ab = await resp.arrayBuffer();
+    const blob = new Blob([ab], { type: 'application/wasm' });
+    const objUrl = URL.createObjectURL(blob);
+    return objUrl;
+  } catch (e) {
+    // If fetch fails for any reason, fall back to returning original URL
+    return wasmUrl;
+  }
 }
 
 export async function getLoadingImageUrl(): Promise<string> {

@@ -426,17 +426,26 @@ export class WormHoleScene2 {
 
 					instance.material = jolliPBR;
 
-					// Physics - directly on the instance (modern approach)
-					new BABYLON.PhysicsAggregate(
-						instance,
-						BABYLON.PhysicsShapeType.SPHERE,
-						{
-							mass: 0.05, // Static
-							restitution: 0.3, // Bounce
-							friction: 0.05
-						},
-						scene
-					);
+					// Physics - use MESH shape to avoid issues with non-uniform scaling
+					try {
+						new BABYLON.PhysicsAggregate(
+							instance,
+							BABYLON.PhysicsShapeType.MESH,
+							{
+								mass: 0.05,
+								restitution: 0.3,
+								friction: 0.05
+							},
+							scene
+						);
+					} catch (e) {
+						console.warn('Failed to create mesh physics for jollibee instance, falling back to box:', e);
+						try {
+							new BABYLON.PhysicsAggregate(instance, BABYLON.PhysicsShapeType.BOX, { mass: 0.05, restitution: 0.3, friction: 0.05 }, scene);
+						} catch (err) {
+							console.warn('Fallback box physics also failed for jollibee instance', err);
+						}
+					}
 				}
 
 				console.log(`Created ${instanceCount} Jollibee instances`);

@@ -32,7 +32,14 @@ export class BillboardManager {
         }
       }
       this.texture = new BABYLON.Texture(texUrl as string, this.scene);
-      try { this.texture.updateSamplingMode(BABYLON.Texture.TRILINEAR_SAMPLINGMODE); } catch {}
+      // Avoid requesting trilinear sampling up-front since that forces mipmap
+      // generation which can fail for NPOT or unsupported texture formats.
+      try {
+        this.texture.updateSamplingMode(BABYLON.Texture.BILINEAR_SAMPLINGMODE);
+      } catch {}
+      try {
+        this.texture.wrapU = this.texture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+      } catch {}
       try { (this.texture as any).hasAlpha = true; } catch {}
 
       for (let i = 0; i < count; i++) {
