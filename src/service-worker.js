@@ -11,9 +11,7 @@ const ASSETS = [
 
 // External assets to cache (optional - only if you want offline support for these)
 const EXTERNAL_ASSETS = [
-	'https://kolown.net/storage/library/chronoescape/parallel3.jpg',
-	// Add other critical external assets here
-	// Note: Large files like videos may hit cache limits
+	// kept for explicit list fallback; main install step will fetch assets.json
 ];
 
 self.addEventListener('install', (event) => {
@@ -25,15 +23,30 @@ self.addEventListener('install', (event) => {
 		await cache.addAll(ASSETS);
 		
 		// Try to cache external assets (fail silently if CORS or network issues)
-		for (const url of EXTERNAL_ASSETS) {
-			try {
-				const response = await fetch(url, { mode: 'cors' });
-				if (response.ok) {
-					await cache.put(url, response);
+		// Also fetch asset list from /assets.json and cache those URLs
+		try {
+			const res = await fetch('/assets.json', { cache: 'no-store' });
+			if (res && res.ok) {
+				const json = await res.json();
+				const urls = new Set();
+				const add = (u) => { if (u) urls.add(u); };
+				if (json.models) for (const a of Object.values(json.models)) add((/^https?:\/\//i.test(a.rootUrl) ? a.rootUrl : '') + (a.filename || ''));
+				if (json.textures) for (const a of Object.values(json.textures)) add((/^https?:\/\//i.test(a.rootUrl) ? a.rootUrl : '') + (a.filename || ''));
+				if (json.shaders) for (const s of Object.values(json.shaders)) { if (s.vertex) add((/^https?:\/\//i.test(s.vertex) ? s.vertex : s.vertex)); if (s.fragment) add((/^https?:\/\//i.test(s.fragment) ? s.fragment : s.fragment)); }
+				if (json.videos) for (const v of Object.values(json.videos)) add(v.url);
+				if (json.loading && json.loading.backgroundImage) add(json.loading.backgroundImage);
+				if (json.physics && json.physics.havokWasm) add(json.physics.havokWasm);
+				for (const url of Array.from(urls)) {
+					try {
+						const r = await fetch(url, { mode: 'cors' });
+						if (r && r.ok) await cache.put(url, r);
+					} catch (e) {
+						console.warn('SW: failed to cache asset', url, e);
+					}
 				}
-			} catch (err) {
-				console.warn(`Failed to cache external asset: ${url}`, err);
 			}
+		} catch (e) {
+			console.warn('SW: failed to load /assets.json', e);
 		}
 	}
 

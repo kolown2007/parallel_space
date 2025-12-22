@@ -49,8 +49,19 @@ export async function setupSceneDrone(
 		enableDebug = true
 	} = options;
 
+	// resolve default GLB URL from assets.json if not provided
+	let resolvedGlbUrl = glbUrl;
+	if (!resolvedGlbUrl) {
+		try {
+			const { getModelUrl } = await import('../../assetsConfig');
+			resolvedGlbUrl = await getModelUrl('drone');
+		} catch (e) {
+			resolvedGlbUrl = '/glb/usb.glb';
+		}
+	}
+
 	// Load drone mesh
-	const { drone, droneVisual } = await createDrone(scene, glbUrl);
+	const { drone, droneVisual } = await createDrone(scene, resolvedGlbUrl);
 	
 	// Set position and rotation
 	drone.position.copyFrom(initialPosition);

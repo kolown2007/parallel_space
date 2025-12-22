@@ -1,4 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
+import { getTextureUrl } from '../../assetsConfig';
 
 export interface BillboardOptions {
   count?: number;
@@ -15,14 +16,22 @@ export class BillboardManager {
 
   constructor(scene: BABYLON.Scene, options: BillboardOptions = {}) {
     this.scene = scene;
-    this.options = Object.assign({ count: 8, size: { width: 4, height: 4 }, textureUrl: '/malunggay.png', parent: null }, options);
+    // keep options.textureUrl optional; resolve at creation time from assets.json when missing
+    this.options = Object.assign({ count: 8, size: { width: 4, height: 4 }, textureUrl: undefined as any, parent: null }, options);
   }
 
   async createAlongPath(pathPoints: BABYLON.Vector3[]) {
     try {
       const count = this.options.count ?? 8;
-      const texUrl = this.options.textureUrl ?? '/malunggay.png';
-      this.texture = new BABYLON.Texture(texUrl, this.scene);
+      let texUrl = this.options.textureUrl;
+      if (!texUrl) {
+        try {
+          texUrl = await getTextureUrl('malunggay');
+        } catch (e) {
+          texUrl = '/malunggay.png';
+        }
+      }
+      this.texture = new BABYLON.Texture(texUrl as string, this.scene);
       try { this.texture.updateSamplingMode(BABYLON.Texture.TRILINEAR_SAMPLINGMODE); } catch {}
       try { (this.texture as any).hasAlpha = true; } catch {}
 

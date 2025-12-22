@@ -121,14 +121,11 @@ export function preloadContainers(
  * Default asset list (placeholders). Update paths/filenames to match your repo or CDN.
  */
 export const defaultAssetList: AssetItem[] = [
-    // common textures in static root
-  { id: 'metal', rootUrl: '/', filename: 'metal.jpg' },
-  { id: 'tribal', rootUrl: '/', filename: 'tribal.png' },
-  // Jollibee is hosted on the CDN used elsewhere in the project
-  { id: 'jollibee', rootUrl: 'https://kolown.net/assets/p1sonet/', filename: 'jollibee.glb' },
-  // local drone GLB shipped in the static assets
-  { id: 'drone', rootUrl: '/', filename: 'glb/usb.glb' },
-  // heightmap(s) from static folder
+  // default fallback list mirrors static/assets.json locations
+  { id: 'metal', rootUrl: 'https://kolown.net/storage/library/chronoescape/', filename: 'metal.jpg' },
+  { id: 'tribal', rootUrl: 'https://kolown.net/storage/library/chronoescape/', filename: 'tribal.png' },
+  { id: 'jollibee', rootUrl: 'https://kolown.net/storage/library/chronoescape/', filename: 'glb/jollibee.glb' },
+  { id: 'drone', rootUrl: 'https://kolown.net/storage/library/chronoescape/', filename: 'glb/usb.glb' },
   { id: 'heightmap', rootUrl: '/heightmaps/', filename: 'heightmap.png' },
 
 ];

@@ -1,4 +1,16 @@
 import type { AssetItem } from './chronoescape/assetContainers';
+// prefer generated synchronous assets when available
+let generatedAvailable = false;
+try {
+  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  // @ts-ignore
+  // attempt to import generated module (may not exist in some workflows)
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const gen = require('./assets.generated');
+  if (gen && typeof gen === 'object') generatedAvailable = true;
+} catch (e) {
+  generatedAvailable = false;
+}
 
 export interface AssetsConfig {
   models: Record<string, {
@@ -34,6 +46,18 @@ let cachedConfig: AssetsConfig | null = null;
 export async function loadAssetsConfig(): Promise<AssetsConfig> {
   if (cachedConfig) return cachedConfig;
   
+  // If a generated module exists, use it synchronously
+  if (generatedAvailable) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const gen = require('./assets.generated');
+      cachedConfig = (gen && gen.ASSETS_JSON) ? gen.ASSETS_JSON : null;
+      if (cachedConfig) return cachedConfig;
+    } catch (e) {
+      // fall through to runtime fetch
+    }
+  }
+
   try {
     const response = await fetch('/assets.json');
     if (!response.ok) {

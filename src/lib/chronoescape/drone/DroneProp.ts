@@ -1,5 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
+import { getModelUrl } from '../../assetsConfig';
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -103,10 +104,19 @@ function syncHelperPosition(
  */
 export async function createDrone(
 	scene: BABYLON.Scene,
-	glbUrl = '/glb/usb.glb'
+	glbUrl?: string
 ): Promise<DroneResult> {
+	// resolve default GLB url from assets.json when not provided
+	let resolved = glbUrl;
+	if (!resolved) {
+		try {
+			resolved = await getModelUrl('drone');
+		} catch (e) {
+			resolved = '/glb/usb.glb';
+		}
+	}
 	try {
-		const { rootUrl, fileName } = parseGlbUrl(glbUrl);
+		const { rootUrl, fileName } = parseGlbUrl(resolved as string);
 		const container = await loadGlbContainer(scene, rootUrl, fileName);
 		const meshes = extractGeometryMeshes(container);
 

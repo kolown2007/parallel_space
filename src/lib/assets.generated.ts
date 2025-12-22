@@ -1,4 +1,5 @@
-{
+// This file is generated from static/assets.json — DO NOT EDIT
+export const ASSETS_JSON = {
   "models": {
     "jollibee": {
       "rootUrl": "https://kolown.net/storage/library/chronoescape/",
@@ -53,4 +54,43 @@
   "physics": {
     "havokWasm": "https://kolown.net/storage/library/chronoescape/HavokPhysics.wasm"
   }
+} as const;
+
+export function getAssetList() {
+  const items = [] as Array<{id:string, rootUrl:string, filename:string}>;
+  if ((ASSETS_JSON as any).models) {
+    for (const k of Object.keys((ASSETS_JSON as any).models)) {
+      const v:any = (ASSETS_JSON as any).models[k];
+      items.push({ id: k, rootUrl: v.rootUrl || '', filename: v.filename || '' });
+    }
+  }
+  if ((ASSETS_JSON as any).textures) {
+    for (const k of Object.keys((ASSETS_JSON as any).textures)) {
+      const v:any = (ASSETS_JSON as any).textures[k];
+      items.push({ id: k, rootUrl: v.rootUrl || '', filename: v.filename || '' });
+    }
+  }
+  return items;
+}
+
+export function getModelUrl(id: string) {
+  const v = (ASSETS_JSON as any).models?.[id];
+  return v ? (v.rootUrl || '') + (v.filename || '') : '';
+}
+
+export function getTextureUrl(id: string) {
+  const v = (ASSETS_JSON as any).textures?.[id];
+  return v ? (v.rootUrl || '') + (v.filename || '') : '';
+}
+
+export function getVideoUrl(id: string) {
+  return (ASSETS_JSON as any).videos?.[id]?.url || '';
+}
+
+export function getPhysicsWasmUrl() {
+  return (ASSETS_JSON as any).physics?.havokWasm || '';
+}
+
+export function getLoadingImageUrl() {
+  return (ASSETS_JSON as any).loading?.backgroundImage || '';
 }

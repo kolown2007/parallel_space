@@ -20,9 +20,28 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
     } else {
       // attempt to load loading image from centralized assets.json
       try {
-        getLoadingImageUrl().then((u) => {
-          if (u) this.loadingUIImageUrl = u;
-        }).catch(() => {});
+        getLoadingImageUrl()
+          .then((u) => {
+            if (!u) return;
+            this.loadingUIImageUrl = u;
+            // If container already created, update its background image
+            try {
+              if (this._container) {
+                // preload image then apply to avoid flash
+                const img = new Image();
+                img.src = u;
+                img.onload = () => {
+                  try {
+                    this._container!.style.backgroundImage = `url(${u})`;
+                    this._container!.style.backgroundSize = 'cover';
+                    this._container!.style.backgroundPosition = 'center center';
+                    this._container!.style.backgroundRepeat = 'no-repeat';
+                  } catch (e) {}
+                };
+              }
+            } catch (e) {}
+          })
+          .catch(() => {});
       } catch (e) {}
     }
   }
