@@ -55,7 +55,7 @@ export class WormHoleScene2 {
 	// MAIN SCENE CREATION
 	// ========================================================================
 
-	static async CreateScene(engine: any, canvas: HTMLCanvasElement): Promise<BABYLON.Scene> {
+	static async CreateScene(engine: any, canvas: HTMLCanvasElement, onPortalTrigger?: () => void): Promise<BABYLON.Scene> {
 		// ====================================================================
 		// ASSET PRELOADING
 		// ====================================================================
@@ -535,15 +535,17 @@ export class WormHoleScene2 {
 
 
 			// Portal collision check (approximate USB AABB from drone position)
-			if (typeof portal !== 'undefined' && portal) {
+			if (portal && onPortalTrigger) {
 				try {
 					const usbAabb = {
 						min: { x: drone.position.x - 0.5, y: drone.position.y - 0.5, z: drone.position.z - 0.5 },
 						max: { x: drone.position.x + 0.5, y: drone.position.y + 0.5, z: drone.position.z + 0.5 }
 					};
-					portal.checkCollisionAndHandle(usbAabb).then((triggered) => {
-						if (triggered) console.log('Portal activated — videoScene mounted');
-					}).catch(() => {});
+					if (portal.intersects(usbAabb)) {
+						onPortalTrigger();
+						try { portal.reset(); } catch {}
+						portal = undefined;
+					}
 				} catch (e) {
 					/* ignore transient errors */
 				}
