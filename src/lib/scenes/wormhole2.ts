@@ -4,56 +4,36 @@
 
 import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
-import HavokPhysics from '@babylonjs/havok';
 
 // Drone
 import { setupSceneDrone } from '../chronoescape/drone/setupDrone';
 import { updateDronePhysics, updateFollowCamera } from '../chronoescape/drone/droneControllers';
 
-// World & Path
+// World & Utilities
 import { createTorus } from '../chronoescape/world/Torus';
-import { getPositionOnPath, getDirectionOnPath } from '../chronoescape/world/PathUtils';
+import { getPositionOnPath } from '../chronoescape/world/PathUtils';
+import { setupPhysics, setupLighting, setupCameras } from '../chronoescape/world/sceneUtils';
+import { createPathMarkers } from '../chronoescape/world/markers';
+import { createBillboards, createPortal, createParticles } from '../chronoescape/world/effects';
 
-// Obstacles & Effects
+// Obstacles
 import { createFloatingCubes } from '../chronoescape/obstacle/floatingCubes';
 import { ObstaclesManager } from '../chronoescape/obstacle/Obstacles';
-import { BillboardManager } from '../chronoescape/obstacle/BillboardManager';
-import { createSolidParticleSystem } from '../particles/solidParticleSystem';
-import { Portal } from '../chronoescape/obstacle/Portal';
-
+import { ModelPlacer } from '../chronoescape/obstacle/ModelPlacer';
 
 // System
 import preloadContainers, { getDefaultAssetList } from '../chronoescape/assetContainers';
 import { installKeyboardControls } from '../input/keyboardControls';
-import { getPhysicsWasmUrl, getTextureUrl, getModelUrl, loadAssetsConfig, getTextureUrl as _getTextureUrl } from '../assetsConfig';
+import { getTextureUrl, getModelUrl, loadAssetsConfig } from '../assetsConfig';
+import { droneControl, updateProgress, adjustDroneSpeed } from '../stores/droneControl';
+import { get } from 'svelte/store';
 
 // ============================================================================
 // SCENE CLASS
 // ============================================================================
 
 export class WormHoleScene2 {
-	// Path animation state
-	static sphereProgress = 0.0;
-	static sphereSpeed = 0.0001;
 	static pathPoints: BABYLON.Vector3[] = [];
-
-	// ========================================================================
-	// PHYSICS SETUP
-	// ========================================================================
-
-	private static async setupPhysics(scene: BABYLON.Scene) {
-		const wasmUrl = await getPhysicsWasmUrl();
-		const havok = await HavokPhysics({
-			locateFile: () => wasmUrl
-		});
-		const gravityVector = new BABYLON.Vector3(0, 0, 0);
-		const havokPlugin = new BABYLON.HavokPlugin(true, havok);
-		scene.enablePhysics(gravityVector, havokPlugin);
-	}
-
-	// ========================================================================
-	// MAIN SCENE CREATION
-	// ========================================================================
 
 	static async CreateScene(engine: any, canvas: HTMLCanvasElement, onPortalTrigger?: () => void): Promise<BABYLON.Scene> {
 		// ====================================================================
@@ -94,59 +74,14 @@ export class WormHoleScene2 {
 		const scene = new BABYLON.Scene(engine);
 		console.log('wormhole2 scene created');
 
-		await WormHoleScene2.setupPhysics(scene);
+		await setupPhysics(scene);
 
 		// ====================================================================
-		// CAMERAS
+		// CAMERAS & LIGHTING
 		// ====================================================================
 
-		// Camera 1: ArcRotate (free view)
-		const arcCamera = new BABYLON.ArcRotateCamera(
-			'camera1',
-			Math.PI / 2,
-			Math.PI / 4,
-			10,
-			BABYLON.Vector3.Zero(),
-			scene
-		);
-		arcCamera.attachControl(canvas, true);
-
-		// Camera 2: Follow (game view)
-		const followCamera = new BABYLON.UniversalCamera('movingCamera', new BABYLON.Vector3(), scene);
-		followCamera.fov = Math.PI / 2;
-		followCamera.minZ = 0.0001;
-		followCamera.maxZ = 10000;
-		followCamera.updateUpVectorFromRotation = true;
-		followCamera.rotationQuaternion = new BABYLON.Quaternion();
-
-		// Set initial camera (follow camera = game view)
-		scene.activeCamera = followCamera;
-		let currentCameraState = 1;
-
-		function switchCameraState() {
-			if (currentCameraState === 1) {
-				// Switch to Follow Camera (game view)
-				scene.activeCamera = followCamera;
-				currentCameraState = 2;
-				console.log('🎮 Switched to Follow Camera (Game View)');
-			} else {
-				// Switch to ArcRotate Camera (free view)
-				scene.activeCamera = arcCamera;
-				currentCameraState = 1;
-				console.log('🔄 Switched to ArcRotate Camera (Free View)');
-			}
-		}
-
-		// ====================================================================
-		// LIGHTING & ATMOSPHERE
-		// ====================================================================
-
-		const light = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(0, 1, 0), scene);
-		light.intensity = 0.2;
-
-		scene.fogMode = BABYLON.Scene.FOGMODE_EXP;
-		scene.fogColor = new BABYLON.Color3(0.9, 0.9, 0.85);
-		scene.fogDensity = 0.0001;
+		const { followCamera, switchCamera } = setupCameras(scene, canvas, 'follow');
+		setupLighting(scene);
 
 		// ====================================================================
 		// WORLD: TORUS TRACK
@@ -168,13 +103,13 @@ export class WormHoleScene2 {
 		const torusAggregate = torusResult.torusAggregate;
 		const torusMainRadius = torusResult.torusMainRadius;
 		const torusTubeRadius = torusResult.torusTubeRadius;
-		const points = torusResult.pathPoints;
-		WormHoleScene2.pathPoints = points;
+		const pathPoints = torusResult.pathPoints;
+		WormHoleScene2.pathPoints = pathPoints;
 		const torusMaterial = torus.material as BABYLON.StandardMaterial;
 
 		// Debug: verify path centering
 		{
-			// const debugLine = BABYLON.MeshBuilder.CreateLines('pathDebug', { points }, scene);
+// const debugLine = BABYLON.MeshBuilder.CreateLines('pathDebug', { points: pathPoints }, scene);
 			// debugLine.color = new BABYLON.Color3(0, 1, 1);
 
 			const center = torus.getAbsolutePosition();
@@ -182,8 +117,8 @@ export class WormHoleScene2 {
 				maxRad = 0;
 			let minY = Number.POSITIVE_INFINITY,
 				maxY = Number.NEGATIVE_INFINITY;
-			for (let i = 0; i < points.length; i++) {
-				const p = points[i];
+			for (let i = 0; i < pathPoints.length; i++) {
+				const p = pathPoints[i];
 				const dx = p.x - center.x;
 				const dz = p.z - center.z;
 				const radial = Math.sqrt(dx * dx + dz * dz);
@@ -259,7 +194,17 @@ export class WormHoleScene2 {
 				}
 				console.log('Drone reset');
 			},
-			onSwitchCamera: switchCameraState
+			onSwitchCamera: switchCamera,
+			onSpeedUp: () => {
+				adjustDroneSpeed(0.00002);
+				const newSpeed = get(droneControl).speed;
+				console.log('Speed increased:', (newSpeed * 10000).toFixed(3));
+			},
+			onSpeedDown: () => {
+				adjustDroneSpeed(-0.00002);
+				const newSpeed = get(droneControl).speed;
+				console.log('Speed decreased:', (newSpeed * 10000).toFixed(3));
+			}
 		});
 
 		// Cleanup on dispose
@@ -270,41 +215,13 @@ export class WormHoleScene2 {
 				/* ignore */
 			}
 		});
-
-		// ====================================================================
 		// OBSTACLES & MARKERS
 		// ====================================================================
 
-		const markerSize = 4;
-		const indices = [
-			Math.floor(points.length * 0.25),
-			Math.floor(points.length * 0.5),
-			Math.floor(points.length * 0.75)
-		];
+		const obstacles = new ObstaclesManager(scene, pathPoints);
+		const indices = await createPathMarkers(scene, pathPoints, obstacles);
 
-		// Orange marker cubes
-		const obstacles = new ObstaclesManager(scene, points);
-		await obstacles.registerType('orangeCube', async (sc) => {
-			const tpl = BABYLON.MeshBuilder.CreateBox('orangeCube_tpl', { size: markerSize }, sc);
-			const mat = new BABYLON.StandardMaterial('orangeCubeMat_tpl', sc);
-			mat.diffuseColor = new BABYLON.Color3(0.92, 0.45, 0.07); // orange
-			tpl.material = mat;
-			tpl.isVisible = false; // hide template
-			return tpl;
-		});
-
-		for (let i = 0; i < indices.length; i++) {
-			const idx = indices[i];
-			// place the cube; ObstaclesManager will set position and metadata
-			await obstacles.place('orangeCube', {
-				index: idx,
-				offsetY: markerSize / 2,
-				physics: { mass: 0.02, shape: BABYLON.PhysicsShapeType.BOX }
-			});
-		}
-
-		// Create floating cubes via helper module (keeps this scene file small)
-		const floating = createFloatingCubes(scene, WormHoleScene2.pathPoints, {
+		const floating = createFloatingCubes(scene, pathPoints, {
 			count: 3,
 			jitter: 0.05,
 			verticalOffset: 0.5,
@@ -315,274 +232,107 @@ export class WormHoleScene2 {
 		});
 
 		// ====================================================================
-		// PARTICLE EFFECTS
-		// ====================================================================
-		const spsFx = createSolidParticleSystem(scene, {
-			particleNb: 800,
-			particleSize: 1.0,
-			maxDistance: 220
-		});
-
-		// choose the path point for the effect - use indices[0] if available, otherwise center point
-		const spsPointIndex =
-			indices && indices.length > 0 ? indices[0] : Math.floor(WormHoleScene2.pathPoints.length / 2);
-		const spsPosition = WormHoleScene2.pathPoints[spsPointIndex]
-			? WormHoleScene2.pathPoints[spsPointIndex].clone()
-			: new BABYLON.Vector3(0, 0, 0);
-		spsPosition.y += 1.2;
-		spsFx.mesh.position.copyFrom(spsPosition);
-		spsFx.attachTo(torus);
-		spsFx.start();
-
-		// auto-dispose after 60s (optional)
-		const spsAutoHandle = window.setTimeout(() => {
-			try {
-				spsFx.stop();
-				spsFx.dispose();
-			} catch (e) {
-				/* ignore */
-			}
-		}, 60_000);
-
-		// ====================================================================
-		// ADDITIONAL MODELS (JOLLIBEE)
+		// EFFECTS
 		// ====================================================================
 
-		try {
-			console.log('Loading Jollibee model...');
+		const particleIdx = indices[0] ?? Math.floor(pathPoints.length / 2);
+		createParticles(scene, pathPoints, particleIdx, torus, { autoDispose: 60_000 });
 
-			const cfg = await loadAssetsConfig();
-			const jolli = cfg.models?.jollibee;
-			const rootUrl = (jolli && jolli.rootUrl) ? jolli.rootUrl : 'https://kolown.net/assets/p1sonet/';
-			const fileName = (jolli && jolli.filename) ? jolli.filename : 'jollibee.glb';
-			let container: any = null;
-			const pluginOptions = {
-				// example glTF plugin options; adjust if you need specific behavior
-				gltf: {
-					// skipMaterials: false,
-					// extensionOptions: { MSFT_lod: { maxLODsToLoad: 1 } }
-				}
-			};
+		// ====================================================================
+		// MODELS & BILLBOARDS
+		// ====================================================================
 
-			// Use the module-level loader only (no fallback to SceneLoader).
-			const moduleLoader =
-				(BABYLON as any).loadAssetContainerAsync || (BABYLON as any).loadAssetContainer;
-			if (typeof moduleLoader !== 'function') {
-				throw new Error(
-					'module-level loadAssetContainerAsync not available; project requires module-level loader API'
-				);
-			}
-
+		(async () => {
 			try {
-				container = await moduleLoader.call(BABYLON, fileName, scene, { rootUrl, pluginOptions });
-			} catch (e) {
-				console.error('module-level loadAssetContainerAsync failed', e);
-				throw e;
-			}
+				const cfg = await loadAssetsConfig();
+				const jolli = cfg.models?.jollibee;
+				const rootUrl = jolli?.rootUrl ?? 'https://kolown.net/assets/p1sonet/';
+				const fileName = jolli?.filename ?? 'jollibee.glb';
+				const container = await (BABYLON as any).loadAssetContainerAsync(fileName, scene, {
+					rootUrl,
+					pluginOptions: { gltf: {} }
+				});
 
-			try {
-				if (container && typeof container.addAllToScene === 'function') container.addAllToScene();
-			} catch (e) {
-				/* ignore */
-			}
+				container.addAllToScene();
 
-			let template =
-				container && Array.isArray(container.meshes)
-					? (container.meshes.find((m: any) => m.geometry) as BABYLON.Mesh | undefined)
-					: undefined;
-			if (!template) {
-				template = scene.meshes.find((m) => m.geometry && /jolli|jollibee/i.test(m.name)) as
-					| BABYLON.Mesh
-					| undefined;
-			}
+				// Find the main mesh to use as template
+				const jolliTemplate = container.meshes.find((m: any) => m.geometry) as BABYLON.Mesh;
 
-			if (template) {
-				try {
-					template.setEnabled(false);
-				} catch (e) {
-					/* ignore if not applicable */
-				}
-
-				const jolliPBR = new BABYLON.PBRMaterial('jolliPBR', scene);
-				jolliPBR.metallic = 0.0; // non-metal for plasticy response
-				jolliPBR.roughness = 0.25; // some gloss (lower = shinier)
-				jolliPBR.directIntensity = 2.0; // amplify direct lights (drone)
-				jolliPBR.environmentIntensity = 1.0; // reflections from env (if set)
-				jolliPBR.emissiveColor = BABYLON.Color3.Black(); // avoid neutral emissive wash
-				jolliPBR.backFaceCulling = true;
-
-				// Create instances along path
-				const instanceCount = 5;
-				const step = Math.floor(WormHoleScene2.pathPoints.length / instanceCount);
-
-				for (let i = 0; i < instanceCount; i++) {
-					const pos = WormHoleScene2.pathPoints[i * step].clone();
-					pos.y += -1; // Lift slightly
-
-					// Visual instance (cast template to Mesh so TS recognizes createInstance)
-					const instance = (template as unknown as BABYLON.Mesh).createInstance(`jollibee_${i}`);
-					instance.position.copyFrom(pos);
-					instance.scaling.setAll(10); // Scale down
-
-					instance.material = jolliPBR;
-
-					// Physics - use MESH shape to avoid issues with non-uniform scaling
-					try {
-						new BABYLON.PhysicsAggregate(
-							instance,
-							BABYLON.PhysicsShapeType.MESH,
-							{
-								mass: 0.05,
-								restitution: 0.3,
-								friction: 0.05
-							},
-							scene
-						);
-					} catch (e) {
-						console.warn('Failed to create mesh physics for jollibee instance, falling back to box:', e);
-						try {
-							new BABYLON.PhysicsAggregate(instance, BABYLON.PhysicsShapeType.BOX, { mass: 0.05, restitution: 0.3, friction: 0.05 }, scene);
-						} catch (err) {
-							console.warn('Fallback box physics also failed for jollibee instance', err);
-						}
-					}
-				}
-
-				console.log(`Created ${instanceCount} Jollibee instances`);
-			}
+				// Also place some static instances
+				const modelPlacer = new ModelPlacer(scene, pathPoints);
+				await modelPlacer.load({
+					rootUrl,
+					filename: fileName,
+					count: 5,
+					scale: 10,
+					offsetY: -1,
+					physics: { mass: 0.05, restitution: 0.3, friction: 0.05, shape: BABYLON.PhysicsShapeType.MESH }
+			});
 		} catch (error) {
-			console.error('Failed to load Jollibee model:', error);
+			console.error('Failed to load models:', error);
 		}
+	})();
 
-		// ====================================================================
-		// BILLBOARDS & FINAL SETUP
-		// ====================================================================
-		try {
-			requestAnimationFrame(() => {
-				try {
-					scene.render();
-				} catch (e) {
-					/* ignore */
-				}
-				requestAnimationFrame(() => {
+	await createBillboards(scene, pathPoints, torus);
+	let portal = await createPortal(scene, pathPoints, indices[0] ?? Math.floor(pathPoints.length / 2));
+
+	// ====================================================================
+	// RENDER LOOP
+	// ====================================================================
+
+	scene.registerBeforeRender(() => {
+		const dt = engine.getDeltaTime() / 1000;
+
+		// Get current drone control state from store
+		const control = get(droneControl);
+
+		// Portal collision check (approximate USB AABB from drone position)
+		if (portal && onPortalTrigger) {
+			try {
+				const usbAabb = {
+					min: { x: drone.position.x - 0.5, y: drone.position.y - 0.5, z: drone.position.z - 0.5 },
+					max: { x: drone.position.x + 0.5, y: drone.position.y + 0.5, z: drone.position.z + 0.5 }
+				};
+				if (portal.intersects(usbAabb)) {
+					onPortalTrigger();
 					try {
-						scene.render();
-					} catch (e) {
-						/* ignore */
-					}
-				});
-			});
-		} catch (e) {
-			// loader hide is handled by the main page
-		}
-
-		// create multiple textured billboard planes along the drone track (via BillboardManager)
-		try {
-			const tribalTex = await getTextureUrl('tribal');
-			const bm = new BillboardManager(scene, {
-				count: 3,
-				size: { width: 30, height: 30 },
-				textureUrl: tribalTex || '/tribal.png',
-				parent: torus
-			});
-			await bm.createAlongPath(WormHoleScene2.pathPoints);
-		} catch (e) {
-			console.warn('Failed to create billboards', e);
-		}
-
-		// Initial render pass
-		try {
-			requestAnimationFrame(() => {
-				try {
-					scene.render();
-				} catch (e) {
-					/* ignore */
+						portal.reset();
+					} catch {}
+					portal = undefined;
 				}
-				requestAnimationFrame(() => {
-					try {
-						scene.render();
-					} catch (e) {
-						/* ignore */
-					}
-				});
-			});
-		} catch (e) {
-			// Loader hide is handled by the main page
+			} catch (e) {
+				/* ignore transient errors */
+			}
 		}
 
-		// Create a Portal positioned on the same track as the other billboards
-		let portal: Portal | undefined;
-		try {
-			// Choose a billboard index (use first marker index if available)
-			const portalIdx = indices && indices.length > 0 ? indices[0] : Math.floor(WormHoleScene2.pathPoints.length / 2);
-			const portalPos = WormHoleScene2.pathPoints[portalIdx].clone();
-			// lift the portal slightly above the path so it's visible
-			portalPos.y += 0.5;
-
-			const posterArg = await getTextureUrl('metal');
-			portal = new Portal(posterArg, 'plant2', { x: portalPos.x, y: portalPos.y, z: portalPos.z }, { x: 3, y: 4, z: 0.5 }, scene, { width: 9, height: 12 });
-		} catch (e) {
-			console.warn('Portal setup failed', e);
+		// Update floating cubes
+		if (floating && typeof floating.update === 'function') {
+			floating.update(dt);
 		}
 
-		// ====================================================================
-		// RENDER LOOP
-		// ====================================================================
+		// Update path progress using store value
+		let newProgress = control.progress + control.speed;
+		if (newProgress > 1) {
+			newProgress = 0;
+		}
+		updateProgress(newProgress);
 
-		scene.registerBeforeRender(() => {
-			const dt = engine.getDeltaTime() / 1000;
+		// Update drone physics with lateral force from store
+		updateDronePhysics(
+			drone,
+			droneAggregate,
+			WormHoleScene2.pathPoints,
+			control.progress,
+			keysPressed,
+			{ lateralForce: control.lateralForce }
+		);
 
+		// Update follow camera
+		if (scene.activeCamera === followCamera) {
+			updateFollowCamera(followCamera, drone, WormHoleScene2.pathPoints, control.progress, gimbal);
+		}
+	});
 
-
-			// Portal collision check (approximate USB AABB from drone position)
-			if (portal && onPortalTrigger) {
-				try {
-					const usbAabb = {
-						min: { x: drone.position.x - 0.5, y: drone.position.y - 0.5, z: drone.position.z - 0.5 },
-						max: { x: drone.position.x + 0.5, y: drone.position.y + 0.5, z: drone.position.z + 0.5 }
-					};
-					if (portal.intersects(usbAabb)) {
-						onPortalTrigger();
-						try { portal.reset(); } catch {}
-						portal = undefined;
-					}
-				} catch (e) {
-					/* ignore transient errors */
-				}
-			}
-
-			// Update floating cubes
-			if (floating && typeof floating.update === 'function') {
-				floating.update(dt);
-			}
-
-			// Update path progress
-			WormHoleScene2.sphereProgress += WormHoleScene2.sphereSpeed;
-			if (WormHoleScene2.sphereProgress > 1) {
-				WormHoleScene2.sphereProgress = 0;
-			}
-
-			// Update drone physics
-			updateDronePhysics(
-				drone,
-				droneAggregate,
-				WormHoleScene2.pathPoints,
-				WormHoleScene2.sphereProgress,
-				keysPressed
-			);
-
-			// Update follow camera
-			if (scene.activeCamera === followCamera) {
-				updateFollowCamera(
-					followCamera,
-					drone,
-					WormHoleScene2.pathPoints,
-					WormHoleScene2.sphereProgress,
-					gimbal
-				);
-			}
-		});
-
-		return scene;
+	return scene;
 	}
 }

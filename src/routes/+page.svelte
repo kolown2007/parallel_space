@@ -14,7 +14,13 @@
     if (!canvas) return;
 
     engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
-    
+    // Ensure canvas element has correct CSS sizing and notify engine of initial size
+    try {
+      canvas.style.width = canvas.style.width || '100%';
+      canvas.style.height = canvas.style.height || '100vh';
+    } catch (e) {}
+    try { engine.resize(); } catch (e) {}
+
     const loadingScreen = new CustomLoadingScreen("Loading...");
     engine.loadingScreen = loadingScreen;
     try { engine.displayLoadingUI(); } catch {}

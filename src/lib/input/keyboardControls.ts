@@ -7,8 +7,11 @@ export function installKeyboardControls(params: {
     onToggleWireframe: () => void;
     onReset: () => void;
     onSwitchCamera: () => void;
+    onSpeedUp?: () => void;
+    onSpeedDown?: () => void;
+    onSpawn?: () => void;
 }) {
-    const { keysPressed, onToggleWireframe, onReset, onSwitchCamera } = params;
+    const { keysPressed, onToggleWireframe, onReset, onSwitchCamera, onSpeedUp, onSpeedDown, onSpawn } = params;
 
     const keydown = (event: KeyboardEvent) => {
         const key = event.key.toLowerCase();
@@ -20,6 +23,12 @@ export function installKeyboardControls(params: {
             keysPressed[key] = true;
         } else if (key === 'c') {
             onSwitchCamera();
+        } else if (key === 'arrowup' && onSpeedUp) {
+            onSpeedUp();
+        } else if (key === 'arrowdown' && onSpeedDown) {
+            onSpeedDown();
+        } else if (key === 'p' && onSpawn) {
+            onSpawn();
         }
     };
 
