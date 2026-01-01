@@ -4,16 +4,15 @@ import { GradientMaterial } from '@babylonjs/materials/gradient';
 import '@babylonjs/loaders/glTF';
 import HavokPhysics from '@babylonjs/havok';
 import { onMount } from 'svelte';
-import * as Ably from 'ably';
+import createAblyClient, { getChannel, closeAblyClient } from '$lib/realtime/socket';
 import { ORBIT } from '$lib/farmnet/config';
 import type { FloatingBall } from '$lib/farmnet/config';
 import { updateOrbits } from '$lib/farmnet/orbit';
 
 onMount(() => {
-  // 1. Ably orientation ingestion
-  const apiKey = ''; // TODO: move to env
-  const ably = new Ably.Realtime({ key: apiKey });
-  const channel = ably.channels.get('channel1');
+  // 1. Ably orientation ingestion (uses createAblyClient from $lib/realtime/socket)
+  const realtime = createAblyClient({ authUrl: 'https://kolown.net/api/ghost_auth' });
+  const channel = getChannel(realtime, 'channel1');
   const targetRotation = new BABYLON.Vector3();
   const DEBUG_ABLY = true; // set false to silence logs
   channel.subscribe(msg => {
@@ -275,7 +274,7 @@ onMount(() => {
   const resize = () => engine.resize();
   window.addEventListener('resize', resize); window.addEventListener('orientationchange', resize);
   return () => {
-    try { channel.unsubscribe(); ably.close(); } catch {}
+    try { channel.unsubscribe(); closeAblyClient(realtime); } catch {}
     try { engine.stopRenderLoop(); engine.dispose(); } catch {}
     // clear drop interval and dispose any spawned cubes
     try {
