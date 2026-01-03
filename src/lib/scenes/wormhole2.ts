@@ -83,6 +83,29 @@ export class WormHoleScene2 {
 		const { followCamera, switchCamera } = setupCameras(scene, canvas, 'follow');
 		setupLighting(scene);
 
+
+		
+		// ====================================================================
+		// SOUND
+		// ====================================================================
+
+		(async () => {
+			const audioEngine = await BABYLON.CreateAudioEngineAsync();
+
+			const narration = await BABYLON.CreateStreamingSoundAsync("narration",
+   			//  "https://assets.babylonjs.com/sound/alarm-1.mp3"
+			"https://kolown.net/storage/library/audio/field/bbc_rainforest_nhu0501214.mp3"
+);
+
+			// Wait until audio engine is ready to play sounds.
+			await audioEngine.unlockAsync();
+
+			narration.play()
+		})();
+
+
+
+
 		// ====================================================================
 		// WORLD: TORUS TRACK
 		// ====================================================================
@@ -151,8 +174,37 @@ export class WormHoleScene2 {
 			friction: 0.3,
 			glowIntensity: 0.4,
 			glowSubmeshIndex: 1,
-			enableDebug: true
+			enableDebug: false
 		});
+
+		// Enable collision detection on drone
+		if (droneAggregate?.body) {
+			try {
+				droneAggregate.body.setCollisionCallbackEnabled(true);
+				
+				const collisionObservable = droneAggregate.body.getCollisionObservable();
+				collisionObservable.add((collisionEvent: any) => {
+					const collidedMesh = collisionEvent.collidedAgainst?.transformNode;
+					const collidedName = collidedMesh?.name || 'unknown';
+					
+					console.log('🎯 Drone collision:', {
+						collidedWith: collidedName,
+						impulse: collisionEvent.impulse,
+						point: collisionEvent.point
+					});
+
+					// Check if it's a Jollibee
+					if (collidedName.toLowerCase().includes('jollibee') || 
+					    collidedName.toLowerCase().includes('model_instance')) {
+						console.log('✨ Drone hit Jollibee!');
+						// Add your collision response here (e.g., score, sound, effects)
+					}
+				});
+				console.log('✓ Drone collision detection enabled');
+			} catch (e) {
+				console.warn('Failed to setup drone collision callback:', e);
+			}
+		}
 
 		// ====================================================================
 		// CAMERA SETTINGS & CONTROLS
