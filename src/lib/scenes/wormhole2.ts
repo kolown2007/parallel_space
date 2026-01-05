@@ -187,11 +187,11 @@ export class WormHoleScene2 {
 					const collidedMesh = collisionEvent.collidedAgainst?.transformNode;
 					const collidedName = collidedMesh?.name || 'unknown';
 					
-					console.log('🎯 Drone collision:', {
-						collidedWith: collidedName,
-						impulse: collisionEvent.impulse,
-						point: collisionEvent.point
-					});
+					// console.log('🎯 Drone collision:', {
+					// 	collidedWith: collidedName,
+					// 	impulse: collisionEvent.impulse,
+					// 	point: collisionEvent.point
+					// });
 
 					// Check if it's a Jollibee
 					if (collidedName.toLowerCase().includes('jollibee') || 
