@@ -9,6 +9,7 @@
   let canvas: HTMLCanvasElement | null = null;
   let engine: any = null;
   let sceneManager: SceneManager | null = null;
+  let cursorTimeout: number | null = null;
 
   onMount(() => {
     if (!canvas) return;
@@ -28,27 +29,46 @@
     const handleResize = () => engine?.resize();
     window.addEventListener('resize', handleResize);
 
+    // Auto-hide cursor after 6 seconds of inactivity
+    const resetCursorTimeout = () => {
+      document.body.style.cursor = 'default';
+      if (cursorTimeout) clearTimeout(cursorTimeout);
+      cursorTimeout = window.setTimeout(() => {
+        document.body.style.cursor = 'none';
+      }, 6000);
+    };
+    
+    const handleMouseMove = () => resetCursorTimeout();
+    window.addEventListener('mousemove', handleMouseMove);
+    resetCursorTimeout();
+
     (async () => {
-      const scene2 = await WormHoleScene2.CreateScene(engine, canvas, () => {
-        sceneManager?.switchTo('scene1');
-      });
-
-      // Create scene manager
-      sceneManager = new SceneManager(
-        engine,
-        scene2,
-        () => mountVideoScene(undefined, undefined, () => sceneManager?.switchTo('scene2'))
-      );
-
-      // Start with scene2
-      sceneManager.switchTo('scene2');
-
-      // Hide loading UI after a few frames
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          setTimeout(() => { try { engine?.hideLoadingUI(); } catch {} }, 50);
+      try {
+        // Scene creation now awaits all asset loading
+        const scene2 = await WormHoleScene2.CreateScene(engine, canvas, () => {
+          sceneManager?.switchTo('scene1');
         });
-      });
+
+        // Create scene manager
+        sceneManager = new SceneManager(
+          engine,
+          scene2,
+          () => mountVideoScene(undefined, undefined, () => sceneManager?.switchTo('scene2'))
+        );
+
+        // Start with scene2
+        sceneManager.switchTo('scene2');
+
+        // Hide loading UI only after everything is ready
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            setTimeout(() => { try { engine?.hideLoadingUI(); } catch {} }, 50);
+          });
+        });
+      } catch (error) {
+        console.error('Scene creation failed:', error);
+        try { engine?.hideLoadingUI(); } catch {}
+      }
     })();
 
     // Global input
@@ -61,12 +81,17 @@
     return () => {
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('mousemove', handleMouseMove);
+      if (cursorTimeout) clearTimeout(cursorTimeout);
+      document.body.style.cursor = 'default';
       sceneManager?.dispose();
       engine?.dispose();
     };
   });
 
   onDestroy(() => {
+    if (cursorTimeout) clearTimeout(cursorTimeout);
+    document.body.style.cursor = 'default';
     sceneManager?.dispose();
     engine?.dispose();
   });

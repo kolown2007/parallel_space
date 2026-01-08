@@ -35,6 +35,43 @@ import { get } from 'svelte/store';
 export class WormHoleScene2 {
 	static pathPoints: BABYLON.Vector3[] = [];
 
+	private static async loadSceneModels(scene: BABYLON.Scene, pathPoints: BABYLON.Vector3[]): Promise<void> {
+		try {
+			// Ensure physics is fully initialized
+			if (!scene.getPhysicsEngine()) {
+				console.warn('Physics engine not ready, skipping physics-enabled models');
+				return;
+			}
+
+			const cfg = await loadAssetsConfig();
+			const jolli = cfg.models?.jollibee;
+			const rootUrl = jolli?.rootUrl ?? 'https://kolown.net/assets/p1sonet/';
+			const fileName = jolli?.filename ?? 'jollibee.glb';
+			const container = await (BABYLON as any).loadAssetContainerAsync(fileName, scene, {
+				rootUrl,
+				pluginOptions: { gltf: {} }
+			});
+
+			container.addAllToScene();
+
+			// Find the main mesh to use as template
+			const jolliTemplate = container.meshes.find((m: any) => m.geometry) as BABYLON.Mesh;
+
+			// Also place some static instances
+			const modelPlacer = new ModelPlacer(scene, pathPoints);
+			await modelPlacer.load({
+				rootUrl,
+				filename: fileName,
+				count: 5,
+				scale: 10,
+				offsetY: -1,
+				physics: { mass: 0.05, restitution: 0.3, friction: 0.05, shape: BABYLON.PhysicsShapeType.MESH }
+			});
+		} catch (error) {
+			console.error('Failed to load models:', error);
+		}
+	}
+
 	static async CreateScene(engine: any, canvas: HTMLCanvasElement, onPortalTrigger?: () => void): Promise<BABYLON.Scene> {
 		// ====================================================================
 		// ASSET PRELOADING
@@ -90,17 +127,21 @@ export class WormHoleScene2 {
 		// ====================================================================
 
 		(async () => {
-			const audioEngine = await BABYLON.CreateAudioEngineAsync();
+			try {
+				const audioEngine = await BABYLON.CreateAudioEngineAsync();
 
-			const narration = await BABYLON.CreateStreamingSoundAsync("narration",
-   			//  "https://assets.babylonjs.com/sound/alarm-1.mp3"
-			"https://kolown.net/storage/library/audio/field/bbc_rainforest_nhu0501214.mp3"
-);
+				const narration = await BABYLON.CreateStreamingSoundAsync("narration",
+					//  "https://assets.babylonjs.com/sound/alarm-1.mp3"
+					"https://kolown.net/storage/library/audio/field/bbc_rainforest_nhu0501214.mp3"
+				);
 
-			// Wait until audio engine is ready to play sounds.
-			await audioEngine.unlockAsync();
+				// Wait until audio engine is ready to play sounds.
+				await audioEngine.unlockAsync();
 
-			narration.play()
+				narration.play();
+			} catch (e) {
+				console.warn('Audio initialization failed:', e);
+			}
 		})();
 
 
@@ -294,39 +335,11 @@ export class WormHoleScene2 {
 		// MODELS & BILLBOARDS
 		// ====================================================================
 
-		(async () => {
-			try {
-				const cfg = await loadAssetsConfig();
-				const jolli = cfg.models?.jollibee;
-				const rootUrl = jolli?.rootUrl ?? 'https://kolown.net/assets/p1sonet/';
-				const fileName = jolli?.filename ?? 'jollibee.glb';
-				const container = await (BABYLON as any).loadAssetContainerAsync(fileName, scene, {
-					rootUrl,
-					pluginOptions: { gltf: {} }
-				});
+		// Load models synchronously before scene completion
+		await WormHoleScene2.loadSceneModels(scene, pathPoints);
 
-				container.addAllToScene();
-
-				// Find the main mesh to use as template
-				const jolliTemplate = container.meshes.find((m: any) => m.geometry) as BABYLON.Mesh;
-
-				// Also place some static instances
-				const modelPlacer = new ModelPlacer(scene, pathPoints);
-				await modelPlacer.load({
-					rootUrl,
-					filename: fileName,
-					count: 5,
-					scale: 10,
-					offsetY: -1,
-					physics: { mass: 0.05, restitution: 0.3, friction: 0.05, shape: BABYLON.PhysicsShapeType.MESH }
-			});
-		} catch (error) {
-			console.error('Failed to load models:', error);
-		}
-	})();
-
-	await createBillboards(scene, pathPoints, torus);
-	let portal = await createPortal(scene, pathPoints, indices[0] ?? Math.floor(pathPoints.length / 2));
+		await createBillboards(scene, pathPoints, torus);
+		let portal = await createPortal(scene, pathPoints, indices[0] ?? Math.floor(pathPoints.length / 2));
 
 	// ====================================================================
 	// RENDER LOOP
