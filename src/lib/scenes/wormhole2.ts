@@ -34,6 +34,18 @@ import { get } from 'svelte/store';
 
 export class WormHoleScene2 {
 	static pathPoints: BABYLON.Vector3[] = [];
+	private static cleanupRegistry: Array<() => void> = [];
+
+	private static registerCleanup(cleanup: () => void): void {
+		this.cleanupRegistry.push(cleanup);
+	}
+
+	private static disposeAll(): void {
+		for (const cleanup of this.cleanupRegistry) {
+			try { cleanup(); } catch (e) { console.warn('Cleanup error:', e); }
+		}
+		this.cleanupRegistry = [];
+	}
 
 	private static async loadSceneModels(scene: BABYLON.Scene, pathPoints: BABYLON.Vector3[]): Promise<void> {
 		try {
@@ -139,6 +151,13 @@ export class WormHoleScene2 {
 				await audioEngine.unlockAsync();
 
 				narration.play();
+
+				// Register audio cleanup
+				WormHoleScene2.registerCleanup(() => {
+					narration?.stop();
+					narration?.dispose();
+					audioEngine?.dispose();
+				});
 			} catch (e) {
 				console.warn('Audio initialization failed:', e);
 			}
@@ -224,7 +243,7 @@ export class WormHoleScene2 {
 				droneAggregate.body.setCollisionCallbackEnabled(true);
 				
 				const collisionObservable = droneAggregate.body.getCollisionObservable();
-				collisionObservable.add((collisionEvent: any) => {
+				const collisionObserver = collisionObservable.add((collisionEvent: any) => {
 					const collidedMesh = collisionEvent.collidedAgainst?.transformNode;
 					const collidedName = collidedMesh?.name || 'unknown';
 					
@@ -240,6 +259,9 @@ export class WormHoleScene2 {
 						console.log('✨ Drone hit Jollibee!');
 						// Add your collision response here (e.g., score, sound, effects)
 					}
+				});
+				WormHoleScene2.registerCleanup(() => {
+					collisionObservable.remove(collisionObserver);
 				});
 				console.log('✓ Drone collision detection enabled');
 			} catch (e) {
@@ -300,13 +322,12 @@ export class WormHoleScene2 {
 			}
 		});
 
+		// Register keyboard cleanup
+		WormHoleScene2.registerCleanup(() => uninstallKeyboard());
+
 		// Cleanup on dispose
 		scene.onDisposeObservable.add(() => {
-			try {
-				uninstallKeyboard();
-			} catch (e) {
-				/* ignore */
-			}
+			WormHoleScene2.disposeAll();
 		});
 		// OBSTACLES & MARKERS
 		// ====================================================================
