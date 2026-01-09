@@ -49,7 +49,7 @@ export const ASSETS_JSON = {
     }
   },
   "loading": {
-    "backgroundImage": "https://kolown.net/storage/library/chronoescape/parallel3.jpg"
+    "backgroundImage": "https://kolown.net/storage/library/chronoescape/loading/parallelspace.png"
   },
   "physics": {
     "havokWasm": "https://kolown.net/storage/library/chronoescape/HavokPhysics.wasm"

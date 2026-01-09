@@ -12,30 +12,55 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
   private _textElement: HTMLDivElement | null = null;
   private _shownAt: number | null = null;
   private _hideTimeoutHandle: number | null = null;
+  private _imageDelayHandle: number | null = null;
+  private _pendingImageUrl: string | null = null;
+  private _imgElement: HTMLImageElement | null = null;
+
+  private _applyImage(url: string) {
+    try {
+      if (!this._container) return;
+      if (!this._imgElement) {
+        const img = document.createElement('img');
+        img.alt = '';
+        img.style.position = 'absolute';
+        img.style.left = '50%';
+        img.style.top = '50%';
+        img.style.transform = 'translate(-50%, -50%)';
+        img.style.maxWidth = '80vw';
+        img.style.maxHeight = '80vh';
+        img.style.objectFit = 'contain';
+        img.style.pointerEvents = 'none';
+        this._imgElement = img;
+        this._container.appendChild(img);
+      }
+      this._imgElement.src = url;
+    } catch (e) { /* ignore */ }
+  }
 
   constructor(loadingUIText: string, imageUrl?: string) {
     this.loadingUIText = loadingUIText;
     if (imageUrl !== undefined) {
       this.loadingUIImageUrl = imageUrl;
     } else {
-      // attempt to load loading image from centralized assets.json
+      // default to the local parallelspace.png, but allow centralized override
+      this.loadingUIImageUrl = '/parallelspace.png';
       try {
         getLoadingImageUrl()
           .then((u) => {
             if (!u) return;
             this.loadingUIImageUrl = u;
-            // If container already created, update its background image
+            // If container already created, preload image then apply (or mark pending)
             try {
               if (this._container) {
-                // preload image then apply to avoid flash
                 const img = new Image();
                 img.src = u;
                 img.onload = () => {
                   try {
-                    this._container!.style.backgroundImage = `url(${u})`;
-                    this._container!.style.backgroundSize = 'cover';
-                    this._container!.style.backgroundPosition = 'center center';
-                    this._container!.style.backgroundRepeat = 'no-repeat';
+                    if (this._imageDelayHandle) {
+                      this._pendingImageUrl = u;
+                    } else {
+                      this._applyImage(u);
+                    }
                   } catch (e) {}
                 };
               }
@@ -78,14 +103,23 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
           container.style.opacity = '1';
           container.style.zIndex = '2147483647';
           container.style.pointerEvents = 'auto';
+          // show red background immediately; add the image element after 3s
+          container.style.background = this.loadingUIBackgroundColor;
           if (this.loadingUIImageUrl) {
-            container.style.backgroundImage = `url(${this.loadingUIImageUrl})`;
-            container.style.backgroundSize = 'cover';
-            container.style.backgroundPosition = 'center center';
-            container.style.backgroundRepeat = 'no-repeat';
-            container.style.backgroundColor = this.loadingUIBackgroundColor;
-          } else {
-            container.style.background = this.loadingUIBackgroundColor;
+            try {
+              if (this._imageDelayHandle) {
+                try { clearTimeout(this._imageDelayHandle); } catch {}
+                this._imageDelayHandle = null;
+              }
+              this._imageDelayHandle = window.setTimeout(() => {
+                try {
+                  const url = this._pendingImageUrl || this.loadingUIImageUrl;
+                  if (url) this._applyImage(url);
+                } catch (e) { /* ignore */ }
+                this._imageDelayHandle = null;
+                this._pendingImageUrl = null;
+              }, 3000) as unknown as number;
+            } catch (e) { /* ignore */ }
           }
           document.body.appendChild(container);
           this._container = container;
@@ -101,6 +135,18 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
     // console.log('CustomLoadingScreen: hideLoadingUI called');
     if (typeof document === 'undefined') return;
     if (this._container) {
+      try {
+        if (this._imageDelayHandle) {
+          try { clearTimeout(this._imageDelayHandle); } catch {}
+          this._imageDelayHandle = null;
+        }
+      } catch (e) { /* ignore */ }
+      try {
+        if (this._imgElement) {
+          try { this._imgElement.remove(); } catch {}
+          this._imgElement = null;
+        }
+      } catch (e) { /* ignore */ }
       // enforce minimum visible duration (default 5000ms) before removing
       const minMs = 5000;
       try {
