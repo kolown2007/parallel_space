@@ -60,22 +60,34 @@ export class ModelPlacer {
 					console.log(`  ↳ Container already in scene, will instantiate from existing meshes`);
 				}
 			} else {
-				console.log(`  ↳ Loading new container from URL`);
-				const moduleLoader = (BABYLON as any).loadAssetContainerAsync;
+				console.log(`  ↳ Loading new container from URL: ${config.rootUrl}${config.filename}`);
+				const moduleLoader = (BABYLON as any).SceneLoader.LoadAssetContainerAsync;
 				if (typeof moduleLoader !== 'function') {
-					throw new Error('loadAssetContainerAsync not available');
+					console.error('✗ SceneLoader.LoadAssetContainerAsync not available!');
+					console.log('Available BABYLON.SceneLoader methods:', Object.keys(BABYLON.SceneLoader || {}));
+					throw new Error('SceneLoader.LoadAssetContainerAsync not available');
 				}
 
-				this.container = await moduleLoader.call(BABYLON, config.filename, {
-					rootUrl: config.rootUrl,
-					pluginOptions: { gltf: {} }
-				});
+				// Correct order: rootUrl, sceneFilename, scene, onSuccess, onProgress, onError, pluginExtension
+				console.log(`  ↳ Calling LoadAssetContainerAsync with:`, { rootUrl: config.rootUrl, filename: config.filename });
+				this.container = await moduleLoader.call(
+					BABYLON.SceneLoader,
+					config.rootUrl,
+					config.filename,
+					this.scene,
+					undefined, // onSuccess
+					undefined, // onProgress
+					undefined, // onError
+					'.glb' // pluginExtension
+				);
+				console.log(`  ↳ Container loaded, meshes count:`, this.container?.meshes?.length);
 				this.ownsContainer = true;
 				this.containerWasInScene = false;
 
 				if (this.container?.addAllToScene) {
 					this.container.addAllToScene();
 					this.containerWasInScene = true;
+					console.log(`  ↳ Added container to scene`);
 				}
 			}
 
@@ -106,15 +118,21 @@ export class ModelPlacer {
 	private findTemplateMesh(): BABYLON.Mesh | undefined {
 		// Try container first - this is most reliable
 		if (this.container?.meshes) {
+			console.log(`  ↳ Container has ${this.container.meshes.length} meshes:`, this.container.meshes.map((m: any) => m.name));
 			const mesh = this.container.meshes.find((m: any) => m.geometry) as BABYLON.Mesh | undefined;
 			if (mesh) {
 				console.log(`  ↳ Found template mesh in container:`, mesh.name);
 				return mesh;
 			}
+			console.warn(`  ⚠ No mesh with geometry found in container!`);
+		} else {
+			console.warn(`  ⚠ Container has no meshes!`);
 		}
 		// Fallback: Search scene for recently added meshes with geometry
 		// This is less reliable and can grab wrong meshes like billboards/portals
+		console.warn(`  ⚠ Falling back to scene search for template mesh`);
 		const meshes = this.scene.meshes.filter(m => m.geometry && !m.name.includes('billboard') && !m.name.includes('portal')) as BABYLON.Mesh[];
+		console.log(`  ↳ Found ${meshes.length} candidate meshes in scene (last 5):`, meshes.slice(-5).map(m => m.name));
 		const candidate = meshes[meshes.length - 1];
 		if (candidate) {
 			console.warn(`  ⚠ Using fallback template search, found:`, candidate.name);

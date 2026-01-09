@@ -78,10 +78,11 @@ export class WormHoleScene2 {
 							return { modelId, container: null, success: false };
 						}
 					
-						const container = await (BABYLON as any).loadAssetContainerAsync(modelDef.filename, scene, {
-							rootUrl: modelDef.rootUrl,
-							pluginOptions: { gltf: {} }
-						});
+						const container = await BABYLON.SceneLoader.LoadAssetContainerAsync(
+							modelDef.rootUrl,
+							modelDef.filename,
+							scene
+						);
 					
 						// Store in cache WITHOUT adding to scene
 						this.modelCache.set(modelId, container);
@@ -135,6 +136,9 @@ export class WormHoleScene2 {
 			const cfg = await loadAssetsConfig();
 			const modelIds = Object.keys(cfg.models || {}).filter(id => id !== 'drone');
 			console.log('🎲 Available models for placement:', modelIds);
+			console.log('📦 Current model cache size:', this.modelCache.size);
+			console.log('📦 Cached model IDs:', Array.from(this.modelCache.keys()));
+			
 			if (modelIds.length === 0) {
 				console.warn('No models available to place');
 				return;
@@ -216,13 +220,16 @@ export class WormHoleScene2 {
 						continue;
 					}
 					if (this.modelCache.has(modelId)) continue;
-					const container = await (BABYLON as any).loadAssetContainerAsync(def.filename, scene, {
-						rootUrl: def.rootUrl,
-						pluginOptions: { gltf: {} }
-					});
+					
+					console.log(`Preloading model: ${modelId} from ${def.rootUrl}${def.filename}`);
+					const container = await BABYLON.SceneLoader.LoadAssetContainerAsync(
+						def.rootUrl,
+						def.filename,
+						scene
+					);
 					// keep container off-scene until instantiation
 					this.modelCache.set(modelId, container);
-					console.log('Preloaded model container:', modelId);
+					console.log('✓ Preloaded model container:', modelId);
 				} catch (e) {
 					console.warn('Failed to preload model', modelId, e);
 				}
