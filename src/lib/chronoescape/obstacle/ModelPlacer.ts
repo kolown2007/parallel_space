@@ -17,6 +17,8 @@ export interface ModelPlacerConfig {
 	// Optional: provide a preloaded AssetContainer instead of loading from URL
 	container?: BABYLON.AssetContainer;
 	// If container provided, ModelPlacer will NOT dispose it (owner is external)
+	// Optional: start placing instances from this path index instead of beginning
+	startIndex?: number;
 }
 
 export class ModelPlacer {
@@ -53,8 +55,9 @@ export class ModelPlacer {
 				if (!this.containerWasInScene && this.container?.addAllToScene) {
 					console.log(`  ↳ Adding container to scene for first time`);
 					this.container.addAllToScene();
+					this.containerWasInScene = true;
 				} else {
-					console.log(`  ↳ Container already in scene, reusing`);
+					console.log(`  ↳ Container already in scene, will instantiate from existing meshes`);
 				}
 			} else {
 				console.log(`  ↳ Loading new container from URL`);
@@ -63,7 +66,7 @@ export class ModelPlacer {
 					throw new Error('loadAssetContainerAsync not available');
 				}
 
-				this.container = await moduleLoader.call(BABYLON, config.filename, this.scene, {
+				this.container = await moduleLoader.call(BABYLON, config.filename, {
 					rootUrl: config.rootUrl,
 					pluginOptions: { gltf: {} }
 				});
@@ -80,6 +83,8 @@ export class ModelPlacer {
 			if (!this.template) {
 				throw new Error('No valid mesh found in model');
 			}
+
+			console.log(`  ↳ Using template mesh:`, this.template.name, `(isVisible: ${this.template.isVisible})`);
 
 			// Hide template but keep enabled so instances work
 			this.template.isVisible = false;
@@ -99,14 +104,22 @@ export class ModelPlacer {
 	}
 
 	private findTemplateMesh(): BABYLON.Mesh | undefined {
-		// Try container first
+		// Try container first - this is most reliable
 		if (this.container?.meshes) {
 			const mesh = this.container.meshes.find((m: any) => m.geometry) as BABYLON.Mesh | undefined;
-			if (mesh) return mesh;
+			if (mesh) {
+				console.log(`  ↳ Found template mesh in container:`, mesh.name);
+				return mesh;
+			}
 		}
-		// Search scene for recently added meshes with geometry
-		const meshes = this.scene.meshes.filter(m => m.geometry) as BABYLON.Mesh[];
-		return meshes[meshes.length - 1]; // Get most recently added mesh
+		// Fallback: Search scene for recently added meshes with geometry
+		// This is less reliable and can grab wrong meshes like billboards/portals
+		const meshes = this.scene.meshes.filter(m => m.geometry && !m.name.includes('billboard') && !m.name.includes('portal')) as BABYLON.Mesh[];
+		const candidate = meshes[meshes.length - 1];
+		if (candidate) {
+			console.warn(`  ⚠ Using fallback template search, found:`, candidate.name);
+		}
+		return candidate;
 	}
 
 	private async createInstances(config: ModelPlacerConfig): Promise<void> {
@@ -115,9 +128,11 @@ export class ModelPlacer {
 		const step = Math.floor(this.pathPoints.length / config.count);
 		const scale = config.scale ?? 1;
 		const offsetY = config.offsetY ?? 0;
+		const startIndex = config.startIndex ?? 0;
 
 		for (let i = 0; i < config.count; i++) {
-			const pos = this.pathPoints[i * step]?.clone();
+			const pathIndex = (startIndex + (i * step)) % this.pathPoints.length;
+			const pos = this.pathPoints[pathIndex]?.clone();
 			if (!pos) continue;
 
 			pos.y += offsetY;

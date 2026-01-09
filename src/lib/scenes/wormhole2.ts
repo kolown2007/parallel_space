@@ -158,6 +158,10 @@ export class WormHoleScene2 {
 			const scale = (Math.random() * 1.5) + 0.5; // random scale 0.5..2.0
 			const physics = scene.getPhysicsEngine() ? { mass: 0.05, restitution: 0.3, friction: 0.05, shape: BABYLON.PhysicsShapeType.MESH } : undefined;
 			
+			// Pick a random position along the path for placement
+			const randomStartIndex = Math.floor(Math.random() * pathPoints.length);
+			console.log('📍 Random placement index:', randomStartIndex, '/', pathPoints.length);
+			
 			// Try to reuse cached container if available
 			const cachedContainer = this.modelCache.get(pick);
 			if (cachedContainer) {
@@ -169,7 +173,8 @@ export class WormHoleScene2 {
 					count: 1,
 					scale,
 					offsetY: (def as any).offsetY ?? 0,
-					physics
+					physics,
+					startIndex: randomStartIndex
 				});
 			} else {
 				console.log('⟳ Loading new container for:', pick);
@@ -179,7 +184,8 @@ export class WormHoleScene2 {
 					count: 1,
 					scale,
 					offsetY: (def as any).offsetY ?? 0,
-					physics
+					physics,
+					startIndex: randomStartIndex
 				});
 			}
 			
@@ -188,6 +194,7 @@ export class WormHoleScene2 {
 				try { placer.dispose(); } catch (e) { /* ignore */ }
 			});
 			console.log('✓ Placed random model:', pick, 'scale:', scale.toFixed(2));
+			console.log('  Total ModelPlacer cleanup handlers registered:', this.cleanupRegistry.length);
 		} catch (e) {
 			console.warn('placeRandomModel failed:', e);
 		}
