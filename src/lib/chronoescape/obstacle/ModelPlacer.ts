@@ -26,6 +26,7 @@ export class ModelPlacer {
 	private template?: BABYLON.Mesh;
 	private instances: BABYLON.InstancedMesh[] = [];
 	private ownsContainer = false;
+	private containerWasInScene = false;
 
 	constructor(scene: BABYLON.Scene, pathPoints: BABYLON.Vector3[]) {
 		this.scene = scene;
@@ -44,8 +45,16 @@ export class ModelPlacer {
 				console.log(`  ↳ Using preloaded container (not owned by placer)`);
 				this.container = config.container;
 				this.ownsContainer = false;
-				if (this.container?.addAllToScene) {
+				
+				// Check if container is already in scene by checking if its meshes have parent scene
+				const firstMesh = this.container?.meshes?.[0];
+				this.containerWasInScene = !!(firstMesh && firstMesh.getScene());
+				
+				if (!this.containerWasInScene && this.container?.addAllToScene) {
+					console.log(`  ↳ Adding container to scene for first time`);
 					this.container.addAllToScene();
+				} else {
+					console.log(`  ↳ Container already in scene, reusing`);
 				}
 			} else {
 				console.log(`  ↳ Loading new container from URL`);
@@ -59,9 +68,11 @@ export class ModelPlacer {
 					pluginOptions: { gltf: {} }
 				});
 				this.ownsContainer = true;
+				this.containerWasInScene = false;
 
 				if (this.container?.addAllToScene) {
 					this.container.addAllToScene();
+					this.containerWasInScene = true;
 				}
 			}
 

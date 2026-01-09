@@ -134,14 +134,23 @@ export class WormHoleScene2 {
 		try {
 			const cfg = await loadAssetsConfig();
 			const modelIds = Object.keys(cfg.models || {}).filter(id => id !== 'drone');
+			console.log('🎲 Available models for placement:', modelIds);
 			if (modelIds.length === 0) {
 				console.warn('No models available to place');
 				return;
 			}
 			const pick = modelIds[Math.floor(Math.random() * modelIds.length)];
 			const def = cfg.models![pick];
+			console.log('🎯 Selected model:', pick, '→', def.filename);
 			if (!def?.rootUrl || !def?.filename) {
 				console.warn('Selected model missing url/filename:', pick);
+				return;
+			}
+			
+			// Validate it's a 3D model file
+			const isModelFile = /\.(glb|gltf|babylon|obj|stl)$/i.test(def.filename);
+			if (!isModelFile) {
+				console.warn('Selected asset is not a 3D model:', pick, def.filename);
 				return;
 			}
 			
