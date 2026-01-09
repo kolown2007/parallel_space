@@ -10,6 +10,32 @@
       "filename": "glb/usb.glb",
       "type": "mesh"
     }
+    ,
+    "rabbit": {
+      "rootUrl": "https://kolown.net/storage/library/chronoescape/",
+      "filename": "glb/rabbit.glb",
+      "type": "mesh"
+    },
+    "mario": {
+      "rootUrl": "https://kolown.net/storage/library/chronoescape/",
+      "filename": "glb/mario.glb",
+      "type": "mesh"
+    },
+    "manikineko": {
+      "rootUrl": "https://kolown.net/storage/library/chronoescape/",
+      "filename": "glb/manikineko.glb",
+      "type": "mesh"
+    },
+    "armycatbike": {
+      "rootUrl": "https://kolown.net/storage/library/chronoescape/",
+      "filename": "glb/armycatbike.glb",
+      "type": "mesh"
+    },
+    "army": {
+      "rootUrl": "https://kolown.net/storage/library/chronoescape/",
+      "filename": "glb/army.glb",
+      "type": "mesh"
+    }
   },
   "textures": {
     "metal": {

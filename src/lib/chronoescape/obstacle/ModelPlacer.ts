@@ -14,6 +14,9 @@ export interface ModelPlacerConfig {
 		friction?: number;
 		shape?: BABYLON.PhysicsShapeType;
 	};
+	// Optional: provide a preloaded AssetContainer instead of loading from URL
+	container?: BABYLON.AssetContainer;
+	// If container provided, ModelPlacer will NOT dispose it (owner is external)
 }
 
 export class ModelPlacer {
@@ -22,6 +25,7 @@ export class ModelPlacer {
 	private container?: BABYLON.AssetContainer;
 	private template?: BABYLON.Mesh;
 	private instances: BABYLON.InstancedMesh[] = [];
+	private ownsContainer = false;
 
 	constructor(scene: BABYLON.Scene, pathPoints: BABYLON.Vector3[]) {
 		this.scene = scene;
@@ -35,18 +39,28 @@ export class ModelPlacer {
 		console.log(`Loading model: ${config.filename}`);
 
 		try {
-			const moduleLoader = (BABYLON as any).loadAssetContainerAsync;
-			if (typeof moduleLoader !== 'function') {
-				throw new Error('loadAssetContainerAsync not available');
-			}
+			if (config.container) {
+				// Use provided preloaded container
+				this.container = config.container;
+				this.ownsContainer = false;
+				if (this.container?.addAllToScene) {
+					this.container.addAllToScene();
+				}
+			} else {
+				const moduleLoader = (BABYLON as any).loadAssetContainerAsync;
+				if (typeof moduleLoader !== 'function') {
+					throw new Error('loadAssetContainerAsync not available');
+				}
 
-			this.container = await moduleLoader.call(BABYLON, config.filename, this.scene, {
-				rootUrl: config.rootUrl,
-				pluginOptions: { gltf: {} }
-			});
+				this.container = await moduleLoader.call(BABYLON, config.filename, this.scene, {
+					rootUrl: config.rootUrl,
+					pluginOptions: { gltf: {} }
+				});
+				this.ownsContainer = true;
 
-			if (this.container?.addAllToScene) {
-				this.container.addAllToScene();
+				if (this.container?.addAllToScene) {
+					this.container.addAllToScene();
+				}
 			}
 
 			this.template = this.findTemplateMesh();
@@ -154,7 +168,7 @@ export class ModelPlacer {
 			}
 		}
 
-		if (this.container) {
+		if (this.container && this.ownsContainer) {
 			try {
 				this.container.dispose();
 			} catch (e) {

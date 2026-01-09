@@ -35,6 +35,7 @@ import { get } from 'svelte/store';
 export class WormHoleScene2 {
 	static pathPoints: BABYLON.Vector3[] = [];
 	private static cleanupRegistry: Array<() => void> = [];
+	private static modelCache: Map<string, BABYLON.AssetContainer> = new Map();
 
 	private static registerCleanup(cleanup: () => void): void {
 		this.cleanupRegistry.push(cleanup);
@@ -45,6 +46,12 @@ export class WormHoleScene2 {
 			try { cleanup(); } catch (e) { console.warn('Cleanup error:', e); }
 		}
 		this.cleanupRegistry = [];
+		
+		// Dispose cached model containers
+		for (const container of this.modelCache.values()) {
+			try { container.dispose(); } catch (e) { console.warn('Model cache disposal error:', e); }
+		}
+		this.modelCache.clear();
 	}
 
 	private static async loadSceneModels(scene: BABYLON.Scene, pathPoints: BABYLON.Vector3[]): Promise<void> {
@@ -56,31 +63,137 @@ export class WormHoleScene2 {
 			}
 
 			const cfg = await loadAssetsConfig();
-			const jolli = cfg.models?.jollibee;
-			const rootUrl = jolli?.rootUrl ?? 'https://kolown.net/assets/p1sonet/';
-			const fileName = jolli?.filename ?? 'jollibee.glb';
-			const container = await (BABYLON as any).loadAssetContainerAsync(fileName, scene, {
-				rootUrl,
-				pluginOptions: { gltf: {} }
-			});
+			
+			// NOTE: this method can preload models into cache if needed.
+			// Currently we avoid eager model preloading to keep startup light.
+			if (cfg.models) {
+				const modelKeys = Object.keys(cfg.models);
+				console.log(`Loading ${modelKeys.length} models:`, modelKeys);
+				
+				const loadPromises = modelKeys.map(async (modelId) => {
+					try {
+						const modelDef = cfg.models![modelId];
+						if (!modelDef?.rootUrl || !modelDef?.filename) {
+							console.warn(`✗ Skipping ${modelId}: missing rootUrl or filename in config`);
+							return { modelId, container: null, success: false };
+						}
+					
+						const container = await (BABYLON as any).loadAssetContainerAsync(modelDef.filename, scene, {
+							rootUrl: modelDef.rootUrl,
+							pluginOptions: { gltf: {} }
+						});
+					
+						// Store in cache WITHOUT adding to scene
+						this.modelCache.set(modelId, container);
+						console.log(`✓ Loaded model: ${modelId}`);
+					
+						return { modelId, container, success: true };
+					} catch (error) {
+						console.error(`✗ Failed to load model ${modelId}:`, error);
+						return { modelId, container: null, success: false };
+					}
+				});
+				
+				await Promise.all(loadPromises);
+				console.log(`Model cache ready with ${this.modelCache.size} models`);
+			}
 
-			container.addAllToScene();
-
-			// Find the main mesh to use as template
-			const jolliTemplate = container.meshes.find((m: any) => m.geometry) as BABYLON.Mesh;
-
-			// Also place some static instances
-			const modelPlacer = new ModelPlacer(scene, pathPoints);
-			await modelPlacer.load({
-				rootUrl,
-				filename: fileName,
-				count: 5,
-				scale: 10,
-				offsetY: -1,
-				physics: { mass: 0.05, restitution: 0.3, friction: 0.05, shape: BABYLON.PhysicsShapeType.MESH }
-			});
+			// Place all cached models using ModelPlacer (use model config when available)
+			for (const [modelId, container] of this.modelCache.entries()) {
+				try {
+					if (!container) continue;
+					const def = cfg.models?.[modelId];
+					const placer = new ModelPlacer(scene, pathPoints);
+					await placer.load({
+						container,
+						rootUrl: def?.rootUrl ?? '',
+						filename: def?.filename ?? modelId,
+						count: (def && typeof (def as any).count === 'number') ? (def as any).count : 1,
+						scale: (def && typeof (def as any).scale === 'number') ? (def as any).scale : 1,
+						offsetY: (def && typeof (def as any).offsetY === 'number') ? (def as any).offsetY : 0
+					});
+					// Register disposal of placer instances; do not dispose the cached container here
+					this.registerCleanup(() => {
+						try { placer.dispose(); } catch (e) { /* ignore */ }
+					});
+					console.log(`Placed model from cache: ${modelId}`);
+				} catch (e) {
+					console.warn(`Failed to place cached model ${modelId}:`, e);
+				}
+			}
 		} catch (error) {
 			console.error('Failed to load models:', error);
+		}
+	}
+
+	/**
+	 * Place a random model from the assets config using ModelPlacer.
+	 * This lazy-loads the model on demand instead of preloading everything.
+	 */
+	static async placeRandomModel(scene: BABYLON.Scene, pathPoints: BABYLON.Vector3[]): Promise<void> {
+		try {
+			const cfg = await loadAssetsConfig();
+			const modelIds = Object.keys(cfg.models || {}).filter(id => id !== 'drone');
+			if (modelIds.length === 0) {
+				console.warn('No models available to place');
+				return;
+			}
+			const pick = modelIds[Math.floor(Math.random() * modelIds.length)];
+			const def = cfg.models![pick];
+			if (!def?.rootUrl || !def?.filename) {
+				console.warn('Selected model missing url/filename:', pick);
+				return;
+			}
+			const placer = new ModelPlacer(scene, pathPoints);
+			const scale = (Math.random() * 1.5) + 0.5; // random scale 0.5..2.0
+			const physics = scene.getPhysicsEngine() ? { mass: 0.05, restitution: 0.3, friction: 0.05, shape: BABYLON.PhysicsShapeType.MESH } : undefined;
+			await placer.load({
+				rootUrl: def.rootUrl,
+				filename: def.filename,
+				count: 1,
+				scale,
+				offsetY: (def as any).offsetY ?? 0,
+				physics
+			});
+			// Register cleanup for this placer (do not dispose external assets)
+			this.registerCleanup(() => {
+				try { placer.dispose(); } catch (e) { /* ignore */ }
+			});
+			console.log('Placed random model:', pick);
+		} catch (e) {
+			console.warn('placeRandomModel failed:', e);
+		}
+	}
+
+	/**
+	 * Background-preload model containers into the model cache.
+	 * Runs without blocking scene setup; useful to avoid hiccups on first placement.
+	 */
+	static async preloadModelContainers(scene: BABYLON.Scene): Promise<void> {
+		try {
+			const cfg = await loadAssetsConfig();
+			const modelIds = Object.keys(cfg.models || {}).filter(id => id !== 'drone');
+			for (const modelId of modelIds) {
+				try {
+					const def = cfg.models![modelId];
+					if (!def?.rootUrl || !def?.filename) {
+						console.warn('preload: skipping', modelId, 'missing url/filename');
+						continue;
+					}
+					if (this.modelCache.has(modelId)) continue;
+					const container = await (BABYLON as any).loadAssetContainerAsync(def.filename, scene, {
+						rootUrl: def.rootUrl,
+						pluginOptions: { gltf: {} }
+					});
+					// keep container off-scene until instantiation
+					this.modelCache.set(modelId, container);
+					console.log('Preloaded model container:', modelId);
+				} catch (e) {
+					console.warn('Failed to preload model', modelId, e);
+				}
+			}
+		} catch (e) {
+			console.warn('preloadModelContainers failed:', e);
 		}
 	}
 
@@ -92,17 +205,26 @@ export class WormHoleScene2 {
 			const preloadScene = new BABYLON.Scene(engine);
 			try {
 				const assetList = await getDefaultAssetList();
-				await preloadContainers(
-					preloadScene,
-					assetList,
-					(loaded: number, total: number, last?: string) => {
-						try {
-							(engine as any)?.loadingScreen?.setLoadingText?.(
-								`Loading ${loaded}/${total} ${last ?? ''}`
-							);
-						} catch {}
+					// Do not preload model files at startup to keep startup light; only preload non-model assets
+					const nonModelList = (assetList || []).filter(a => !/\.(glb|gltf|babylon|obj|stl)$/i.test(a.filename));
+					await preloadContainers(
+						preloadScene,
+						nonModelList,
+						(loaded: number, total: number, last?: string) => {
+							try {
+								(engine as any)?.loadingScreen?.setLoadingText?.(
+									`Loading ${loaded}/${total} ${last ?? ''}`
+								);
+							} catch {}
+						}
+					);
+					// Also preload model containers (heavy assets) on the preload scene so first placement is smooth
+					try {
+						await WormHoleScene2.preloadModelContainers(preloadScene);
+						console.log('Preloaded model containers during startup');
+					} catch (e) {
+						console.warn('Preloading model containers failed:', e);
 					}
-				);
 			} catch (e) {
 				console.warn('preloadContainers threw', e);
 			} finally {
@@ -333,33 +455,46 @@ export class WormHoleScene2 {
 		// ====================================================================
 
 		const obstacles = new ObstaclesManager(scene, pathPoints);
+
 		const indices = await createPathMarkers(scene, pathPoints, obstacles);
 
-		const floating = createFloatingCubes(scene, pathPoints, {
-			count: 3,
-			jitter: 0.05,
-			verticalOffset: 0.5,
-			sizeRange: [0.2, 1],
-			massRange: [0.008, 0.8],
-			antiGravityFactor: 1.0,
-			linearDamping: 0.985
-		});
+		// const floating = createFloatingCubes(scene, pathPoints, {
+		// 	count: 3,
+		// 	jitter: 0.05,
+		// 	verticalOffset: 0.5,
+		// 	sizeRange: [0.2, 1],
+		// 	massRange: [0.008, 0.8],
+		// 	antiGravityFactor: 1.0,
+		// 	linearDamping: 0.985
+		// });
 
 		// ====================================================================
 		// EFFECTS
 		// ====================================================================
 
-		const particleIdx = indices[0] ?? Math.floor(pathPoints.length / 2);
-		createParticles(scene, pathPoints, particleIdx, torus, { autoDispose: 60_000 });
+		// const particleIdx = indices[0] ?? Math.floor(pathPoints.length / 2);
+		// createParticles(scene, pathPoints, particleIdx, torus, { autoDispose: 60_000 });
 
 		// ====================================================================
 		// MODELS & BILLBOARDS
 		// ====================================================================
 
-		// Load models synchronously before scene completion
-		await WormHoleScene2.loadSceneModels(scene, pathPoints);
+		// Models are loaded lazily on demand. Bind `f` key to place a random model.
+		// (Preloading already occurred during the startup preload phase.)
+		const onKeyDown = async (ev: KeyboardEvent) => {
+			if (ev.key?.toLowerCase() === 'f') {
+				try {
+					await WormHoleScene2.placeRandomModel(scene, pathPoints);
+				} catch (e) {
+					console.warn('Failed to place random model via keypress:', e);
+				}
+			}
+		};
+		window.addEventListener('keydown', onKeyDown);
+		WormHoleScene2.registerCleanup(() => window.removeEventListener('keydown', onKeyDown));
 
 		await createBillboards(scene, pathPoints, torus);
+		
 		let portal = await createPortal(scene, pathPoints, indices[0] ?? Math.floor(pathPoints.length / 2));
 
 	// ====================================================================
@@ -392,9 +527,11 @@ export class WormHoleScene2 {
 		}
 
 		// Update floating cubes
-		if (floating && typeof floating.update === 'function') {
-			floating.update(dt);
-		}
+		// if (floating && typeof floating.update === 'function') {
+		// 	floating.update(dt);
+		// }
+
+
 
 		// Update path progress using store value
 		let newProgress = control.progress + control.speed;

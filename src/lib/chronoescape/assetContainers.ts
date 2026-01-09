@@ -118,28 +118,13 @@ export function preloadContainers(
 }
 
 /**
- * Default asset list (placeholders). Update paths/filenames to match your repo or CDN.
- */
-export const defaultAssetList: AssetItem[] = [
-  // default fallback list mirrors static/assets.json locations
-  { id: 'metal', rootUrl: 'https://kolown.net/storage/library/chronoescape/', filename: 'metal.jpg' },
-  { id: 'tribal', rootUrl: 'https://kolown.net/storage/library/chronoescape/', filename: 'tribal.png' },
-  { id: 'jollibee', rootUrl: 'https://kolown.net/storage/library/chronoescape/', filename: 'glb/jollibee.glb' },
-  { id: 'drone', rootUrl: 'https://kolown.net/storage/library/chronoescape/', filename: 'glb/usb.glb' },
-  { id: 'heightmap', rootUrl: '/heightmaps/', filename: 'heightmap.png' },
-
-];
-
-/**
  * Load assets from JSON config
+ *
+ * This intentionally does not fall back to hardcoded defaults so missing/invalid
+ * config is visible during development and CI.
  */
 export async function getDefaultAssetList(): Promise<AssetItem[]> {
-  try {
-    return await getAssetList();
-  } catch (error) {
-    console.warn('Failed to load assets from config, using hardcoded defaults:', error);
-    return defaultAssetList;
-  }
+  return await getAssetList();
 }
 
 export default preloadContainers;
