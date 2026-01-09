@@ -36,17 +36,19 @@ export class ModelPlacer {
 	 * Load and place model instances along the path
 	 */
 	async load(config: ModelPlacerConfig): Promise<void> {
-		console.log(`Loading model: ${config.filename}`);
+		console.log(`📦 ModelPlacer.load: ${config.filename}, count: ${config.count}, scale: ${config.scale ?? 1}`);
 
 		try {
 			if (config.container) {
 				// Use provided preloaded container
+				console.log(`  ↳ Using preloaded container (not owned by placer)`);
 				this.container = config.container;
 				this.ownsContainer = false;
 				if (this.container?.addAllToScene) {
 					this.container.addAllToScene();
 				}
 			} else {
+				console.log(`  ↳ Loading new container from URL`);
 				const moduleLoader = (BABYLON as any).loadAssetContainerAsync;
 				if (typeof moduleLoader !== 'function') {
 					throw new Error('loadAssetContainerAsync not available');
@@ -78,9 +80,9 @@ export class ModelPlacer {
 
 			await this.createInstances(config);
 
-			console.log(`Created ${config.count} model instances`);
+			console.log(`✓ ModelPlacer created ${this.instances.length}/${config.count} instances`);
 		} catch (error) {
-			console.error('Failed to load model:', error);
+			console.error('✗ ModelPlacer.load failed:', error);
 			throw error;
 		}
 	}
@@ -151,6 +153,8 @@ export class ModelPlacer {
 	}
 
 	dispose(): void {
+		console.log(`🗑️ ModelPlacer.dispose: disposing ${this.instances.length} instances, ownsContainer: ${this.ownsContainer}`);
+		
 		this.instances.forEach((instance) => {
 			try {
 				instance.dispose();

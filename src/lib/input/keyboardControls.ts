@@ -10,8 +10,9 @@ export function installKeyboardControls(params: {
     onSpeedUp?: () => void;
     onSpeedDown?: () => void;
     onSpawn?: () => void;
+    onPlaceModel?: () => void;
 }) {
-    const { keysPressed, onToggleWireframe, onReset, onSwitchCamera, onSpeedUp, onSpeedDown, onSpawn } = params;
+    const { keysPressed, onToggleWireframe, onReset, onSwitchCamera, onSpeedUp, onSpeedDown, onSpawn, onPlaceModel } = params;
 
     const keydown = (event: KeyboardEvent) => {
         const key = event.key.toLowerCase();
@@ -29,6 +30,8 @@ export function installKeyboardControls(params: {
             onSpeedDown();
         } else if (key === 'p' && onSpawn) {
             onSpawn();
+        } else if (key === 'f' && onPlaceModel) {
+            onPlaceModel();
         }
     };
 

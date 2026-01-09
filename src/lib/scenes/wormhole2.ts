@@ -128,7 +128,7 @@ export class WormHoleScene2 {
 
 	/**
 	 * Place a random model from the assets config using ModelPlacer.
-	 * This lazy-loads the model on demand instead of preloading everything.
+	 * Reuses cached containers when available to avoid re-loading.
 	 */
 	static async placeRandomModel(scene: BABYLON.Scene, pathPoints: BABYLON.Vector3[]): Promise<void> {
 		try {
@@ -144,22 +144,41 @@ export class WormHoleScene2 {
 				console.warn('Selected model missing url/filename:', pick);
 				return;
 			}
+			
 			const placer = new ModelPlacer(scene, pathPoints);
 			const scale = (Math.random() * 1.5) + 0.5; // random scale 0.5..2.0
 			const physics = scene.getPhysicsEngine() ? { mass: 0.05, restitution: 0.3, friction: 0.05, shape: BABYLON.PhysicsShapeType.MESH } : undefined;
-			await placer.load({
-				rootUrl: def.rootUrl,
-				filename: def.filename,
-				count: 1,
-				scale,
-				offsetY: (def as any).offsetY ?? 0,
-				physics
-			});
-			// Register cleanup for this placer (do not dispose external assets)
+			
+			// Try to reuse cached container if available
+			const cachedContainer = this.modelCache.get(pick);
+			if (cachedContainer) {
+				console.log('✓ Using cached container for:', pick);
+				await placer.load({
+					container: cachedContainer,
+					rootUrl: def.rootUrl,
+					filename: def.filename,
+					count: 1,
+					scale,
+					offsetY: (def as any).offsetY ?? 0,
+					physics
+				});
+			} else {
+				console.log('⟳ Loading new container for:', pick);
+				await placer.load({
+					rootUrl: def.rootUrl,
+					filename: def.filename,
+					count: 1,
+					scale,
+					offsetY: (def as any).offsetY ?? 0,
+					physics
+				});
+			}
+			
+			// Register cleanup for this placer
 			this.registerCleanup(() => {
 				try { placer.dispose(); } catch (e) { /* ignore */ }
 			});
-			console.log('Placed random model:', pick);
+			console.log('✓ Placed random model:', pick, 'scale:', scale.toFixed(2));
 		} catch (e) {
 			console.warn('placeRandomModel failed:', e);
 		}
@@ -441,6 +460,13 @@ export class WormHoleScene2 {
 				adjustDroneSpeed(-0.00002);
 				const newSpeed = get(droneControl).speed;
 				console.log('Speed decreased:', (newSpeed * 10000).toFixed(3));
+			},
+			onPlaceModel: async () => {
+				try {
+					await WormHoleScene2.placeRandomModel(scene, pathPoints);
+				} catch (e) {
+					console.warn('Failed to place random model:', e);
+				}
 			}
 		});
 
@@ -479,19 +505,8 @@ export class WormHoleScene2 {
 		// MODELS & BILLBOARDS
 		// ====================================================================
 
-		// Models are loaded lazily on demand. Bind `f` key to place a random model.
+		// Models are loaded lazily on demand. Press 'f' key to place a random model.
 		// (Preloading already occurred during the startup preload phase.)
-		const onKeyDown = async (ev: KeyboardEvent) => {
-			if (ev.key?.toLowerCase() === 'f') {
-				try {
-					await WormHoleScene2.placeRandomModel(scene, pathPoints);
-				} catch (e) {
-					console.warn('Failed to place random model via keypress:', e);
-				}
-			}
-		};
-		window.addEventListener('keydown', onKeyDown);
-		WormHoleScene2.registerCleanup(() => window.removeEventListener('keydown', onKeyDown));
 
 		await createBillboards(scene, pathPoints, torus);
 		
