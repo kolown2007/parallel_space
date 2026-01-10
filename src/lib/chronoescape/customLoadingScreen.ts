@@ -1,235 +1,128 @@
 import * as BABYLON from '@babylonjs/core';
-import { getLoadingImageUrl } from '../assetsConfig';
 
 export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
-  // use a solid red background for loading
   public loadingUIBackgroundColor: string = '#BB464B';
   public loadingUIText: string;
-  // optional background image for loader (full cover)
-  public loadingUIImageUrl: string | null = null;
-
+  
   private _container: HTMLDivElement | null = null;
-  private _textElement: HTMLDivElement | null = null;
-  private _shownAt: number | null = null;
-  private _hideTimeoutHandle: number | null = null;
-  private _imageDelayHandle: number | null = null;
-  private _pendingImageUrl: string | null = null;
-  private _imgElement: HTMLImageElement | null = null;
+  private _img: HTMLImageElement | null = null;
+  private _textEl: HTMLDivElement | null = null;
+  private _shownAt: number = 0;
+  private _hideTimeout: number | null = null;
+  private _imageUrl: string;
+  private _assetsReady: boolean = false;
+  private _canHide: boolean = false;
 
-  private _applyImage(url: string) {
-    try {
-      if (!this._container) return;
-      if (!this._imgElement) {
-        const img = document.createElement('img');
-        img.alt = '';
-        img.style.position = 'absolute';
-        img.style.left = '50%';
-        img.style.top = '50%';
-        img.style.transform = 'translate(-50%, -50%)';
-        img.style.maxWidth = '80vw';
-        img.style.maxHeight = '80vh';
-        img.style.objectFit = 'contain';
-        img.style.pointerEvents = 'none';
-        this._imgElement = img;
-        this._container.appendChild(img);
-      }
-      this._imgElement.src = url;
-    } catch (e) { /* ignore */ }
-  }
-
-  constructor(loadingUIText: string, imageUrl?: string) {
+  constructor(loadingUIText: string, imageUrl: string = '/parallelspace.png') {
     this.loadingUIText = loadingUIText;
-    if (imageUrl !== undefined) {
-      this.loadingUIImageUrl = imageUrl;
-    } else {
-      // default to the local parallelspace.png, but allow centralized override
-      this.loadingUIImageUrl = '/parallelspace.png';
-      try {
-        getLoadingImageUrl()
-          .then((u) => {
-            if (!u) return;
-            this.loadingUIImageUrl = u;
-            // If container already created, preload image then apply (or mark pending)
-            try {
-              if (this._container) {
-                const img = new Image();
-                img.src = u;
-                img.onload = () => {
-                  try {
-                    if (this._imageDelayHandle) {
-                      this._pendingImageUrl = u;
-                    } else {
-                      this._applyImage(u);
-                    }
-                  } catch (e) {}
-                };
-              }
-            } catch (e) {}
-          })
-          .catch(() => {});
-      } catch (e) {}
-    }
+    this._imageUrl = imageUrl;
   }
 
   public displayLoadingUI() {
     if (typeof document === 'undefined') return;
-      // minimal DOM overlay: show image (cover) if available, otherwise log only
-      console.log('CustomLoadingScreen: displayLoadingUI');
-      try {
-        this._shownAt = Date.now();
-        if (this._hideTimeoutHandle) {
-          try { clearTimeout(this._hideTimeoutHandle); } catch {};
-          this._hideTimeoutHandle = null;
-        }
-      } catch (e) { /* ignore */ }
+    
+    this._shownAt = Date.now();
+    this._assetsReady = false;
+    this._canHide = false;
 
-      if (typeof document === 'undefined') {
-        // non-browser environment: nothing more to do
-        return;
-      }
+    if (this._hideTimeout) {
+      clearTimeout(this._hideTimeout);
+      this._hideTimeout = null;
+    }
 
-      // create a simple full-viewport container that displays the image as a cover
-      try {
-        if (!this._container) {
-          const container = document.createElement('div');
-          container.setAttribute('role', 'status');
-          container.setAttribute('data-custom-loading', 'true');
-          container.style.position = 'fixed';
-          container.style.left = '0';
-          container.style.top = '0';
-          container.style.width = '100vw';
-          container.style.height = '100vh';
-          container.style.display = 'block';
-          container.style.opacity = '1';
-          container.style.zIndex = '2147483647';
-          container.style.pointerEvents = 'auto';
-          // show red background immediately; add the image element after 3s
-          container.style.background = this.loadingUIBackgroundColor;
-          if (this.loadingUIImageUrl) {
-            try {
-              if (this._imageDelayHandle) {
-                try { clearTimeout(this._imageDelayHandle); } catch {}
-                this._imageDelayHandle = null;
-              }
-              this._imageDelayHandle = window.setTimeout(() => {
-                try {
-                  const url = this._pendingImageUrl || this.loadingUIImageUrl;
-                  if (url) this._applyImage(url);
-                } catch (e) { /* ignore */ }
-                this._imageDelayHandle = null;
-                this._pendingImageUrl = null;
-              }, 3000) as unknown as number;
-            } catch (e) { /* ignore */ }
-          }
-          document.body.appendChild(container);
-          this._container = container;
-        } else {
-          this._container.style.display = 'block';
-        }
-      } catch (e) {
-        console.log('CustomLoadingScreen: failed to create DOM overlay', e);
-      }
+    if (this._container) {
+      this._container.style.display = 'block';
+      return;
+    }
+
+    // Create container with red background
+    const container = document.createElement('div');
+    container.style.cssText = `
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      display: block;
+      background: ${this.loadingUIBackgroundColor};
+      z-index: 2147483647;
+      pointer-events: auto;
+    `;
+    container.setAttribute('role', 'status');
+
+    // Create and add image
+    const img = document.createElement('img');
+    img.src = this._imageUrl;
+    img.alt = 'Loading';
+    img.style.cssText = `
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      max-width: 80vw;
+      max-height: 80vh;
+      object-fit: contain;
+      pointer-events: none;
+    `;
+    
+    // Create loading text
+    const textEl = document.createElement('div');
+    textEl.textContent = this.loadingUIText;
+    textEl.style.cssText = `
+      position: absolute;
+      left: 50%;
+      bottom: 10%;
+      transform: translateX(-50%);
+      color: white;
+      font-size: 1.2rem;
+      font-family: system-ui, sans-serif;
+      text-align: center;
+    `;
+    
+    container.appendChild(img);
+    container.appendChild(textEl);
+    document.body.appendChild(container);
+    
+    this._container = container;
+    this._img = img;
+    this._textEl = textEl;
+
+    // Ensure minimum 5 seconds display
+    setTimeout(() => {
+      this._canHide = true;
+      this._tryHide();
+    }, 5000);
   }
 
   public hideLoadingUI() {
-    // console.log('CustomLoadingScreen: hideLoadingUI called');
-    if (typeof document === 'undefined') return;
-    if (this._container) {
-      try {
-        if (this._imageDelayHandle) {
-          try { clearTimeout(this._imageDelayHandle); } catch {}
-          this._imageDelayHandle = null;
-        }
-      } catch (e) { /* ignore */ }
-      try {
-        if (this._imgElement) {
-          try { this._imgElement.remove(); } catch {}
-          this._imgElement = null;
-        }
-      } catch (e) { /* ignore */ }
-      // enforce minimum visible duration (default 5000ms) before removing
-      const minMs = 5000;
-      try {
-        const now = Date.now();
-        const shown = this._shownAt ?? 0;
-        const elapsed = shown ? (now - shown) : minMs;
-        const remaining = Math.max(0, minMs - elapsed);
-        if (remaining > 0) {
-          // schedule removal after remaining time
-          try {
-            this._hideTimeoutHandle = window.setTimeout(() => {
-              try {
-                if (this._container) {
-                  try { this._container.remove(); } catch (e) { if (this._container && this._container.parentNode) this._container.parentNode.removeChild(this._container); }
-                  this._container = null;
-                  this._textElement = null;
-                }
-                try {
-                  // clear any body background set by the loader
-                  document.body.style.backgroundImage = '';
-                  document.body.style.backgroundSize = '';
-                  document.body.style.backgroundPosition = '';
-                  document.body.style.backgroundRepeat = '';
-                  document.body.style.backgroundColor = '';
-                } catch (e) { /* ignore */ }
-              } catch (e) { /* ignore */ }
-              this._hideTimeoutHandle = null;
-              this._shownAt = null;
-            }, remaining) as unknown as number;
-          } catch (e) {
-            // fallback to immediate removal
-          }
-          return;
-        }
-      } catch (e) { /* ignore */ }
+    this._assetsReady = true;
+    this._tryHide();
+  }
 
-      // immediate removal (minimum visible time already satisfied)
-      try {
-        this._container.remove();
-      } catch (e) {
-        if (this._container.parentNode) this._container.parentNode.removeChild(this._container);
-      }
-      this._container = null;
-      this._textElement = null;
-      try {
-        // clear any body background set by the loader
-        document.body.style.backgroundImage = '';
-        document.body.style.backgroundSize = '';
-        document.body.style.backgroundPosition = '';
-        document.body.style.backgroundRepeat = '';
-        document.body.style.backgroundColor = '';
-      } catch (e) { /* ignore */ }
-      this._shownAt = null;
-    } else {
-      // no DOM container: just enforce the min-time and log
-      console.log('CustomLoadingScreen: hideLoadingUI requested (no DOM)');
-      const minMs = 5000;
-      try {
-        const now = Date.now();
-        const shown = this._shownAt ?? 0;
-        const elapsed = shown ? (now - shown) : minMs;
-        const remaining = Math.max(0, minMs - elapsed);
-        if (remaining > 0) {
-          try {
-            this._hideTimeoutHandle = window.setTimeout(() => {
-              console.log('CustomLoadingScreen: hideLoadingUI (delayed)');
-              this._hideTimeoutHandle = null;
-              this._shownAt = null;
-            }, remaining) as unknown as number;
-          } catch (e) {
-            this._shownAt = null;
-          }
-          return;
-        }
-      } catch (e) { /* ignore */ }
-      this._shownAt = null;
-      console.log('CustomLoadingScreen: hideLoadingUI immediate (no DOM)');
+  private _tryHide() {
+    if (!this._assetsReady || !this._canHide) return;
+    if (!this._container) return;
+
+    this._container.remove();
+    this._container = null;
+    this._img = null;
+    this._textEl = null;
+    
+    if (this._hideTimeout) {
+      clearTimeout(this._hideTimeout);
+      this._hideTimeout = null;
     }
-
   }
 
   public setLoadingText(text: string) {
     this.loadingUIText = text;
-    console.log('CustomLoadingScreen: setLoadingText ->', text);
+    if (this._textEl) {
+      this._textEl.textContent = text;
+    }
+  }
+
+  // Called by scene setup after assets are loaded
+  public notifyAssetsReady() {
+    this._assetsReady = true;
+    this._tryHide();
   }
 }

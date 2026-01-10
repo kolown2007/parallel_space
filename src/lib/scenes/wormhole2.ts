@@ -56,19 +56,18 @@ export class WormHoleScene2 {
 			const preloadScene = new BABYLON.Scene(engine);
 			try {
 				const assetList = await getDefaultAssetList();
-					// Do not preload model files at startup to keep startup light; only preload non-model assets
-					const nonModelList = (assetList || []).filter(a => !/\.(glb|gltf|babylon|obj|stl)$/i.test(a.filename));
-					await preloadContainers(
-						preloadScene,
-						nonModelList,
-						(loaded: number, total: number, last?: string) => {
-							try {
-								(engine as any)?.loadingScreen?.setLoadingText?.(
-									`Loading ${loaded}/${total} ${last ?? ''}`
-								);
-							} catch {}
-						}
-					);
+				// Load ALL assets (including models) before scene starts
+				await preloadContainers(
+					preloadScene,
+					assetList || [],
+					(loaded: number, total: number, last?: string) => {
+						try {
+							(engine as any)?.loadingScreen?.setLoadingText?.(
+								`Loading assets ${loaded}/${total}${last ? ': ' + last : ''}`
+							);
+						} catch {}
+					}
+				);
 			} catch (e) {
 				console.warn('preloadContainers threw', e);
 			} finally {
@@ -451,6 +450,16 @@ export class WormHoleScene2 {
 			updateFollowCamera(followCamera, drone, WormHoleScene2.pathPoints, control.progress, gimbal);
 		}
 	});
+
+	// Notify loading screen that scene and assets are ready
+	try {
+		const loadingScreen = (engine as any)?.loadingScreen;
+		if (loadingScreen && typeof loadingScreen.notifyAssetsReady === 'function') {
+			loadingScreen.notifyAssetsReady();
+		}
+	} catch (e) {
+		console.warn('Failed to notify loading screen:', e);
+	}
 
 	return scene;
 	}
