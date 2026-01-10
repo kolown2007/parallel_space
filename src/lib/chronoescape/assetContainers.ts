@@ -34,7 +34,9 @@ export function preloadContainers(
   if (!Array.isArray(assets) || assets.length === 0) return Promise.resolve({});
   return new Promise((resolve) => {
     const mgr = new AssetsManager(scene);
+    mgr.useDefaultLoadingScreen = false;
     const results: PreloadResult = {} as PreloadResult;
+    let tasksAdded = 0;
 
     const getExt = (fn: string) => (fn.split('.').pop() || '').toLowerCase();
 
@@ -49,6 +51,7 @@ export function preloadContainers(
       })();
 
       if (['glb', 'gltf', 'babylon', 'obj', 'stl'].includes(ext)) {
+        tasksAdded++;
         // Use addMeshTask which provides loadedMeshes; avoids cross-origin/container URL issues.
         const meshTask = (mgr as any).addMeshTask(`${a.id}_meshTask`, '', a.rootUrl, a.filename);
         (meshTask as any).onSuccess = (t: any) => {
@@ -82,6 +85,7 @@ export function preloadContainers(
           results[a.id] = { container: null, template: null, resource: null };
         };
       } else if (['png', 'jpg', 'jpeg', 'gif', 'webp'].includes(ext)) {
+        tasksAdded++;
         // texture task for images / heightmaps
         const texTask = mgr.addTextureTask(`${a.id}_texTask`, fullUrl);
         texTask.onSuccess = (t: any) => {
@@ -92,6 +96,7 @@ export function preloadContainers(
           results[a.id] = { container: null, template: null, resource: null };
         };
       } else {
+        tasksAdded++;
         // fallback: try a texture task
         const texTask = mgr.addTextureTask(`${a.id}_fallbackTex`, fullUrl);
         texTask.onSuccess = (t: any) => {
@@ -106,13 +111,29 @@ export function preloadContainers(
 
     mgr.onProgress = (remainingCount, totalCount, lastFinishedTask) => {
       const loaded = totalCount - remainingCount;
+      console.log(`Asset loading progress: ${loaded}/${totalCount} (${tasksAdded} tasks added)`);
       try { onProgress?.(loaded, totalCount, lastFinishedTask?.name); } catch {}
     };
 
-    mgr.onFinish = () => {
+    mgr.onFinish = (tasks) => {
+      console.log(`Asset loading finished. Total tasks: ${tasks.length}, Tasks added: ${tasksAdded}, Results: ${Object.keys(results).length}`);
       resolve(results);
     };
 
+    // Add timeout as failsafe (30 seconds)
+    const timeoutId = setTimeout(() => {
+      console.warn(`Asset loading timeout after 30s. Loaded: ${Object.keys(results).length}/${tasksAdded}`);
+      resolve(results);
+    }, 30000);
+
+    // Clear timeout when loading completes normally
+    const originalOnFinish = mgr.onFinish;
+    mgr.onFinish = (tasks: any) => {
+      clearTimeout(timeoutId);
+      originalOnFinish.call(mgr, tasks);
+    };
+
+    console.log(`Starting asset load with ${tasksAdded} tasks for ${assets.length} assets`);
     mgr.load();
   });
 }
