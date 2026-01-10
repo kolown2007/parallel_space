@@ -1,6 +1,3 @@
-// ============================================================================
-// IMPORTS
-// ============================================================================
 
 import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
@@ -13,13 +10,10 @@ import { updateDronePhysics, updateFollowCamera } from '../chronoescape/drone/dr
 import { createTorus } from '../chronoescape/world/Torus';
 import { getPositionOnPath } from '../chronoescape/world/PathUtils';
 import { setupPhysics, setupLighting, setupCameras } from '../chronoescape/world/sceneUtils';
-import { createPathMarkers } from '../chronoescape/world/markers';
-import { createBillboards, createPortal, createParticles } from '../chronoescape/world/effects';
+import { visualizePathDebug } from '../chronoescape/world/debugPath';
 
 // Obstacles
-import { createFloatingCubes } from '../chronoescape/obstacle/floatingCubes';
-import { ObstaclesManager } from '../chronoescape/obstacle/Obstacles';
-import { ModelPlacer } from '../chronoescape/obstacle/ModelPlacer';
+import { ObstacleFactory } from '../chronoescape/obstacle/ObstacleFactory';
 
 // System
 import preloadContainers, { getDefaultAssetList } from '../chronoescape/assetContainers';
@@ -164,34 +158,18 @@ export class WormHoleScene2 {
 		console.log('PathPoints count:', pathPoints.length);
 		const torusMaterial = torus.material as BABYLON.StandardMaterial;
 
-		// Debug: verify path centering
-		{
-// const debugLine = BABYLON.MeshBuilder.CreateLines('pathDebug', { points: pathPoints }, scene);
-			// debugLine.color = new BABYLON.Color3(0, 1, 1);
-
-			const center = torus.getAbsolutePosition();
-			let minRad = Number.POSITIVE_INFINITY,
-				maxRad = 0;
-			let minY = Number.POSITIVE_INFINITY,
-				maxY = Number.NEGATIVE_INFINITY;
-			for (let i = 0; i < pathPoints.length; i++) {
-				const p = pathPoints[i];
-				const dx = p.x - center.x;
-				const dz = p.z - center.z;
-				const radial = Math.sqrt(dx * dx + dz * dz);
-				minRad = Math.min(minRad, radial);
-				maxRad = Math.max(maxRad, radial);
-				minY = Math.min(minY, p.y - center.y);
-				maxY = Math.max(maxY, p.y - center.y);
-			}
-			console.log('Path debug — torus center:', center);
-			console.log(
-				`Path radial distance (min, max): ${minRad.toFixed(4)}, ${maxRad.toFixed(4)} (expected ~${torusMainRadius.toFixed(4)})`
-			);
-			console.log(
-				`Path Y offset from torus center (min, max): ${minY.toFixed(4)}, ${maxY.toFixed(4)} (expected within +/-${torusTubeRadius.toFixed(4)})`
-			);
-		}
+		// ====================================================================
+		// PATH DEBUG VISUALIZATION
+		// ====================================================================
+		visualizePathDebug(scene, pathPoints, {
+			showLine: false, //true to view
+			showLabels: false,
+			labelInterval: 10,
+			showStats: true,
+			torusCenter: torus.getAbsolutePosition(),
+			torusMainRadius,
+			torusTubeRadius
+		});
 
 		// ====================================================================
 		// DRONE: LOADING & SETUP
@@ -307,13 +285,57 @@ export class WormHoleScene2 {
 				adjustDroneSpeed(-0.00002);
 				const newSpeed = get(droneControl).speed;
 				console.log('Speed decreased:', (newSpeed * 10000).toFixed(3));
+			},
+			onPlaceCube: async () => {
+				try {
+					const currentPointIndex = getDronePathIndex();
+					const targetIndex = (currentPointIndex + 10) % pathPoints.length;
+					await obstacles.place('cube', { index: targetIndex, size: 2, physics: true });
+					console.log(`📦 Placed cube at point ${targetIndex} (drone @ ${currentPointIndex})`);
+				} catch (e) {
+					console.warn('Failed to place cube:', e);
+				}
 			}
 		});
 
 		// Register keyboard cleanup
+		
 		WormHoleScene2.registerCleanup(() => uninstallKeyboard());
 
+		// Helper: compute nearest path point index for drone
+		const getDronePathIndex = () => {
+			if (!drone || !pathPoints || pathPoints.length === 0) return 0;
+			let currentPointIndex = 0;
+			let minDistSq = Number.POSITIVE_INFINITY;
+			for (let i = 0; i < pathPoints.length; i++) {
+				const dx = pathPoints[i].x - drone.position.x;
+				const dy = pathPoints[i].y - drone.position.y;
+				const dz = pathPoints[i].z - drone.position.z;
+				const d2 = dx * dx + dy * dy + dz * dz;
+				if (d2 < minDistSq) {
+					minDistSq = d2;
+					currentPointIndex = i;
+				}
+			}
+			return currentPointIndex;
+		};
+
+		// DRONE POSITION LOGGER
+		// ====================================================================
+		const _dronePosLogger = setInterval(() => {
+			try {
+				if (!drone || !pathPoints || pathPoints.length === 0) return;
+				const currentPointIndex = getDronePathIndex();
+				const p = drone.position;
+				console.log('Drone @ point', currentPointIndex, '/', pathPoints.length, '| xyz:', { x: p.x.toFixed(2), y: p.y.toFixed(2), z: p.z.toFixed(2) });
+			} catch (e) {
+				console.warn('Drone position logger error:', e);
+			}
+		}, 10000);
+		WormHoleScene2.registerCleanup(() => clearInterval(_dronePosLogger));
+
 		// Cleanup on dispose
+			// ====================================================================
 		scene.onDisposeObservable.add(() => {
 			WormHoleScene2.disposeAll();
 		});
@@ -322,12 +344,12 @@ export class WormHoleScene2 {
 		// OBSTACLES & MARKERS
 		// ====================================================================
 
-		const obstacles = new ObstaclesManager(scene, pathPoints);
+		const obstacles = new ObstacleFactory(scene, pathPoints, WormHoleScene2.modelCache, WormHoleScene2.cleanupRegistry);
 
-		// const indices = await createPathMarkers(scene, pathPoints, obstacles);
-		const indices: number[] = []; // No markers
+		let portal: any | undefined;
 
-		// const floating = createFloatingCubes(scene, pathPoints, {
+		// Example: Enable floating cubes
+		// await obstacles.place('floating-cube', {
 		// 	count: 3,
 		// 	jitter: 0.05,
 		// 	verticalOffset: 0.5,
@@ -341,24 +363,35 @@ export class WormHoleScene2 {
 		// EFFECTS
 		// ====================================================================
 
-		// const particleIdx = indices[0] ?? Math.floor(pathPoints.length / 2);
+		// const particleIdx = Math.floor(pathPoints.length / 2);
 		// createParticles(scene, pathPoints, particleIdx, torus, { autoDispose: 60_000 });
 
 		// ====================================================================
-		// MODELS & BILLBOARDS
+		// MODELS & OBSTACLES
 		// ====================================================================
 
-		// Place 2 models at random positions along the track
-		await ModelPlacer.placeModels(scene, pathPoints, ['mario'], {
-			countPerModel: 3,        // 3 instances of each model
-			randomPositions: true,   // Place at random points
-			scaleRange: [ 2, 4.0],  // Random scale between 5.0-6.0
-			physics: true            // Enable physics
-		}, WormHoleScene2.modelCache, WormHoleScene2.cleanupRegistry);
-		
-		// await createBillboards(scene, pathPoints, torus);
-		
-		// let portal = await createPortal(scene, pathPoints, indices[0] ?? Math.floor(pathPoints.length / 2));
+		// Place models using unified API
+		await obstacles.place('model', {
+			modelNames: ['mario'],
+			count: 1,
+			randomPositions: true,
+			scaleRange: [4, 8],
+			physics: true
+		});
+
+	
+
+			portal = await obstacles.place('portal', {
+				index: Math.floor(pathPoints.length / 2),
+				posterRef: 'malunggay',
+				videoRef: 'plant1',
+				width: 15,
+				height: 25
+			}) as any;
+			try {
+				console.log('Placed portal:', portal?.mesh?.position ?? portal);
+			} catch (e) { /* ignore logging errors */ }
+
 
 	// ====================================================================
 	// RENDER LOOP
@@ -371,23 +404,23 @@ export class WormHoleScene2 {
 		const control = get(droneControl);
 
 		// Portal collision check (approximate USB AABB from drone position)
-		// if (portal && onPortalTrigger) {
-		// 	try {
-		// 		const usbAabb = {
-		// 			min: { x: drone.position.x - 0.5, y: drone.position.y - 0.5, z: drone.position.z - 0.5 },
-		// 			max: { x: drone.position.x + 0.5, y: drone.position.y + 0.5, z: drone.position.z + 0.5 }
-		// 		};
-		// 		if (portal.intersects(usbAabb)) {
-		// 			onPortalTrigger();
-		// 			try {
-		// 				portal.reset();
-		// 			} catch {}
-		// 			portal = undefined;
-		// 		}
-		// 	} catch (e) {
-		// 		/* ignore transient errors */
-		// 	}
-		// }
+		if (portal && onPortalTrigger) {
+			try {
+				const usbAabb = {
+					min: { x: drone.position.x - 0.5, y: drone.position.y - 0.5, z: drone.position.z - 0.5 },
+					max: { x: drone.position.x + 0.5, y: drone.position.y + 0.5, z: drone.position.z + 0.5 }
+				};
+				if (portal.intersects(usbAabb)) {
+					onPortalTrigger();
+					try {
+						portal.reset();
+					} catch {}
+					portal = undefined;
+				}
+			} catch (e) {
+				/* ignore transient errors */
+			}
+		}
 
 		// Update floating cubes
 		// if (floating && typeof floating.update === 'function') {

@@ -266,6 +266,7 @@ export class ModelPlacer {
 			randomPositions?: boolean;
 			scaleRange?: [number, number];
 			physics?: boolean;
+			positionIndices?: number | number[];
 			targetSize?: number;
 		} = {},
 		modelCache: Map<string, BABYLON.AssetContainer>,
@@ -295,6 +296,7 @@ export class ModelPlacer {
 					}
 
 					const instanceCount = countPerModel ?? (Math.floor(Math.random() * 3) + 1);
+					const positionIndices = options.positionIndices;
 
 					let container = modelCache.get(modelId);
 					if (container) {
@@ -359,7 +361,18 @@ export class ModelPlacer {
 						const placer = new ModelPlacer(scene, pathPoints);
 						const userScale = scaleRange[0] + Math.random() * (scaleRange[1] - scaleRange[0]);
 						const finalScale = normalizeScale * userScale;
-						const pathIndex = randomPositions ? Math.floor(Math.random() * pathPoints.length) : Math.floor((i / instanceCount) * pathPoints.length);
+						let pathIndex: number;
+						if (positionIndices !== undefined && positionIndices !== null) {
+							if (Array.isArray(positionIndices)) {
+								pathIndex = positionIndices[i % positionIndices.length];
+							} else {
+								pathIndex = positionIndices as number;
+							}
+						} else {
+							pathIndex = randomPositions ? Math.floor(Math.random() * pathPoints.length) : Math.floor((i / instanceCount) * pathPoints.length);
+						}
+						// normalize index into range
+						pathIndex = ((pathIndex % pathPoints.length) + pathPoints.length) % pathPoints.length;
 
 						await placer.load({
 							container,

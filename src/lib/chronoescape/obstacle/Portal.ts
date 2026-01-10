@@ -64,7 +64,10 @@ export class Portal {
             this.material = new BABYLON.StandardMaterial('portalMat', scene);
             this.material.backFaceCulling = false;
             if (posterUrl) {
-                this.material.diffuseTexture = new BABYLON.Texture(posterUrl, scene);
+                const tex = new BABYLON.Texture(posterUrl, scene);
+                tex.hasAlpha = true;
+                this.material.diffuseTexture = tex;
+                this.material.useAlphaFromDiffuseTexture = true;
             } else {
                 this.material.emissiveColor = new BABYLON.Color3(1, 1, 1);
             }
