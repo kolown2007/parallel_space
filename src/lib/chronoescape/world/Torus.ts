@@ -10,6 +10,8 @@ export interface TorusOptions {
   turns?: number;
   spiralTurns?: number;
   segments?: number;
+  /** Number of sampled points around the main circle (if provided, overrides `segments` sampling behaviour) */
+  pointsPerCircle?: number;
   materialTextureUrl?: string;
 }
 
@@ -67,26 +69,49 @@ export function createTorus(scene: BABYLON.Scene, opts: TorusOptions = {}): Toru
   const lineRadius = torusTubeRadiusActual * lineRadiusFactor;
   const points: BABYLON.Vector3[] = [];
   const torusCenter = torus.getAbsolutePosition();
-  for (let i = 0; i <= segments; i++) {
-    const t = i / segments;
-    const mainAngle = t * Math.PI * 2 * turns;
-    const tubeAngle = t * Math.PI * 2 * spiralTurns;
 
-    // Position on the main torus ring relative to torus center
-    const mainX = torusCenter.x + Math.cos(mainAngle) * torusMainRadius;
-    const mainZ = torusCenter.z + Math.sin(mainAngle) * torusMainRadius;
-    const mainY = torusCenter.y;
+  // If the caller explicitly supplies `pointsPerCircle`, sample exactly that many
+  // points (i = 0 .. pointsPerCircle-1). Otherwise preserve legacy behaviour
+  // which sampled `segments + 1` points (i = 0 .. segments).
+  if (typeof opts.pointsPerCircle === 'number') {
+    const pointsCount = Math.max(1, Math.floor(opts.pointsPerCircle));
+    for (let i = 0; i < pointsCount; i++) {
+      const t = i / pointsCount;
+      const mainAngle = t * Math.PI * 2 * turns;
+      const tubeAngle = t * Math.PI * 2 * spiralTurns;
 
-    // Offset within the tube
-    const tubeX = Math.cos(tubeAngle) * lineRadius;
-    const tubeY = Math.sin(tubeAngle) * lineRadius;
+      const mainX = torusCenter.x + Math.cos(mainAngle) * torusMainRadius;
+      const mainZ = torusCenter.z + Math.sin(mainAngle) * torusMainRadius;
+      const mainY = torusCenter.y;
 
-    // Combine main position + tube offset (radial offset along torus local radial)
-    const x = mainX + Math.cos(mainAngle) * tubeX;
-    const z = mainZ + Math.sin(mainAngle) * tubeX;
-    const y = mainY + tubeY;
+      const tubeX = Math.cos(tubeAngle) * lineRadius;
+      const tubeY = Math.sin(tubeAngle) * lineRadius;
 
-    points.push(new BABYLON.Vector3(x, y, z));
+      const x = mainX + Math.cos(mainAngle) * tubeX;
+      const z = mainZ + Math.sin(mainAngle) * tubeX;
+      const y = mainY + tubeY;
+
+      points.push(new BABYLON.Vector3(x, y, z));
+    }
+  } else {
+    for (let i = 0; i <= segments; i++) {
+      const t = i / segments;
+      const mainAngle = t * Math.PI * 2 * turns;
+      const tubeAngle = t * Math.PI * 2 * spiralTurns;
+
+      const mainX = torusCenter.x + Math.cos(mainAngle) * torusMainRadius;
+      const mainZ = torusCenter.z + Math.sin(mainAngle) * torusMainRadius;
+      const mainY = torusCenter.y;
+
+      const tubeX = Math.cos(tubeAngle) * lineRadius;
+      const tubeY = Math.sin(tubeAngle) * lineRadius;
+
+      const x = mainX + Math.cos(mainAngle) * tubeX;
+      const z = mainZ + Math.sin(mainAngle) * tubeX;
+      const y = mainY + tubeY;
+
+      points.push(new BABYLON.Vector3(x, y, z));
+    }
   }
 
 

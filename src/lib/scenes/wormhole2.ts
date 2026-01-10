@@ -54,191 +54,6 @@ export class WormHoleScene2 {
 		this.modelCache.clear();
 	}
 
-	private static async loadSceneModels(scene: BABYLON.Scene, pathPoints: BABYLON.Vector3[]): Promise<void> {
-		try {
-			// Ensure physics is fully initialized
-			if (!scene.getPhysicsEngine()) {
-				console.warn('Physics engine not ready, skipping physics-enabled models');
-				return;
-			}
-
-			const cfg = await loadAssetsConfig();
-			
-			// NOTE: this method can preload models into cache if needed.
-			// Currently we avoid eager model preloading to keep startup light.
-			if (cfg.models) {
-				const modelKeys = Object.keys(cfg.models);
-				console.log(`Loading ${modelKeys.length} models:`, modelKeys);
-				
-				const loadPromises = modelKeys.map(async (modelId) => {
-					try {
-						const modelDef = cfg.models![modelId];
-						if (!modelDef?.rootUrl || !modelDef?.filename) {
-							console.warn(`✗ Skipping ${modelId}: missing rootUrl or filename in config`);
-							return { modelId, container: null, success: false };
-						}
-					
-						const container = await BABYLON.SceneLoader.LoadAssetContainerAsync(
-							modelDef.rootUrl,
-							modelDef.filename,
-							scene
-						);
-					
-						// Store in cache WITHOUT adding to scene
-						this.modelCache.set(modelId, container);
-						console.log(`✓ Loaded model: ${modelId}`);
-					
-						return { modelId, container, success: true };
-					} catch (error) {
-						console.error(`✗ Failed to load model ${modelId}:`, error);
-						return { modelId, container: null, success: false };
-					}
-				});
-				
-				await Promise.all(loadPromises);
-				console.log(`Model cache ready with ${this.modelCache.size} models`);
-			}
-
-			// Place all cached models using ModelPlacer (use model config when available)
-			for (const [modelId, container] of this.modelCache.entries()) {
-				try {
-					if (!container) continue;
-					const def = cfg.models?.[modelId];
-					const placer = new ModelPlacer(scene, pathPoints);
-					await placer.load({
-						container,
-						rootUrl: def?.rootUrl ?? '',
-						filename: def?.filename ?? modelId,
-						count: (def && typeof (def as any).count === 'number') ? (def as any).count : 1,
-						scale: (def && typeof (def as any).scale === 'number') ? (def as any).scale : 1,
-						offsetY: (def && typeof (def as any).offsetY === 'number') ? (def as any).offsetY : 0
-					});
-					// Register disposal of placer instances; do not dispose the cached container here
-					this.registerCleanup(() => {
-						try { placer.dispose(); } catch (e) { /* ignore */ }
-					});
-					console.log(`Placed model from cache: ${modelId}`);
-				} catch (e) {
-					console.warn(`Failed to place cached model ${modelId}:`, e);
-				}
-			}
-		} catch (error) {
-			console.error('Failed to load models:', error);
-		}
-	}
-
-	/**
-	 * Place a random model from the assets config using ModelPlacer.
-	 * Reuses cached containers when available to avoid re-loading.
-	 */
-	static async placeRandomModel(scene: BABYLON.Scene, pathPoints: BABYLON.Vector3[]): Promise<void> {
-		try {
-			const cfg = await loadAssetsConfig();
-			const modelIds = Object.keys(cfg.models || {}).filter(id => id !== 'drone');
-			console.log('🎲 Available models for placement:', modelIds);
-			console.log('📦 Current model cache size:', this.modelCache.size);
-			console.log('📦 Cached model IDs:', Array.from(this.modelCache.keys()));
-			
-			if (modelIds.length === 0) {
-				console.warn('No models available to place');
-				return;
-			}
-			const pick = modelIds[Math.floor(Math.random() * modelIds.length)];
-			const def = cfg.models![pick];
-			console.log('🎯 Selected model:', pick, '→', def.filename);
-			if (!def?.rootUrl || !def?.filename) {
-				console.warn('Selected model missing url/filename:', pick);
-				return;
-			}
-			
-			// Validate it's a 3D model file
-			const isModelFile = /\.(glb|gltf|babylon|obj|stl)$/i.test(def.filename);
-			if (!isModelFile) {
-				console.warn('Selected asset is not a 3D model:', pick, def.filename);
-				return;
-			}
-			
-			const placer = new ModelPlacer(scene, pathPoints);
-			const scale = (Math.random() * 1.5) + 0.5; // random scale 0.5..2.0
-			const physics = scene.getPhysicsEngine() ? { mass: 0.05, restitution: 0.3, friction: 0.05, shape: BABYLON.PhysicsShapeType.MESH } : undefined;
-			
-			// Pick a random position along the path for placement
-			const randomStartIndex = Math.floor(Math.random() * pathPoints.length);
-			console.log('📍 Random placement index:', randomStartIndex, '/', pathPoints.length);
-			
-			// Try to reuse cached container if available
-			const cachedContainer = this.modelCache.get(pick);
-			if (cachedContainer) {
-				console.log('✓ Using cached container for:', pick);
-				await placer.load({
-					container: cachedContainer,
-					rootUrl: def.rootUrl,
-					filename: def.filename,
-					count: 1,
-					scale,
-					offsetY: (def as any).offsetY ?? 0,
-					physics,
-					startIndex: randomStartIndex
-				});
-			} else {
-				console.log('⟳ Loading new container for:', pick);
-				await placer.load({
-					rootUrl: def.rootUrl,
-					filename: def.filename,
-					count: 1,
-					scale,
-					offsetY: (def as any).offsetY ?? 0,
-					physics,
-					startIndex: randomStartIndex
-				});
-			}
-			
-			// Register cleanup for this placer
-			this.registerCleanup(() => {
-				try { placer.dispose(); } catch (e) { /* ignore */ }
-			});
-			console.log('✓ Placed random model:', pick, 'scale:', scale.toFixed(2));
-			console.log('  Total ModelPlacer cleanup handlers registered:', this.cleanupRegistry.length);
-		} catch (e) {
-			console.warn('placeRandomModel failed:', e);
-		}
-	}
-
-	/**
-	 * Background-preload model containers into the model cache.
-	 * Runs without blocking scene setup; useful to avoid hiccups on first placement.
-	 */
-	static async preloadModelContainers(scene: BABYLON.Scene): Promise<void> {
-		try {
-			const cfg = await loadAssetsConfig();
-			const modelIds = Object.keys(cfg.models || {}).filter(id => id !== 'drone');
-			for (const modelId of modelIds) {
-				try {
-					const def = cfg.models![modelId];
-					if (!def?.rootUrl || !def?.filename) {
-						console.warn('preload: skipping', modelId, 'missing url/filename');
-						continue;
-					}
-					if (this.modelCache.has(modelId)) continue;
-					
-					console.log(`Preloading model: ${modelId} from ${def.rootUrl}${def.filename}`);
-					const container = await BABYLON.SceneLoader.LoadAssetContainerAsync(
-						def.rootUrl,
-						def.filename,
-						scene
-					);
-					// keep container off-scene until instantiation
-					this.modelCache.set(modelId, container);
-					console.log('✓ Preloaded model container:', modelId);
-				} catch (e) {
-					console.warn('Failed to preload model', modelId, e);
-				}
-			}
-		} catch (e) {
-			console.warn('preloadModelContainers failed:', e);
-		}
-	}
-
 	static async CreateScene(engine: any, canvas: HTMLCanvasElement, onPortalTrigger?: () => void): Promise<BABYLON.Scene> {
 		// ====================================================================
 		// ASSET PRELOADING
@@ -260,13 +75,6 @@ export class WormHoleScene2 {
 							} catch {}
 						}
 					);
-					// Also preload model containers (heavy assets) on the preload scene so first placement is smooth
-					try {
-						await WormHoleScene2.preloadModelContainers(preloadScene);
-						console.log('Preloaded model containers during startup');
-					} catch (e) {
-						console.warn('Preloading model containers failed:', e);
-					}
 			} catch (e) {
 				console.warn('preloadContainers threw', e);
 			} finally {
@@ -344,6 +152,7 @@ export class WormHoleScene2 {
 			turns: 1,
 			spiralTurns: 3,
 			segments: 128,
+			pointsPerCircle: 360,
 			materialTextureUrl: metalTextureUrl || '/metal.jpg'
 		});
 		const torus = torusResult.torus;
@@ -352,6 +161,7 @@ export class WormHoleScene2 {
 		const torusTubeRadius = torusResult.torusTubeRadius;
 		const pathPoints = torusResult.pathPoints;
 		WormHoleScene2.pathPoints = pathPoints;
+		console.log('PathPoints count:', pathPoints.length);
 		const torusMaterial = torus.material as BABYLON.StandardMaterial;
 
 		// Debug: verify path centering
@@ -401,6 +211,27 @@ export class WormHoleScene2 {
 			enableDebug: false
 		});
 
+		// Ensure drone always starts at pathpoint 0
+		try {
+			updateProgress(0);
+			const startPos = getPositionOnPath(WormHoleScene2.pathPoints, 0);
+			drone.position.copyFrom(startPos);
+			if (droneAggregate?.body) {
+				try {
+					droneAggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
+					droneAggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
+					// Some physics engines expose a setPosition method; attempt if available
+					if (typeof (droneAggregate.body as any).setPosition === 'function') {
+						(droneAggregate.body as any).setPosition({ x: startPos.x, y: startPos.y, z: startPos.z });
+					}
+				} catch (e) {
+					/* ignore transient physics positioning errors */
+				}
+			}
+		} catch (e) {
+			console.warn('Failed to enforce drone start at pathpoint 0:', e);
+		}
+
 		// Enable collision detection on drone
 		if (droneAggregate?.body) {
 			try {
@@ -411,16 +242,9 @@ export class WormHoleScene2 {
 					const collidedMesh = collisionEvent.collidedAgainst?.transformNode;
 					const collidedName = collidedMesh?.name || 'unknown';
 					
-					// console.log('🎯 Drone collision:', {
-					// 	collidedWith: collidedName,
-					// 	impulse: collisionEvent.impulse,
-					// 	point: collisionEvent.point
-					// });
-
-					// Check if it's a Jollibee
-					if (collidedName.toLowerCase().includes('jollibee') || 
-					    collidedName.toLowerCase().includes('model_instance')) {
-						console.log('✨ Drone hit Jollibee!');
+					// Check if it's a model instance
+					if (collidedName.toLowerCase().includes('model_instance')) {
+						console.log(`✨ Drone hit model: ${collidedName}`);
 						// Add your collision response here (e.g., score, sound, effects)
 					}
 				});
@@ -483,13 +307,6 @@ export class WormHoleScene2 {
 				adjustDroneSpeed(-0.00002);
 				const newSpeed = get(droneControl).speed;
 				console.log('Speed decreased:', (newSpeed * 10000).toFixed(3));
-			},
-			onPlaceModel: async () => {
-				try {
-					await WormHoleScene2.placeRandomModel(scene, pathPoints);
-				} catch (e) {
-					console.warn('Failed to place random model:', e);
-				}
 			}
 		});
 
@@ -500,12 +317,15 @@ export class WormHoleScene2 {
 		scene.onDisposeObservable.add(() => {
 			WormHoleScene2.disposeAll();
 		});
+
+
 		// OBSTACLES & MARKERS
 		// ====================================================================
 
 		const obstacles = new ObstaclesManager(scene, pathPoints);
 
-		const indices = await createPathMarkers(scene, pathPoints, obstacles);
+		// const indices = await createPathMarkers(scene, pathPoints, obstacles);
+		const indices: number[] = []; // No markers
 
 		// const floating = createFloatingCubes(scene, pathPoints, {
 		// 	count: 3,
@@ -528,12 +348,17 @@ export class WormHoleScene2 {
 		// MODELS & BILLBOARDS
 		// ====================================================================
 
-		// Models are loaded lazily on demand. Press 'f' key to place a random model.
-		// (Preloading already occurred during the startup preload phase.)
-
-		await createBillboards(scene, pathPoints, torus);
+		// Place 2 models at random positions along the track
+		await ModelPlacer.placeModels(scene, pathPoints, ['mario'], {
+			countPerModel: 3,        // 3 instances of each model
+			randomPositions: true,   // Place at random points
+			scaleRange: [ 2, 4.0],  // Random scale between 5.0-6.0
+			physics: true            // Enable physics
+		}, WormHoleScene2.modelCache, WormHoleScene2.cleanupRegistry);
 		
-		let portal = await createPortal(scene, pathPoints, indices[0] ?? Math.floor(pathPoints.length / 2));
+		// await createBillboards(scene, pathPoints, torus);
+		
+		// let portal = await createPortal(scene, pathPoints, indices[0] ?? Math.floor(pathPoints.length / 2));
 
 	// ====================================================================
 	// RENDER LOOP
@@ -546,23 +371,23 @@ export class WormHoleScene2 {
 		const control = get(droneControl);
 
 		// Portal collision check (approximate USB AABB from drone position)
-		if (portal && onPortalTrigger) {
-			try {
-				const usbAabb = {
-					min: { x: drone.position.x - 0.5, y: drone.position.y - 0.5, z: drone.position.z - 0.5 },
-					max: { x: drone.position.x + 0.5, y: drone.position.y + 0.5, z: drone.position.z + 0.5 }
-				};
-				if (portal.intersects(usbAabb)) {
-					onPortalTrigger();
-					try {
-						portal.reset();
-					} catch {}
-					portal = undefined;
-				}
-			} catch (e) {
-				/* ignore transient errors */
-			}
-		}
+		// if (portal && onPortalTrigger) {
+		// 	try {
+		// 		const usbAabb = {
+		// 			min: { x: drone.position.x - 0.5, y: drone.position.y - 0.5, z: drone.position.z - 0.5 },
+		// 			max: { x: drone.position.x + 0.5, y: drone.position.y + 0.5, z: drone.position.z + 0.5 }
+		// 		};
+		// 		if (portal.intersects(usbAabb)) {
+		// 			onPortalTrigger();
+		// 			try {
+		// 				portal.reset();
+		// 			} catch {}
+		// 			portal = undefined;
+		// 		}
+		// 	} catch (e) {
+		// 		/* ignore transient errors */
+		// 	}
+		// }
 
 		// Update floating cubes
 		// if (floating && typeof floating.update === 'function') {

@@ -93,10 +93,18 @@ export class ModelPlacer {
 
 			this.template = this.findTemplateMesh();
 			if (!this.template) {
+				console.error('  ✗ No valid mesh found in model - container meshes:', this.container?.meshes?.map((m:any)=>m.name));
 				throw new Error('No valid mesh found in model');
 			}
 
 			console.log(`  ↳ Using template mesh:`, this.template.name, `(isVisible: ${this.template.isVisible})`);
+			try {
+				console.log('  ↳ Template scene:', !!this.template.getScene(), 'template parent:', this.template.parent?.name ?? null);
+				console.log('  ↳ Template position:', this.template.position?.toString?.() ?? this.template.position);
+				console.log('  ↳ Scene mesh count (before instances):', this.scene.meshes.length);
+			} catch (e) {
+				console.warn('  ⚠ Template debug log failed:', e);
+			}
 
 			// Hide template but keep enabled so instances work
 			this.template.isVisible = false;
@@ -148,6 +156,8 @@ export class ModelPlacer {
 		const offsetY = config.offsetY ?? 0;
 		const startIndex = config.startIndex ?? 0;
 
+		console.log(`  ↳ createInstances: count=${config.count}, step=${step}, scale=${scale}, startIndex=${startIndex}`);
+
 		for (let i = 0; i < config.count; i++) {
 			const pathIndex = (startIndex + (i * step)) % this.pathPoints.length;
 			const pos = this.pathPoints[pathIndex]?.clone();
@@ -156,9 +166,18 @@ export class ModelPlacer {
 			pos.y += offsetY;
 
 			const instance = this.template.createInstance(`model_instance_${i}`);
+			if (!instance) {
+				console.warn('  ⚠ createInstance returned null for', this.template.name);
+				continue;
+			}
 			instance.position.copyFrom(pos);
 			instance.scaling.setAll(scale);
-		instance.isVisible = true;
+			instance.isVisible = true;
+			try {
+				console.log(`  ↳ Created instance: ${instance.name}, visible: ${instance.isVisible}, pos: ${pos.toString()}, scene?: ${!!instance.getScene()}`);
+			} catch (e) {
+				/* ignore logging errors */
+			}
 
 		if (config.physics) {
 			this.addPhysics(instance, config.physics);
@@ -227,5 +246,151 @@ export class ModelPlacer {
 
 	getInstances(): BABYLON.InstancedMesh[] {
 		return this.instances;
+	}
+
+	/**
+	 * Static helper: Place multiple models by name with automatic normalization.
+	 * @param scene - Babylon scene
+	 * @param pathPoints - Path points for placement
+	 * @param modelNames - Array of model IDs from assets.json
+	 * @param options - Configuration options
+	 * @param modelCache - Cache for loaded containers
+	 * @param cleanupRegistry - Registry for cleanup callbacks
+	 */
+	static async placeModels(
+		scene: BABYLON.Scene,
+		pathPoints: BABYLON.Vector3[],
+		modelNames: string[],
+		options: {
+			countPerModel?: number;
+			randomPositions?: boolean;
+			scaleRange?: [number, number];
+			physics?: boolean;
+			targetSize?: number;
+		} = {},
+		modelCache: Map<string, BABYLON.AssetContainer>,
+		cleanupRegistry: Array<() => void>
+	): Promise<void> {
+		try {
+			// Dynamically import loadAssetsConfig to avoid circular dependencies
+			const { loadAssetsConfig } = await import('../../assetsConfig');
+			const cfg = await loadAssetsConfig();
+			
+			const {
+				countPerModel,
+				randomPositions = true,
+				scaleRange = [0.5, 2.0],
+				physics = true,
+				targetSize = 2.0
+			} = options;
+
+			console.log(`🎨 Placing models: ${modelNames.join(', ')}, normalized to ${targetSize}m`);
+
+			for (const modelId of modelNames) {
+				try {
+					const def = cfg.models?.[modelId];
+					if (!def?.rootUrl || !def?.filename) {
+						console.warn(`⚠️ Model "${modelId}" not found in assets`);
+						continue;
+					}
+
+					const instanceCount = countPerModel ?? (Math.floor(Math.random() * 3) + 1);
+
+					let container = modelCache.get(modelId);
+					if (container) {
+						const meshScene = container.meshes[0]?.getScene();
+						if (meshScene !== scene) {
+							try { container.dispose(); } catch (e) { /* ignore */ }
+							container = undefined as any;
+							modelCache.delete(modelId);
+						}
+					}
+					if (!container) {
+						container = await BABYLON.SceneLoader.LoadAssetContainerAsync(
+							def.rootUrl,
+							def.filename,
+							scene
+						);
+						if (container?.addAllToScene) {
+							container.addAllToScene();
+						}
+						modelCache.set(modelId, container);
+					}
+
+					let normalizeScale = 1.0;
+					try {
+						const meshesWithGeometry = container.meshes.filter((m: any) => m.getTotalVertices && m.getTotalVertices() > 0);
+						
+						if (meshesWithGeometry.length > 0) {
+							let minX = Infinity, minY = Infinity, minZ = Infinity;
+							let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+							
+							for (const mesh of meshesWithGeometry) {
+								mesh.computeWorldMatrix(true);
+								const boundingInfo = mesh.getBoundingInfo();
+								const min = boundingInfo.boundingBox.minimumWorld;
+								const max = boundingInfo.boundingBox.maximumWorld;
+								
+								minX = Math.min(minX, min.x);
+								minY = Math.min(minY, min.y);
+								minZ = Math.min(minZ, min.z);
+								maxX = Math.max(maxX, max.x);
+								maxY = Math.max(maxY, max.y);
+								maxZ = Math.max(maxZ, max.z);
+							}
+							
+							const sizeX = maxX - minX;
+							const sizeY = maxY - minY;
+							const sizeZ = maxZ - minZ;
+							const maxDimension = Math.max(sizeX, sizeY, sizeZ);
+							
+							if (maxDimension > 0) {
+								normalizeScale = targetSize / maxDimension;
+								console.log(`  ↳ ${modelId}: native size=${sizeX.toFixed(3)}×${sizeY.toFixed(3)}×${sizeZ.toFixed(3)}m, max=${maxDimension.toFixed(3)}m, normalize scale=${normalizeScale.toFixed(3)}`);
+							}
+						} else {
+							console.warn(`  ⚠ ${modelId}: No meshes with geometry found for normalization`);
+						}
+					} catch (e) {
+						console.warn(`  ⚠ ${modelId}: Failed to calculate normalization:`, e);
+					}
+
+					for (let i = 0; i < instanceCount; i++) {
+						const placer = new ModelPlacer(scene, pathPoints);
+						const userScale = scaleRange[0] + Math.random() * (scaleRange[1] - scaleRange[0]);
+						const finalScale = normalizeScale * userScale;
+						const pathIndex = randomPositions ? Math.floor(Math.random() * pathPoints.length) : Math.floor((i / instanceCount) * pathPoints.length);
+
+						await placer.load({
+							container,
+							rootUrl: def.rootUrl,
+							filename: def.filename,
+							count: 1,
+							scale: finalScale,
+							offsetY: (def as any).offsetY ?? 0,
+							physics: physics && scene.getPhysicsEngine() ? {
+								mass: 0.05,
+								restitution: 0.3,
+								friction: 0.05,
+								shape: BABYLON.PhysicsShapeType.MESH
+							} : undefined,
+							startIndex: pathIndex
+						});
+
+						cleanupRegistry.push(() => {
+							try { placer.dispose(); } catch (e) { /* ignore */ }
+						});
+
+						console.log(`✓ Placed ${modelId} #${i + 1} at index ${pathIndex}, userScale: ${userScale.toFixed(2)}, finalScale: ${finalScale.toFixed(2)}`);
+					}
+				} catch (e) {
+					console.warn(`Failed to place model ${modelId}:`, e);
+				}
+			}
+
+			console.log(`✨ Placed ${modelNames.length} model types`);
+		} catch (e) {
+			console.error('placeModels failed:', e);
+		}
 	}
 }
