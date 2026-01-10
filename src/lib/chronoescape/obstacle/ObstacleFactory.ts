@@ -3,8 +3,9 @@ import { ModelPlacer } from './ModelPlacer';
 import { Portal } from './Portal';
 import { BillboardManager } from './BillboardManager';
 import { createFloatingCubes, type FloatingCubesResult } from './floatingCubes';
+import { createParticles, type ParticleOptions } from './Particles';
 
-export type ObstacleType = 'cube' | 'model' | 'portal' | 'billboard' | 'floating-cube';
+export type ObstacleType = 'cube' | 'model' | 'portal' | 'billboard' | 'floating-cube' | 'particles';
 
 export interface BaseObstacleOptions {
 	index?: number;
@@ -126,11 +127,37 @@ export class ObstacleFactory {
 				return this.placePortal(options as PortalOptions);
 			case 'billboard':
 				return this.placeBillboard(options as BillboardOptions);
+			case 'particles':
+				return this.placeParticles(options as any);
 			case 'floating-cube':
 				return this.placeFloatingCubes(options as FloatingCubeOptions);
 			default:
 				throw new Error(`Unknown obstacle type: ${type}`);
 		}
+	}
+
+	/**
+	 * Place particle system at a path index
+	 */
+	private placeParticles(options: any): any {
+		const { index = 0, count = 800, size = 1.0, maxDistance = 220, offsetY = 1.2, autoDispose } = options || {};
+		const actualIndex = this.normalizeIndex(index);
+		// createParticles attaches to a parent mesh; use scene.rootNodes[0] or create a helper invisible parent
+		const parent = this.scene.getMeshByName('torus') || this.scene.getTransformNodeByName('torus') || this.scene;
+		const result = createParticles(this.scene, this.pathPoints, actualIndex, parent as any, {
+			count,
+			size,
+			maxDistance,
+			offsetY,
+			autoDispose
+		});
+
+		// register cleanup if disposable
+		this.cleanupRegistry.push(() => {
+			try { if (result && typeof result.dispose === 'function') result.dispose(); } catch {}
+		});
+
+		return result;
 	}
 
 	/**
