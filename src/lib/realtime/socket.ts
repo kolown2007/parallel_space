@@ -1,4 +1,3 @@
-
 import * as Ably from 'ably';
 
 // Default auth URL used when none is provided to createAblyClient.
@@ -14,6 +13,9 @@ export interface CreateAblyOptions {
     clientId?: string;
     realtimeOptions?: any;
 }
+
+export type RealtimeClient = Ably.Realtime;
+export type RealtimeChannel = ReturnType<Ably.Realtime['channels']['get']>;
 
 /**
  * Create an Ably Realtime client using an auth URL.
@@ -57,6 +59,71 @@ export function closeAblyClient(realtime: Ably.Realtime) {
     } catch (e) {
         // ignore
     }
+}
+
+/**
+ * Ensure the channel is attached and return it.
+ * Resolves when the channel reaches the `attached` state or rejects on error/timeout.
+ */
+export async function getAttachedChannel(realtime: Ably.Realtime, channelName: string, attachTimeoutMs = 5000) {
+    const ch = realtime.channels.get(channelName);
+    if (ch.state === 'attached') return ch;
+
+    return new Promise<any>((resolve, reject) => {
+        const timer = setTimeout(() => {
+            reject(new Error('channel attach timeout'));
+        }, attachTimeoutMs);
+
+        ch.attach()
+            .then(() => {
+                clearTimeout(timer);
+                resolve(ch);
+            })
+            .catch((err) => {
+                clearTimeout(timer);
+                reject(err);
+            });
+    });
+}
+
+/**
+ * Convenience: create a client (using `createAblyClient`) and return an attached channel.
+ * Caller should close the returned client with `closeAblyClient` when done.
+ */
+export async function connectToChannel(channelName: string, opts?: CreateAblyOptions) {
+    return connect(channelName, opts);
+}
+
+/**
+ * Simple helper: create an Ably client, wait for connection, attach the channel, and return both.
+ * Resolves with `{ client, channel }`. Caller should call `closeAblyClient(client)` when finished.
+ */
+export async function connect(channelName: string, opts?: Partial<CreateAblyOptions>, connectTimeoutMs = 5000) {
+    const authUrl = opts?.authUrl ?? DEFAULT_AUTH_URL;
+    const clientId = opts?.clientId;
+    const realtimeOptions = opts?.realtimeOptions;
+
+    if (!authUrl) throw new Error('connect: authUrl required (pass opts.authUrl or set DEFAULT_AUTH_URL)');
+
+    const client = createAblyClient({ authUrl, clientId, realtimeOptions });
+
+    // wait for connection
+    await new Promise<void>((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error('connection timeout')), connectTimeoutMs);
+        const onConnect = () => { clearTimeout(timer); client.connection.off('connected', onConnect); resolve(); };
+        client.connection.on('connected', onConnect);
+        client.connection.on('failed', (err: any) => { clearTimeout(timer); reject(err || new Error('connection failed')); });
+    });
+
+    const channel = await getAttachedChannel(client, channelName);
+    return { client, channel } as { client: RealtimeClient; channel: RealtimeChannel };
+}
+
+/**
+ * Convenience: connect to the project's default channel `chronoescape`.
+ */
+export async function connectChronoescape(opts?: Partial<CreateAblyOptions>, connectTimeoutMs = 5000) {
+    return connect('chronoescape', opts, connectTimeoutMs);
 }
 
 export default createAblyClient;

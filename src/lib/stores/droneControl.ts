@@ -36,3 +36,21 @@ export function updateProgress(progress: number) {
 export function resetDrone() {
   droneControl.set(initialState);
 }
+
+/**
+ * Quick burst acceleration - speeds up then returns to normal speed
+ * @param boostMultiplier - How much faster (default 5x)
+ * @param duration - How long the boost lasts in ms (default 500ms)
+ */
+export function burstAccelerate(boostMultiplier = 5, duration = 500) {
+  let originalSpeed = 0;
+  
+  droneControl.update(state => {
+    originalSpeed = state.speed;
+    return { ...state, speed: state.speed * boostMultiplier };
+  });
+  
+  setTimeout(() => {
+    droneControl.update(state => ({ ...state, speed: originalSpeed }));
+  }, duration);
+}
