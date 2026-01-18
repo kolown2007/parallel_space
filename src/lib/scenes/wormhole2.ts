@@ -372,7 +372,7 @@ export class WormHoleScene2 {
 		// Place models using unified API
 		await obstacles.place('model', {
 			modelNames: ['mario'],
-			count: 1,
+			count: 2,
 			randomPositions: true,
 			scaleRange: [4, 8],
 			physics: true
