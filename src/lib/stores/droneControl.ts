@@ -8,7 +8,7 @@ export interface DroneControlState {
 }
 
 const initialState: DroneControlState = {
-  speed: 0.0001,
+  speed: 0.000007,
   lateralForce: 8,
   progress: 0
 };

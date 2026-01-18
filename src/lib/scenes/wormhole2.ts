@@ -109,7 +109,7 @@ export class WormHoleScene2 {
 
 				const narration = await BABYLON.CreateStreamingSoundAsync("narration",
 					//  "https://assets.babylonjs.com/sound/alarm-1.mp3"
-					"https://kolown.net/storage/library/audio/field/bbc_rainforest_nhu0501214.mp3"
+					"https://kolown.net/storage/library/chronoescape/audio/bg1.mp3"
 				);
 
 				// Wait until audio engine is ready to play sounds.
