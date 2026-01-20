@@ -379,3 +379,98 @@ export class ObstacleFactory {
 		this.instances = [];
 	}
 }
+
+/**
+ * Standalone helpers for universal WebSocket usage in +layout.svelte
+ */
+
+export function placeCubeInFrontOfDrone(
+	scene: BABYLON.Scene,
+	droneMesh: BABYLON.AbstractMesh,
+	options?: CubeOptions & { distance?: number }
+): BABYLON.Mesh {
+	const { distance = 5, size = 2, color, physics = true, offsetY = 0 } = options || {};
+	
+	// Calculate position in front of drone
+	const forward = droneMesh.forward.clone().normalize();
+	const targetPos = droneMesh.position.clone().add(forward.scale(distance));
+	targetPos.y += offsetY;
+	
+	// Create cube directly
+	const cube = BABYLON.MeshBuilder.CreateBox(
+		`obstacle_cube_${Date.now()}`,
+		{ size },
+		scene
+	);
+	cube.position.copyFrom(targetPos);
+
+	const mat = new BABYLON.StandardMaterial(`cubeMat_${Date.now()}`, scene);
+	mat.diffuseColor = color || new BABYLON.Color3(1, 0.5, 0);
+	mat.emissiveColor = mat.diffuseColor.scale(0.3);
+	cube.material = mat;
+
+	if (physics && scene.getPhysicsEngine()) {
+		const physicsOptions = typeof physics === 'object' ? physics : {
+			mass: 0.05,
+			restitution: 0.3,
+			friction: 0.05
+		};
+		new BABYLON.PhysicsAggregate(
+			cube,
+			physicsOptions.shape ?? BABYLON.PhysicsShapeType.BOX,
+			{
+				mass: physicsOptions.mass ?? 0.05,
+				restitution: physicsOptions.restitution ?? 0.3,
+				friction: physicsOptions.friction ?? 0.05
+			},
+			scene
+		);
+	}
+
+	return cube;
+}
+
+export function placeFloatingCubesInFrontOfDrone(
+	scene: BABYLON.Scene,
+	droneMesh: BABYLON.AbstractMesh,
+	cleanupRegistry: Array<() => void>,
+	options?: FloatingCubeOptions & { distance?: number; spread?: number }
+): FloatingCubesResult {
+	const { 
+		distance = 8, 
+		spread = 3,
+		count = 3,
+		jitter = 0.3,
+		verticalOffset = 0.5,
+		sizeRange = [0.8, 2.0],
+		massRange = [0.6, 1.8]
+	} = options || {};
+	
+	// Generate path points in front of drone
+	const forward = droneMesh.forward.clone().normalize();
+	const basePos = droneMesh.position.clone().add(forward.scale(distance));
+	
+	const pathPoints: BABYLON.Vector3[] = [];
+	for (let i = 0; i < count; i++) {
+		const offset = new BABYLON.Vector3(
+			(Math.random() - 0.5) * spread,
+			(Math.random() - 0.5) * spread * 0.5,
+			(Math.random() - 0.5) * spread
+		);
+		pathPoints.push(basePos.clone().add(offset));
+	}
+
+	const result = createFloatingCubes(scene, pathPoints, {
+		count,
+		jitter,
+		verticalOffset,
+		sizeRange,
+		massRange
+	});
+
+	cleanupRegistry.push(() => {
+		try { result.dispose(); } catch (e) {}
+	});
+
+	return result;
+}

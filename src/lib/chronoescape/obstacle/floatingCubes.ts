@@ -25,6 +25,7 @@ export function createFloatingCubes(
     massRange?: [number, number];
     antiGravityFactor?: number;
     linearDamping?: number;
+    autoDisposeMs?: number;
   } = {}
 ): FloatingCubesResult {
   const {
@@ -34,7 +35,8 @@ export function createFloatingCubes(
     sizeRange = [0.8, 2.0],
     massRange = [0.6, 1.8],
     antiGravityFactor = 0.95,
-    linearDamping = 0.985
+    linearDamping = 0.985,
+    autoDisposeMs = 10000
   } = options;
 
   const root = new BABYLON.TransformNode('floatingCubesRoot', scene);
@@ -72,36 +74,56 @@ export function createFloatingCubes(
     items.push({ mesh: box, agg, mass, home: box.position.clone() });
   }
 
+  let isDisposed = false;
+
   function update(dtSec: number) {
+    if (isDisposed) return;
+    
     const gravity = 9.81;
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i];
+    for (const it of items) {
       const pos = it.mesh.getAbsolutePosition();
-      // small anti-gravity
+      
+      // Apply anti-gravity
       const antiGravity = new BABYLON.Vector3(0, it.mass * gravity * antiGravityFactor, 0);
       it.agg.body.applyForce(antiGravity, pos);
 
-      // gentle centering toward home
+      // Gentle centering toward home
       const toHome = it.home.subtract(pos);
-      const d = toHome.length();
-      if (d > 0.15) {
-        const pull = toHome.normalize().scale(Math.min(15, d * 2.0));
+      const distance = toHome.length();
+      if (distance > 0.15) {
+        const pull = toHome.normalize().scale(Math.min(15, distance * 2.0));
         it.agg.body.applyForce(pull, pos);
       }
 
-      // damping applied by resetting velocity once per-frame (cheap)
+      // Apply damping
       const lv = it.agg.body.getLinearVelocity();
       if (lv) it.agg.body.setLinearVelocity(lv.scale(linearDamping));
     }
   }
 
   function dispose() {
+    if (isDisposed) return;
+    isDisposed = true;
+    
     for (const it of items) {
       try { it.agg.dispose(); } catch (e) {}
       try { it.mesh.dispose(); } catch (e) {}
     }
     try { root.dispose(); } catch (e) {}
+    items.length = 0;
   }
 
-  return { root, items, update, dispose };
+  // Auto-dispose timer (cancellable via dispose)
+  const timer = setTimeout(() => {
+    dispose();
+  }, autoDisposeMs);
+
+  // Override dispose to clear timer
+  const originalDispose = dispose;
+  const enhancedDispose = () => {
+    clearTimeout(timer);
+    originalDispose();
+  };
+
+  return { root, items, update, dispose: enhancedDispose };
 }
