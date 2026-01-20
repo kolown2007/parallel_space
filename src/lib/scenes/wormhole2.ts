@@ -13,15 +13,15 @@ import { setupPhysics, setupLighting, setupCameras } from '../chronoescape/world
 import { visualizePathDebug } from '../chronoescape/world/debugPath';
 
 // Obstacles
-import { ObstacleFactory } from '../chronoescape/obstacle/ObstacleFactory';
+import { ObstacleManager } from '../chronoescape/obstacle/ObstacleManager';
 
 // System
 import preloadContainers, { getDefaultAssetList } from '../chronoescape/assetContainers';
 import { installKeyboardControls } from '../input/keyboardControls';
 import { getTextureUrl, getModelUrl, loadAssetsConfig } from '../assetsConfig';
-import { droneControl, updateProgress, adjustDroneSpeed } from '../stores/droneControl';
-import { get } from 'svelte/store';
-import { sceneStore } from '../stores/sceneStore';
+import { droneControl, updateProgress, adjustDroneSpeed, type DroneControlState } from '../stores/droneControl.svelte.js';
+import { sceneRefStore } from '../stores/sceneRefStore';
+import { registerScene, unregisterScene } from '../core/SceneRegistry';
 
 // ============================================================================
 // SCENE CLASS
@@ -235,14 +235,18 @@ export class WormHoleScene2 {
 			}
 		}
 
-		// Publish scene and drone references for external callers (e.g., +layout)
+		// Publish lightweight references: register heavy objects elsewhere and store IDs
 		try {
-			sceneStore.set({ scene, droneMesh: drone, pathPoints: WormHoleScene2.pathPoints });
+			const sceneId = registerScene(scene, drone, WormHoleScene2.pathPoints);
+			sceneRefStore.set({ sceneId, droneId: sceneId, pathPoints: WormHoleScene2.pathPoints });
 			WormHoleScene2.registerCleanup(() => {
-				try { sceneStore.set({ scene: null, droneMesh: null, pathPoints: null }); } catch (e) {}
+				try {
+					sceneRefStore.set({ sceneId: null, droneId: null, pathPoints: null });
+					unregisterScene(sceneId);
+				} catch (e) {}
 			});
 		} catch (e) {
-			console.warn('Failed to set sceneStore:', e);
+			console.warn('Failed to set sceneRefStore:', e);
 		}
 
 		// ====================================================================
@@ -288,12 +292,12 @@ export class WormHoleScene2 {
 			onSwitchCamera: switchCamera,
 			onSpeedUp: () => {
 				adjustDroneSpeed(0.00002);
-				const newSpeed = get(droneControl).speed;
+				const newSpeed = droneControl.speed;
 				console.log('Speed increased:', (newSpeed * 10000).toFixed(3));
 			},
 			onSpeedDown: () => {
 				adjustDroneSpeed(-0.00002);
-				const newSpeed = get(droneControl).speed;
+				const newSpeed = droneControl.speed;
 				console.log('Speed decreased:', (newSpeed * 10000).toFixed(3));
 			},
 			onPlaceCube: async () => {
@@ -337,7 +341,7 @@ export class WormHoleScene2 {
 				if (!drone || !pathPoints || pathPoints.length === 0) return;
 				const currentPointIndex = getDronePathIndex();
 				const p = drone.position;
-				console.log('Drone @ point', currentPointIndex, '/', pathPoints.length, '| xyz:', { x: p.x.toFixed(2), y: p.y.toFixed(2), z: p.z.toFixed(2) });
+				// console.log('Drone @ point', currentPointIndex, '/', pathPoints.length, '| xyz:', { x: p.x.toFixed(2), y: p.y.toFixed(2), z: p.z.toFixed(2) });
 			} catch (e) {
 				console.warn('Drone position logger error:', e);
 			}
@@ -354,7 +358,7 @@ export class WormHoleScene2 {
 		// OBSTACLES & MARKERS
 		// ====================================================================
 
-		const obstacles = new ObstacleFactory(scene, pathPoints, WormHoleScene2.modelCache, WormHoleScene2.cleanupRegistry);
+		const obstacles = new ObstacleManager(scene, pathPoints, WormHoleScene2.modelCache, WormHoleScene2.cleanupRegistry);
 
 		let portal: any | undefined;
 
@@ -410,8 +414,8 @@ export class WormHoleScene2 {
 	scene.registerBeforeRender(() => {
 		const dt = engine.getDeltaTime() / 1000;
 
-		// Get current drone control state from store
-		const control = get(droneControl);
+		// Direct access to reactive state (Svelte 5 runes)
+		const control = droneControl;
 
 		// Portal collision check (approximate USB AABB from drone position)
 		if (portal && onPortalTrigger) {

@@ -2,10 +2,11 @@
 import { onMount, onDestroy } from 'svelte';
 import Ably from 'ably';
 import { realtime, channel } from '$lib/stores/realtime';
-import { burstAccelerate } from '$lib/stores/droneControl';
-import { sceneStore } from '$lib/stores/sceneStore';
-import { placeCubeInFrontOfDrone } from '$lib/chronoescape/obstacle/ObstacleFactory';
-// import {placeCube} from '$lib/chronoescape/obstacle/ObstacleFactory'
+import { burstAccelerate } from '$lib/stores/droneControl.svelte.js';
+import { sceneRefStore } from '$lib/stores/sceneRefStore';
+import { getScene, getDroneMesh } from '$lib/core/SceneRegistry';
+import { ObstacleManager } from '$lib/chronoescape/obstacle/ObstacleManager';
+
 
 let client: any = null;
 let connected = false;
@@ -39,11 +40,15 @@ async function connectAbly() {
 			}
 
 			if (msg.name === 'action' && msg.data === 'obstruct') {
-				const { scene, droneMesh } = $sceneStore;
+				const { sceneId, droneId } = $sceneRefStore;
+				const scene = sceneId ? getScene(sceneId) : null;
+				const droneMesh = droneId ? getDroneMesh(droneId) : null;
 				if (scene && droneMesh) {
-					placeCubeInFrontOfDrone(scene, droneMesh, { 
-						distance: 5, 
-						size: 2 
+					ObstacleManager.cubeInFrontOfDrone(scene, droneMesh, { 
+						distance: 10, 
+						size: 6,
+						thrustMs: 2000,
+						thrustSpeed: 5
 					});
 					console.log('📦 Placed obstacle cube in front of drone');
 				} else {

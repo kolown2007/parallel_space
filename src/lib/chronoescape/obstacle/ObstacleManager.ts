@@ -1,8 +1,8 @@
 import * as BABYLON from '@babylonjs/core';
-import { ModelPlacer } from './ModelPlacer';
+import { ModelPlacer } from './Model';
 import { Portal } from './Portal';
-import { BillboardManager } from './BillboardManager';
-import { createFloatingCubes, type FloatingCubesResult } from './floatingCubes';
+import { BillboardManager } from './Billboard';
+import { createFloatingCubes, type FloatingCubesResult } from './Cubes';
 import { createParticles, type ParticleOptions } from './Particles';
 
 export type ObstacleType = 'cube' | 'model' | 'portal' | 'billboard' | 'floating-cube' | 'particles';
@@ -25,6 +25,9 @@ export interface BaseObstacleOptions {
 export interface CubeOptions extends BaseObstacleOptions {
 	size?: number;
 	color?: BABYLON.Color3;
+	thrustMs?: number;
+	thrustSpeed?: number;
+	distance?: number; // For inFrontOfDrone methods
 }
 
 export interface ModelOptions extends BaseObstacleOptions {
@@ -54,6 +57,8 @@ export interface FloatingCubeOptions extends BaseObstacleOptions {
 	massRange?: [number, number];
 	antiGravityFactor?: number;
 	linearDamping?: number;
+	distance?: number; // For inFrontOfDrone methods
+	spread?: number; // For inFrontOfDrone methods
 }
 
 export type ObstacleOptions = 
@@ -64,9 +69,10 @@ export type ObstacleOptions =
 	| FloatingCubeOptions;
 
 /**
- * Unified API for placing all types of obstacles along a path
+ * Unified obstacle management system for the game.
+ * Provides instance methods for path-based placement and static helpers for common patterns.
  */
-export class ObstacleFactory {
+export class ObstacleManager {
 	private scene: BABYLON.Scene;
 	private pathPoints: BABYLON.Vector3[];
 	private modelCache: Map<string, BABYLON.AssetContainer>;
@@ -85,37 +91,139 @@ export class ObstacleFactory {
 		this.cleanupRegistry = cleanupRegistry;
 	}
 
+	// ===================================================================
+	// STATIC HELPERS - Universal patterns (no path required)
+	// ===================================================================
+
 	/**
-	 * Resolve index or indices from options supporting `index`, `progress`, `degree`, `indices`, and `randomPositions`.
-	 * If `count` > 1 and randomPositions true, returns an array of indices.
+	 * Place a cube obstacle in front of a drone (common game pattern).
+	 * Default: spawns 5 units ahead with thrust for 2 seconds.
 	 */
-	private resolveIndices(opts: any = {}, count = 1): number | number[] {
-		const pts = this.pathPoints || [];
-		if (!pts.length) return 0;
-		if (opts.indices !== undefined && opts.indices !== null) {
-			if (Array.isArray(opts.indices)) return opts.indices.map((i: number) => this.normalizeIndex(i));
-			return this.normalizeIndex(opts.indices as number);
+	static cubeInFrontOfDrone(
+		scene: BABYLON.Scene,
+		droneMesh: BABYLON.AbstractMesh,
+		options?: CubeOptions
+	): BABYLON.Mesh {
+		const { 
+			distance = 10, 
+			size = 6, 
+			color = new BABYLON.Color3(1, 0.5, 0),
+			physics = true, 
+			offsetY = 0,
+			thrustMs = 2000,
+			thrustSpeed = 5
+		} = options || {};
+		
+		const forward = droneMesh.forward.clone().normalize();
+		const targetPos = droneMesh.position.clone().add(forward.scale(distance));
+		targetPos.y += offsetY;
+		
+		const cube = BABYLON.MeshBuilder.CreateBox(
+			`obstacle_cube_${Date.now()}`,
+			{ size },
+			scene
+		);
+		cube.position.copyFrom(targetPos);
+
+		const mat = new BABYLON.StandardMaterial(`cubeMat_${Date.now()}`, scene);
+		mat.diffuseColor = color;
+		mat.emissiveColor = color.scale(0.3);
+		cube.material = mat;
+
+		if (physics && scene.getPhysicsEngine()) {
+			const physicsOptions = typeof physics === 'object' ? physics : {
+				mass: 0.05,
+				restitution: 0.3,
+				friction: 0.05
+			};
+			new BABYLON.PhysicsAggregate(
+				cube,
+				physicsOptions.shape ?? BABYLON.PhysicsShapeType.BOX,
+				{
+					mass: physicsOptions.mass ?? 0.05,
+					restitution: physicsOptions.restitution ?? 0.3,
+					friction: physicsOptions.friction ?? 0.05
+				},
+				scene
+			);
+
+			// Apply thrust
+			if (thrustMs && thrustSpeed) {
+				const initialVel = forward.scale(thrustSpeed);
+				setTimeout(() => {
+					try {
+						if ((cube as any).physicsBody?.setLinearVelocity) {
+							(cube as any).physicsBody.setLinearVelocity(initialVel);
+						}
+					} catch (e) { /* ignore */ }
+				}, 0);
+
+				setTimeout(() => {
+					try {
+						if ((cube as any).physicsBody?.setLinearVelocity) {
+							(cube as any).physicsBody.setLinearVelocity(BABYLON.Vector3.Zero());
+						}
+					} catch (e) { /* ignore */ }
+				}, thrustMs);
+			}
 		}
-		if (typeof opts.index === 'number') return this.normalizeIndex(opts.index);
-		if (typeof opts.progress === 'number') {
-			const prog = Math.max(0, Math.min(1, opts.progress));
-			return Math.round(prog * (pts.length - 1));
-		}
-		if (typeof opts.degree === 'number') {
-			const prog = (((opts.degree % 360) + 360) % 360) / 360;
-			return Math.round(prog * (pts.length - 1));
-		}
-		if (opts.randomPositions) {
-			if (count <= 1) return Math.floor(Math.random() * pts.length);
-			const out: number[] = [];
-			for (let i = 0; i < count; i++) out.push(Math.floor(Math.random() * pts.length));
-			return out;
-		}
-		return 0;
+
+		return cube;
 	}
 
 	/**
-	 * Place obstacles of any type along the path
+	 * Place floating cubes in front of drone
+	 */
+	static floatingCubesInFrontOfDrone(
+		scene: BABYLON.Scene,
+		droneMesh: BABYLON.AbstractMesh,
+		cleanupRegistry: Array<() => void>,
+		options?: FloatingCubeOptions
+	): FloatingCubesResult {
+		const { 
+			distance = 8, 
+			spread = 3,
+			count = 3,
+			jitter = 0.3,
+			verticalOffset = 0.5,
+			sizeRange = [0.8, 2.0],
+			massRange = [0.6, 1.8]
+		} = options || {};
+		
+		const forward = droneMesh.forward.clone().normalize();
+		const basePos = droneMesh.position.clone().add(forward.scale(distance));
+		
+		const pathPoints: BABYLON.Vector3[] = [];
+		for (let i = 0; i < count; i++) {
+			const offset = new BABYLON.Vector3(
+				(Math.random() - 0.5) * spread,
+				(Math.random() - 0.5) * spread * 0.5,
+				(Math.random() - 0.5) * spread
+			);
+			pathPoints.push(basePos.clone().add(offset));
+		}
+
+		const result = createFloatingCubes(scene, pathPoints, {
+			count,
+			jitter,
+			verticalOffset,
+			sizeRange,
+			massRange
+		});
+
+		cleanupRegistry.push(() => {
+			try { result.dispose(); } catch (e) {}
+		});
+
+		return result;
+	}
+
+	// ===================================================================
+	// INSTANCE METHODS - Path-based placement
+	// ===================================================================
+
+	/**
+	 * Place any obstacle type along the path
 	 */
 	async place(type: ObstacleType, options: ObstacleOptions): Promise<any> {
 		switch (type) {
@@ -137,31 +245,7 @@ export class ObstacleFactory {
 	}
 
 	/**
-	 * Place particle system at a path index
-	 */
-	private placeParticles(options: any): any {
-		const { index = 0, count = 800, size = 1.0, maxDistance = 220, offsetY = 1.2, autoDispose } = options || {};
-		const actualIndex = this.normalizeIndex(index);
-		// createParticles attaches to a parent mesh; use scene.rootNodes[0] or create a helper invisible parent
-		const parent = this.scene.getMeshByName('torus') || this.scene.getTransformNodeByName('torus') || this.scene;
-		const result = createParticles(this.scene, this.pathPoints, actualIndex, parent as any, {
-			count,
-			size,
-			maxDistance,
-			offsetY,
-			autoDispose
-		});
-
-		// register cleanup if disposable
-		this.cleanupRegistry.push(() => {
-			try { if (result && typeof result.dispose === 'function') result.dispose(); } catch {}
-		});
-
-		return result;
-	}
-
-	/**
-	 * Place a simple cube obstacle
+	 * Place a cube along the path
 	 */
 	private placeCube(options: CubeOptions): BABYLON.Mesh {
 		const {
@@ -169,7 +253,9 @@ export class ObstacleFactory {
 			color = new BABYLON.Color3(1, 0.5, 0),
 			physics = true,
 			offsetY = 0,
-			count = 1
+			count = 1,
+			thrustMs,
+			thrustSpeed
 		} = options;
 
 		const indices = this.resolveIndices(options, count);
@@ -206,6 +292,29 @@ export class ObstacleFactory {
 					},
 					this.scene
 				);
+
+				// Optional thrust along path tangent
+				if (thrustMs && thrustSpeed && this.pathPoints.length > 1) {
+					const nextIdx = this.normalizeIndex(actualIndex + 1);
+					const dir = this.pathPoints[nextIdx].subtract(this.pathPoints[actualIndex]).normalize();
+					const initialVel = dir.scale(thrustSpeed);
+					
+					setTimeout(() => {
+						try {
+							if ((cube as any).physicsBody?.setLinearVelocity) {
+								(cube as any).physicsBody.setLinearVelocity(initialVel);
+							}
+						} catch (e) { /* ignore */ }
+					}, 0);
+
+					setTimeout(() => {
+						try {
+							if ((cube as any).physicsBody?.setLinearVelocity) {
+								(cube as any).physicsBody.setLinearVelocity(BABYLON.Vector3.Zero());
+							}
+						} catch (e) { /* ignore */ }
+					}, thrustMs);
+				}
 			}
 
 			this.instances.push(cube);
@@ -218,11 +327,10 @@ export class ObstacleFactory {
 		} else {
 			return createAt(indices as number);
 		}
-
 	}
 
 	/**
-	 * Place 3D model(s) using ModelPlacer
+	 * Place 3D model(s) along the path
 	 */
 	private async placeModel(options: ModelOptions): Promise<void> {
 		const {
@@ -253,7 +361,7 @@ export class ObstacleFactory {
 	}
 
 	/**
-	 * Place a portal
+	 * Place a portal along the path
 	 */
 	private placePortal(options: PortalOptions): Portal {
 		const {
@@ -324,7 +432,7 @@ export class ObstacleFactory {
 	}
 
 	/**
-	 * Place floating cubes with physics
+	 * Place floating cubes along the path
 	 */
 	private placeFloatingCubes(options: FloatingCubeOptions): FloatingCubesResult {
 		const {
@@ -355,7 +463,61 @@ export class ObstacleFactory {
 	}
 
 	/**
-	 * Helper: normalize index to valid path range
+	 * Place particle system at a path index
+	 */
+	private placeParticles(options: any): any {
+		const { index = 0, count = 800, size = 1.0, maxDistance = 220, offsetY = 1.2, autoDispose } = options || {};
+		const actualIndex = this.normalizeIndex(index);
+		const parent = this.scene.getMeshByName('torus') || this.scene.getTransformNodeByName('torus') || this.scene;
+		const result = createParticles(this.scene, this.pathPoints, actualIndex, parent as any, {
+			count,
+			size,
+			maxDistance,
+			offsetY,
+			autoDispose
+		});
+
+		this.cleanupRegistry.push(() => {
+			try { if (result && typeof result.dispose === 'function') result.dispose(); } catch {}
+		});
+
+		return result;
+	}
+
+	// ===================================================================
+	// HELPERS
+	// ===================================================================
+
+	/**
+	 * Resolve index or indices from options
+	 */
+	private resolveIndices(opts: any = {}, count = 1): number | number[] {
+		const pts = this.pathPoints || [];
+		if (!pts.length) return 0;
+		if (opts.indices !== undefined && opts.indices !== null) {
+			if (Array.isArray(opts.indices)) return opts.indices.map((i: number) => this.normalizeIndex(i));
+			return this.normalizeIndex(opts.indices as number);
+		}
+		if (typeof opts.index === 'number') return this.normalizeIndex(opts.index);
+		if (typeof opts.progress === 'number') {
+			const prog = Math.max(0, Math.min(1, opts.progress));
+			return Math.round(prog * (pts.length - 1));
+		}
+		if (typeof opts.degree === 'number') {
+			const prog = (((opts.degree % 360) + 360) % 360) / 360;
+			return Math.round(prog * (pts.length - 1));
+		}
+		if (opts.randomPositions) {
+			if (count <= 1) return Math.floor(Math.random() * pts.length);
+			const out: number[] = [];
+			for (let i = 0; i < count; i++) out.push(Math.floor(Math.random() * pts.length));
+			return out;
+		}
+		return 0;
+	}
+
+	/**
+	 * Normalize index to valid path range
 	 */
 	private normalizeIndex(index: number): number {
 		if (!this.pathPoints || this.pathPoints.length === 0) return 0;
@@ -380,97 +542,29 @@ export class ObstacleFactory {
 	}
 }
 
-/**
- * Standalone helpers for universal WebSocket usage in +layout.svelte
- */
+// ===================================================================
+// BACKWARDS COMPATIBILITY - Export standalone functions
+// ===================================================================
 
+/**
+ * @deprecated Use ObstacleManager.cubeInFrontOfDrone() instead
+ */
 export function placeCubeInFrontOfDrone(
 	scene: BABYLON.Scene,
 	droneMesh: BABYLON.AbstractMesh,
-	options?: CubeOptions & { distance?: number }
+	options?: CubeOptions
 ): BABYLON.Mesh {
-	const { distance = 5, size = 2, color, physics = true, offsetY = 0 } = options || {};
-	
-	// Calculate position in front of drone
-	const forward = droneMesh.forward.clone().normalize();
-	const targetPos = droneMesh.position.clone().add(forward.scale(distance));
-	targetPos.y += offsetY;
-	
-	// Create cube directly
-	const cube = BABYLON.MeshBuilder.CreateBox(
-		`obstacle_cube_${Date.now()}`,
-		{ size },
-		scene
-	);
-	cube.position.copyFrom(targetPos);
-
-	const mat = new BABYLON.StandardMaterial(`cubeMat_${Date.now()}`, scene);
-	mat.diffuseColor = color || new BABYLON.Color3(1, 0.5, 0);
-	mat.emissiveColor = mat.diffuseColor.scale(0.3);
-	cube.material = mat;
-
-	if (physics && scene.getPhysicsEngine()) {
-		const physicsOptions = typeof physics === 'object' ? physics : {
-			mass: 0.05,
-			restitution: 0.3,
-			friction: 0.05
-		};
-		new BABYLON.PhysicsAggregate(
-			cube,
-			physicsOptions.shape ?? BABYLON.PhysicsShapeType.BOX,
-			{
-				mass: physicsOptions.mass ?? 0.05,
-				restitution: physicsOptions.restitution ?? 0.3,
-				friction: physicsOptions.friction ?? 0.05
-			},
-			scene
-		);
-	}
-
-	return cube;
+	return ObstacleManager.cubeInFrontOfDrone(scene, droneMesh, options);
 }
 
+/**
+ * @deprecated Use ObstacleManager.floatingCubesInFrontOfDrone() instead
+ */
 export function placeFloatingCubesInFrontOfDrone(
 	scene: BABYLON.Scene,
 	droneMesh: BABYLON.AbstractMesh,
 	cleanupRegistry: Array<() => void>,
-	options?: FloatingCubeOptions & { distance?: number; spread?: number }
+	options?: FloatingCubeOptions
 ): FloatingCubesResult {
-	const { 
-		distance = 8, 
-		spread = 3,
-		count = 3,
-		jitter = 0.3,
-		verticalOffset = 0.5,
-		sizeRange = [0.8, 2.0],
-		massRange = [0.6, 1.8]
-	} = options || {};
-	
-	// Generate path points in front of drone
-	const forward = droneMesh.forward.clone().normalize();
-	const basePos = droneMesh.position.clone().add(forward.scale(distance));
-	
-	const pathPoints: BABYLON.Vector3[] = [];
-	for (let i = 0; i < count; i++) {
-		const offset = new BABYLON.Vector3(
-			(Math.random() - 0.5) * spread,
-			(Math.random() - 0.5) * spread * 0.5,
-			(Math.random() - 0.5) * spread
-		);
-		pathPoints.push(basePos.clone().add(offset));
-	}
-
-	const result = createFloatingCubes(scene, pathPoints, {
-		count,
-		jitter,
-		verticalOffset,
-		sizeRange,
-		massRange
-	});
-
-	cleanupRegistry.push(() => {
-		try { result.dispose(); } catch (e) {}
-	});
-
-	return result;
+	return ObstacleManager.floatingCubesInFrontOfDrone(scene, droneMesh, cleanupRegistry, options);
 }
