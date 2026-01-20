@@ -21,6 +21,7 @@ import { installKeyboardControls } from '../input/keyboardControls';
 import { getTextureUrl, getModelUrl, loadAssetsConfig } from '../assetsConfig';
 import { droneControl, updateProgress, adjustDroneSpeed } from '../stores/droneControl';
 import { get } from 'svelte/store';
+import { sceneStore } from '../stores/sceneStore';
 
 // ============================================================================
 // SCENE CLASS
@@ -232,6 +233,16 @@ export class WormHoleScene2 {
 			} catch (e) {
 				console.warn('Failed to setup drone collision callback:', e);
 			}
+		}
+
+		// Publish scene and drone references for external callers (e.g., +layout)
+		try {
+			sceneStore.set({ scene, droneMesh: drone, pathPoints: WormHoleScene2.pathPoints });
+			WormHoleScene2.registerCleanup(() => {
+				try { sceneStore.set({ scene: null, droneMesh: null, pathPoints: null }); } catch (e) {}
+			});
+		} catch (e) {
+			console.warn('Failed to set sceneStore:', e);
 		}
 
 		// ====================================================================
