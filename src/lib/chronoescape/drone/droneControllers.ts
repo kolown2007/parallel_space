@@ -69,7 +69,13 @@ export function updateFollowCamera(
 	drone: BABYLON.AbstractMesh,
 	pathPoints: BABYLON.Vector3[],
 	pathProgress: number,
-	gimbal: CameraGimbalConfig
+	gimbal: CameraGimbalConfig,
+	bounds?: {
+		torusCenter?: BABYLON.Vector3;
+		torusMainRadius?: number;
+		torusTubeRadius?: number;
+		margin?: number;
+	}
 ): void {
 	// Calculate look-ahead point
 	const lookAheadProgress = Math.min(
@@ -107,4 +113,43 @@ export function updateFollowCamera(
 		targetQuat,
 		gimbal.rotationSmooth
 	);
+
+	// If torus bounds provided, clamp camera to stay within torus tube
+	try {
+		if (bounds && bounds.torusCenter && typeof bounds.torusMainRadius === 'number' && typeof bounds.torusTubeRadius === 'number') {
+			const center = bounds.torusCenter;
+			const mainR = bounds.torusMainRadius;
+			const tubeR = bounds.torusTubeRadius;
+			const margin = typeof bounds.margin === 'number' ? bounds.margin : 0.5;
+
+			// Project onto XZ plane
+			const dx = camera.position.x - center.x;
+			const dz = camera.position.z - center.z;
+			const distXZ = Math.sqrt(dx * dx + dz * dz);
+
+			// Desired radial offset from main radius
+			const radialOffset = distXZ - mainR;
+			const maxOffset = Math.max(0, tubeR - margin);
+			const clampedOffset = Math.max(-maxOffset, Math.min(maxOffset, radialOffset));
+			const newDistXZ = mainR + clampedOffset;
+
+			if (distXZ > 1e-5) {
+				const scale = newDistXZ / distXZ;
+				camera.position.x = center.x + dx * scale;
+				camera.position.z = center.z + dz * scale;
+			} else {
+				// If camera exactly at center, nudge it to the inner side of the tube
+				camera.position.x = center.x + newDistXZ;
+				camera.position.z = center.z;
+			}
+
+			// Clamp Y to tube vertical bounds
+			const minY = center.y - maxOffset;
+			const maxY = center.y + maxOffset;
+			camera.position.y = Math.max(minY, Math.min(maxY, camera.position.y));
+		}
+	} catch (e) {
+		// don't let clamping break camera updates
+		// console.warn('camera clamp failed', e);
+	}
 }

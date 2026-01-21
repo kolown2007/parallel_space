@@ -47,8 +47,8 @@ async function connectAbly() {
 					ObstacleManager.cubeInFrontOfDrone(scene, droneMesh, { 
 						distance: 10, 
 						size: 6,
-						thrustMs: 2000,
-						thrustSpeed: 5
+						thrustMs: -2000,
+						thrustSpeed: 30
 					});
 					console.log('📦 Placed obstacle cube in front of drone');
 				} else {
@@ -83,3 +83,19 @@ onDestroy(() => {
 </script>
 
 <slot />
+
+<style>
+	:global(html, body, #svelte) {
+		height: 100%;
+		margin: 0;
+		padding: 0;
+		overflow: hidden; /* prevent scrollbars */
+		background: #000; /* dark background behind canvas */
+	}
+	:global(canvas) {
+		display: block;
+		box-sizing: border-box;
+		border: none !important;
+		outline: none !important;
+	}
+</style>

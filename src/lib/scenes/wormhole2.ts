@@ -140,7 +140,7 @@ export class WormHoleScene2 {
 		const torusResult = createTorus(scene, {
 			diameter: 80,
 			thickness: 30,
-			tessellation: 80,
+			tessellation: 100,
 			positionY: 1,
 			lineRadiusFactor: 0.0,
 			turns: 1,
@@ -154,6 +154,7 @@ export class WormHoleScene2 {
 		const torusMainRadius = torusResult.torusMainRadius;
 		const torusTubeRadius = torusResult.torusTubeRadius;
 		const pathPoints = torusResult.pathPoints;
+		const torusCenter = torus.getAbsolutePosition();
 		WormHoleScene2.pathPoints = pathPoints;
 		console.log('PathPoints count:', pathPoints.length);
 		const torusMaterial = torus.material as BABYLON.StandardMaterial;
@@ -182,9 +183,9 @@ export class WormHoleScene2 {
 			initialPosition: initialPosition,
 			initialRotation: new BABYLON.Vector3(0, 0, -Math.PI / 2),
 			mass: 2,
-			restitution: 1,
-			friction: 0.3,
-			glowIntensity: 0.4,
+			restitution: 0.6,
+			friction: 0.1,
+			glowIntensity: 0.2,
 			glowSubmeshIndex: 1,
 			enableDebug: false
 		});
@@ -362,49 +363,35 @@ export class WormHoleScene2 {
 
 		let portal: any | undefined;
 
-		// Example: Enable floating cubes
-		// await obstacles.place('floating-cube', {
-		// 	count: 3,
-		// 	jitter: 0.05,
-		// 	verticalOffset: 0.5,
-		// 	sizeRange: [0.2, 1],
-		// 	massRange: [0.008, 0.8],
-		// 	antiGravityFactor: 1.0,
-		// 	linearDamping: 0.985
-		// });
-
-		// ====================================================================
-		// EFFECTS
-		// ====================================================================
-
-		// const particleIdx = Math.floor(pathPoints.length / 2);
-		// createParticles(scene, pathPoints, particleIdx, torus, { autoDispose: 60_000 });
-
 		// ====================================================================
 		// MODELS & OBSTACLES
 		// ====================================================================
 
-		// Place models using unified API
-		await obstacles.place('model', {
-			modelNames: ['mario'],
-			count: 2,
-			randomPositions: true,
-			scaleRange: [4, 8],
-			physics: true
-		});
+		// Place models using unified API (delayed)
+		setTimeout(async () => {
+			try {
+				await obstacles.place('model', {
+					modelNames: ['mario', 'jollibee'],
+					count: 1,
+					randomPositions: true,
+					scaleRange: [4, 8],
+					physics: true
+				});
 
-	
-
-			portal = await obstacles.place('portal', {
+				portal = await obstacles.place('portal', {
 				index: Math.floor(pathPoints.length / 2),
 				posterRef: 'malunggay',
 				videoRef: 'plant1',
 				width: 15,
 				height: 25
-			}) as any;
-			try {
-				console.log('Placed portal:', portal?.mesh?.position ?? portal);
-			} catch (e) { /* ignore logging errors */ }
+				}) as any;
+				try {
+					console.log('Placed models + portal');
+				} catch (e) { /* ignore logging errors */ }
+			} catch (e) {
+				console.warn('Delayed model/portal placement failed:', e);
+			}
+		}, 0);
 
 
 	// ====================================================================
@@ -457,12 +444,19 @@ export class WormHoleScene2 {
 			WormHoleScene2.pathPoints,
 			control.progress,
 			keysPressed,
-			{ lateralForce: control.lateralForce }
+			{ lateralForce: control.lateralForce, maxFollowSpeed: 5 }
 		);
 
 		// Update follow camera
 		if (scene.activeCamera === followCamera) {
-			updateFollowCamera(followCamera, drone, WormHoleScene2.pathPoints, control.progress, gimbal);
+			updateFollowCamera(
+				followCamera,
+				drone,
+				WormHoleScene2.pathPoints,
+				control.progress,
+				gimbal,
+				{ torusCenter, torusMainRadius, torusTubeRadius, margin: 0.9 }
+			);
 		}
 	});
 

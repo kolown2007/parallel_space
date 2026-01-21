@@ -97,9 +97,6 @@
   });
 </script>
 
-<style>
-  .babylon-canvas { width: 100%; height: 100vh; display: block; }
-  :global(body) { margin: 0; }
-</style>
+
 
 <canvas bind:this={canvas} class="babylon-canvas"></canvas>

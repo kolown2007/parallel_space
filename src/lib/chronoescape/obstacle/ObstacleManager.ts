@@ -103,21 +103,108 @@ export class ObstacleManager {
 		scene: BABYLON.Scene,
 		droneMesh: BABYLON.AbstractMesh,
 		options?: CubeOptions
-	): BABYLON.Mesh {
-		const { 
-			distance = 10, 
-			size = 6, 
+	): BABYLON.Mesh | undefined {
+		// If the scene exposes pathPoints (attached via scene.metadata.pathPoints or similar),
+		// prefer placing the cube along the path (same behaviour as instance.place('cube')).
+		const {
+			distance = 10,
+			size = 6,
 			color = new BABYLON.Color3(1, 0.5, 0),
-			physics = true, 
+			physics = true,
 			offsetY = 0,
 			thrustMs = 2000,
-			thrustSpeed = 5
+			thrustSpeed = 5,
+			// semantic option for path-based placement
+			pointsAhead = 10
 		} = options || {};
-		
+
+		const pathPoints: BABYLON.Vector3[] = (scene as any).metadata?.pathPoints || (scene as any).pathPoints || [];
+
+		// Helper: normalize index into path range
+		const normalizeIndex = (idx: number) => {
+			if (!pathPoints || pathPoints.length === 0) return 0;
+			return ((idx % pathPoints.length) + pathPoints.length) % pathPoints.length;
+		};
+
+		if (pathPoints && pathPoints.length > 0) {
+			// find nearest path point to drone
+			let currentPointIndex = 0;
+			let minDistSq = Number.POSITIVE_INFINITY;
+			const dronePos = (droneMesh as any).position ?? droneMesh.getAbsolutePosition?.();
+			for (let i = 0; i < pathPoints.length; i++) {
+				const d = pathPoints[i].subtract(dronePos).lengthSquared();
+				if (d < minDistSq) { minDistSq = d; currentPointIndex = i; }
+			}
+
+			const targetIndex = (typeof (options as any)?.index === 'number')
+				? normalizeIndex((options as any).index)
+				: normalizeIndex(currentPointIndex + (pointsAhead || 0));
+
+			// Place at the path point (mirrors placeCube behaviour)
+			const pos = pathPoints[targetIndex].clone();
+			pos.y += offsetY;
+
+			const cube = BABYLON.MeshBuilder.CreateBox(
+				`obstacle_cube_${targetIndex}_${Date.now()}`,
+				{ size },
+				scene
+			);
+			cube.position.copyFrom(pos);
+
+			const mat = new BABYLON.StandardMaterial(`cubeMat_${Date.now()}`, scene);
+			mat.diffuseColor = color;
+			mat.emissiveColor = color.scale(0.3);
+			cube.material = mat;
+
+			if (physics && scene.getPhysicsEngine()) {
+				const physicsOptions = typeof physics === 'object' ? physics : {
+					mass: 0.05,
+					restitution: 0.3,
+					friction: 0.05
+				};
+				new BABYLON.PhysicsAggregate(
+					cube,
+					physicsOptions.shape ?? BABYLON.PhysicsShapeType.BOX,
+					{
+						mass: physicsOptions.mass ?? 0.05,
+						restitution: physicsOptions.restitution ?? 0.3,
+						friction: physicsOptions.friction ?? 0.05
+					},
+					scene
+				);
+
+				// Optional thrust along path tangent (same as placeCube)
+				if (thrustMs && thrustSpeed && pathPoints.length > 1) {
+					const nextIdx = normalizeIndex(targetIndex + 1);
+					const dir = pathPoints[nextIdx].subtract(pathPoints[targetIndex]).normalize();
+					const initialVel = dir.scale(thrustSpeed);
+
+					setTimeout(() => {
+						try {
+							if ((cube as any).physicsBody?.setLinearVelocity) {
+								(cube as any).physicsBody.setLinearVelocity(initialVel);
+							}
+						} catch (e) { /* ignore */ }
+					}, 0);
+
+					setTimeout(() => {
+						try {
+							if ((cube as any).physicsBody?.setLinearVelocity) {
+								(cube as any).physicsBody.setLinearVelocity(BABYLON.Vector3.Zero());
+							}
+						} catch (e) { /* ignore */ }
+					}, thrustMs);
+				}
+			}
+
+			return cube;
+		}
+
+		// Fallback: original behaviour (place directly in front of drone) if no pathPoints
 		const forward = droneMesh.forward.clone().normalize();
 		const targetPos = droneMesh.position.clone().add(forward.scale(distance));
 		targetPos.y += offsetY;
-		
+
 		const cube = BABYLON.MeshBuilder.CreateBox(
 			`obstacle_cube_${Date.now()}`,
 			{ size },
