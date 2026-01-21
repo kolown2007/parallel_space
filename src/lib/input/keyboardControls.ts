@@ -1,40 +1,88 @@
-import * as BABYLON from '@babylonjs/core';
+/**
+ * Centralized keyboard controller for the game
+ * All keyboard input handling is consolidated here for maintainability
+ * 
+ * Key Mappings:
+ * - W/A/S/D: Movement (continuous input via keysPressed state)
+ * - Q: Toggle wireframe
+ * - R: Reset drone position
+ * - C: Switch camera
+ * - Arrow Up: Increase speed
+ * - Arrow Down: Decrease speed
+ * - B: Burst acceleration (5x speed for 500ms)
+ * - Space: Place cube obstacle ahead
+ * - F: Place model
+ * - P: Spawn obstacle
+ */
 
 export type KeysPressed = { [key: string]: boolean };
 
-export function installKeyboardControls(params: {
+export interface KeyboardCallbacks {
+    // Movement keys (W/A/S/D) - handled via keysPressed state
     keysPressed: KeysPressed;
-    onToggleWireframe: () => void;
-    onReset: () => void;
-    onSwitchCamera: () => void;
-    onSpeedUp?: () => void;
-    onSpeedDown?: () => void;
-    onSpawn?: () => void;
-    onPlaceModel?: () => void;
-    onPlaceCube?: () => void;
-}) {
-    const { keysPressed, onToggleWireframe, onReset, onSwitchCamera, onSpeedUp, onSpeedDown, onSpawn, onPlaceModel, onPlaceCube } = params;
+    
+    // Toggle/UI actions
+    onToggleWireframe?: () => void;  // Q
+    onSwitchCamera?: () => void;     // C
+    
+    // Drone control
+    onReset?: () => void;            // R
+    onSpeedUp?: () => void;          // Arrow Up
+    onSpeedDown?: () => void;        // Arrow Down
+    onBurst?: () => void;            // B - burst acceleration
+    
+    // Obstacle placement
+    onPlaceCube?: () => void;        // Space - place cube ahead
+    onPlaceModel?: () => void;       // F - place model
+    onSpawn?: () => void;            // P - spawn obstacle
+}
+
+/**
+ * Install keyboard controls with centralized handlers
+ * Returns cleanup function to remove listeners
+ */
+export function installKeyboardControls(callbacks: KeyboardCallbacks) {
+    const { keysPressed } = callbacks;
 
     const keydown = (event: KeyboardEvent) => {
         const key = event.key.toLowerCase();
-        if (key === 'q') {
-            onToggleWireframe();
-        } else if (key === 'r') {
-            onReset();
-        } else if (['w', 'a', 's', 'd'].includes(key)) {
+        
+        // Movement keys (continuous input)
+        if (['w', 'a', 's', 'd'].includes(key)) {
             keysPressed[key] = true;
-        } else if (key === 'c') {
-            onSwitchCamera();
-        } else if (key === 'arrowup' && onSpeedUp) {
-            onSpeedUp();
-        } else if (key === 'arrowdown' && onSpeedDown) {
-            onSpeedDown();
-        } else if (key === 'p' && onSpawn) {
-            onSpawn();
-        } else if (key === 'f' && onPlaceModel) {
-            onPlaceModel();
-        } else if (key === 'b' && onPlaceCube) {
-            onPlaceCube();
+            return;
+        }
+        
+        // Action keys (single press)
+        switch (key) {
+            case 'q':
+                callbacks.onToggleWireframe?.();
+                break;
+            case 'r':
+                callbacks.onReset?.();
+                break;
+            case 'c':
+                callbacks.onSwitchCamera?.();
+                break;
+            case 'arrowup':
+                callbacks.onSpeedUp?.();
+                break;
+            case 'arrowdown':
+                callbacks.onSpeedDown?.();
+                break;
+            case 'b':
+                callbacks.onBurst?.();
+                break;
+            case ' ':
+                event.preventDefault(); // prevent page scroll
+                callbacks.onPlaceCube?.();
+                break;
+            case 'f':
+                callbacks.onPlaceModel?.();
+                break;
+            case 'p':
+                callbacks.onSpawn?.();
+                break;
         }
     };
 
@@ -48,7 +96,7 @@ export function installKeyboardControls(params: {
     window.addEventListener('keydown', keydown);
     window.addEventListener('keyup', keyup);
 
-    // return uninstall function
+    // Return uninstall function
     return () => {
         window.removeEventListener('keydown', keydown);
         window.removeEventListener('keyup', keyup);

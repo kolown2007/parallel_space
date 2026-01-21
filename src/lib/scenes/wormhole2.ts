@@ -19,9 +19,12 @@ import { ObstacleManager } from '../chronoescape/obstacle/ObstacleManager';
 import preloadContainers, { getDefaultAssetList } from '../chronoescape/assetContainers';
 import { installKeyboardControls } from '../input/keyboardControls';
 import { getTextureUrl, getModelUrl, loadAssetsConfig } from '../assetsConfig';
-import { droneControl, updateProgress, adjustDroneSpeed, type DroneControlState } from '../stores/droneControl.svelte.js';
+import { droneControl, updateProgress, adjustDroneSpeed, hitCollision, enterPortal, burstAccelerate, cleanupDroneControl, type DroneControlState } from '../stores/droneControl.svelte.js';
 import { sceneRefStore } from '../stores/sceneRefStore';
+import { revolutionStore } from '../stores/droneRevolution';
+import { get } from 'svelte/store';
 import { registerScene, unregisterScene } from '../core/SceneRegistry';
+import { initRealtimeControl } from '../services/RealtimeControl';
 
 // ============================================================================
 // SCENE CLASS
@@ -224,7 +227,7 @@ export class WormHoleScene2 {
 					// Check if it's a model instance
 					if (collidedName.toLowerCase().includes('model_instance')) {
 						console.log(`✨ Drone hit model: ${collidedName}`);
-						// Add your collision response here (e.g., score, sound, effects)
+						hitCollision({ percent: 0.2 }); // reduce speed by 20%
 					}
 				});
 				WormHoleScene2.registerCleanup(() => {
@@ -288,18 +291,24 @@ export class WormHoleScene2 {
 				} catch (e) {
 					/* ignore if aggregate missing */
 				}
+				// reset revolution counter as well
+				try { revolutionStore.reset(); } catch (e) {}
 				console.log('Drone reset');
 			},
 			onSwitchCamera: switchCamera,
 			onSpeedUp: () => {
 				adjustDroneSpeed(0.00002);
-				const newSpeed = droneControl.speed;
+				const newSpeed = get(droneControl).speed;
 				console.log('Speed increased:', (newSpeed * 10000).toFixed(3));
 			},
 			onSpeedDown: () => {
 				adjustDroneSpeed(-0.00002);
-				const newSpeed = droneControl.speed;
+				const newSpeed = get(droneControl).speed;
 				console.log('Speed decreased:', (newSpeed * 10000).toFixed(3));
+			},
+			onBurst: () => {
+				burstAccelerate(5, 500);
+				console.log('🚀 Burst acceleration activated!');
 			},
 			onPlaceCube: async () => {
 				try {
@@ -316,6 +325,10 @@ export class WormHoleScene2 {
 		// Register keyboard cleanup
 		
 		WormHoleScene2.registerCleanup(() => uninstallKeyboard());
+		
+		// Register drone control cleanup (burst timers etc)
+		WormHoleScene2.registerCleanup(() => cleanupDroneControl(false));
+
 
 		// Helper: compute nearest path point index for drone
 		const getDronePathIndex = () => {
@@ -361,6 +374,8 @@ export class WormHoleScene2 {
 
 		const obstacles = new ObstacleManager(scene, pathPoints, WormHoleScene2.modelCache, WormHoleScene2.cleanupRegistry);
 
+		let lastLoggedLoops = 0;
+
 		let portal: any | undefined;
 
 		// ====================================================================
@@ -401,8 +416,8 @@ export class WormHoleScene2 {
 	scene.registerBeforeRender(() => {
 		const dt = engine.getDeltaTime() / 1000;
 
-		// Direct access to reactive state (Svelte 5 runes)
-		const control = droneControl;
+		// Read current drone control state
+		const control = get(droneControl);
 
 		// Portal collision check (approximate USB AABB from drone position)
 		if (portal && onPortalTrigger) {
@@ -412,6 +427,7 @@ export class WormHoleScene2 {
 					max: { x: drone.position.x + 0.5, y: drone.position.y + 0.5, z: drone.position.z + 0.5 }
 				};
 				if (portal.intersects(usbAabb)) {
+					enterPortal(); // set speed to zero
 					onPortalTrigger();
 					try {
 						portal.reset();
@@ -436,6 +452,16 @@ export class WormHoleScene2 {
 			newProgress = 0;
 		}
 		updateProgress(newProgress);
+
+		// Record loop progress for revolution counter and log when a full loop completes
+		try {
+			revolutionStore.updateFromPathFraction(newProgress);
+			const loops = get(revolutionStore).loopsCompletedCount;
+			if (loops !== lastLoggedLoops) {
+				console.log(`Drone completed loop(s): ${loops}`);
+				lastLoggedLoops = loops;
+			}
+		} catch (e) { /* ignore if store missing */ }
 
 		// Update drone physics with lateral force from store
 		updateDronePhysics(
@@ -468,6 +494,24 @@ export class WormHoleScene2 {
 		}
 	} catch (e) {
 		console.warn('Failed to notify loading screen:', e);
+	}
+
+	// Initialize realtime control (websocket)
+	try {
+		const realtimeConnection = await initRealtimeControl({
+			scene,
+			droneMesh: drone
+		});
+		WormHoleScene2.registerCleanup(() => {
+			try {
+				realtimeConnection.disconnect();
+			} catch (e) {
+				console.warn('Realtime disconnect error:', e);
+			}
+		});
+		console.log('🌐 Realtime control enabled');
+	} catch (e) {
+		console.warn('Failed to initialize realtime control:', e);
 	}
 
 	return scene;
