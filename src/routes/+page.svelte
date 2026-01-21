@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import * as BABYLON from '@babylonjs/core';
-  import { CustomLoadingScreen } from '$lib/chronoescape/customLoadingScreen';
+  import { CustomLoadingScreen } from '$lib/scenes/customLoadingScreen';
   import mountVideoScene from '$lib/scenes/videoscene';
   import { WormHoleScene2 } from '$lib/scenes/wormhole2';
   import { SceneManager } from '$lib/core/SceneManager';
