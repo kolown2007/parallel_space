@@ -6,6 +6,8 @@ let filter: Tone.Filter | null = null
 let reverb: Tone.Reverb | null = null
 let lfo: Tone.LFO | null = null
 let loopId: number | null = null
+let activeVoices = 0
+const MAX_POLYPHONY = 8
 
 export async function startAmbient() {
   if (Tone.context.state !== 'running') {
@@ -23,7 +25,7 @@ export async function startAmbient() {
   filter = new Tone.Filter({ frequency: 800, Q: 1, type: 'lowpass' }).connect(reverb)
 
   pad = new Tone.PolySynth(Tone.Synth, ({
-    maxPolyphony: 8,
+    maxPolyphony: MAX_POLYPHONY,
     voice: {
       oscillator: { type: 'sine' },
       envelope: { attack: 8, decay: 2, sustain: 0.8, release: 12 }
@@ -93,9 +95,46 @@ export function playCollisionNote(velocity: number = 1.0) {
   const duration = Math.min(4 + velocity * 8, 12) // 4-12 seconds based on impact
   const vol = Math.min(0.3 + velocity * 0.5, 0.8)
   
-  chord.forEach((note, i) => {
+  // Prevent exceeding max polyphony: only play as many notes as available.
+  const available = Math.max(0, MAX_POLYPHONY - activeVoices)
+  let notesToPlay = chord.length
+  if (available <= 0) {
+    // no free voices; fall back to a single, quieter note
+    notesToPlay = 1
+  } else if (available < chord.length) {
+    notesToPlay = available
+  }
+
+  chord.slice(0, notesToPlay).forEach((note, i) => {
     pad!.triggerAttackRelease(note, duration, `+${i * 0.1}`, vol)
+    // approximate voice usage: increment and schedule decrement after note ends
+    activeVoices += 1
+    const ms = Math.ceil(duration * 1000) + 100
+    setTimeout(() => { activeVoices = Math.max(0, activeVoices - 1) }, ms)
   })
+}
+
+// Play a single random note for simple collisions (e.g. boxes)
+export function playCollisionNoteSingle(velocity: number = 1.0) {
+  if (!pad) return
+
+  const scale = ['C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4']
+  const note = scale[Math.floor(Math.random() * scale.length)]
+  const duration = Math.min(0.25 + velocity * 0.75, 2) // shorter for single hits
+  const vol = Math.min(0.15 + velocity * 0.6, 0.9)
+
+  // Respect polyphony budget
+  const available = Math.max(0, MAX_POLYPHONY - activeVoices)
+  if (available <= 0) {
+    // No free voices — play a very short, quiet note to reduce pressure
+    pad.triggerAttackRelease(note, 0.12, undefined, vol * 0.6)
+    return
+  }
+
+  pad.triggerAttackRelease(note, duration, undefined, vol)
+  activeVoices += 1
+  const ms = Math.ceil(duration * 1000) + 80
+  setTimeout(() => { activeVoices = Math.max(0, activeVoices - 1) }, ms)
 }
 
 export function stopAmbient() {
@@ -105,6 +144,9 @@ export function stopAmbient() {
 
   pad.dispose()
   pad = null
+
+  // reset voice tracking
+  activeVoices = 0
 
   if (texture) {
     texture.dispose()

@@ -27,7 +27,11 @@ import { registerScene, unregisterScene } from '../core/SceneRegistry';
 import { initRealtimeControl } from '../services/RealtimeControl';
 
 //scores
-import { startAmbient, stopAmbient, playCollisionNote, resumeAudioOnGesture } from '$lib/scores/ambient'
+import { startAmbient, stopAmbient, playCollisionNote, resumeAudioOnGesture,playCollisionNoteSingle } from '$lib/scores/ambient'
+
+// Debounce repeated quick collisions on the same obstacle (ms)
+const HIT_DEBOUNCE_MS = 500
+const obstacleLastHit = new Map<any, number>()
 
 // ============================================================================
 // SCENE CLASS
@@ -226,16 +230,34 @@ export class WormHoleScene2 {
 					}
 					
 					const nameLower = collidedName.toLowerCase();
-					const isObstacle = nameLower.includes('model_instance') || nameLower.includes('hoverbox') || nameLower.includes('billboard');
+					// Treat named model instances, floating hover boxes, billboards, and placed cubes as obstacles
+					const isObstacle = nameLower.includes('model_instance')
+						|| nameLower.includes('hoverbox')
+						|| nameLower.includes('billboard')
+						|| nameLower.includes('obstacle_cube');
 					
 					if (isObstacle) {
+						// debounce repeated hits on the same mesh
+						const meshKey = collidedMesh.uniqueId ?? collidedMesh.id ?? collidedName
+						const now = Date.now()
+						const last = obstacleLastHit.get(meshKey) || 0
+						if (now - last < HIT_DEBOUNCE_MS) {
+							return
+						}
+						obstacleLastHit.set(meshKey, now)
+
 						console.log(`✨ Drone hit obstacle: ${collidedName}`);
 						hitCollision({ percent: 0.2 }); // reduce speed by 20%
-						
+
 						// Trigger collision sound based on drone speed (0-1 normalized)
 						const state = get(droneControl);
 						const velocity = Math.min(state.speed / 0.0002, 1.0); // MAX_PROGRESS_SPEED = 0.0002
-						playCollisionNote(velocity);
+						if (nameLower.includes('obstacle_cube')) {
+							// play single random key for simple box collisions
+							playCollisionNoteSingle(velocity);
+						} else {
+							playCollisionNote(velocity);
+						}
 					}
 				});
 				WormHoleScene2.registerCleanup(() => {
