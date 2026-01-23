@@ -38,6 +38,7 @@
 		"@babylonjs/loaders": "^8.10.0",
 		"@babylonjs/materials": "^8.10.0",
 		"@kolown/scene-manager": "^0.0.1",
-		"ably": "^2.13.0"
+		"ably": "^2.13.0",
+		"tone": "^15.1.22"
 	}
 }

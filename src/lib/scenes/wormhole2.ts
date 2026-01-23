@@ -26,6 +26,9 @@ import { get } from 'svelte/store';
 import { registerScene, unregisterScene } from '../core/SceneRegistry';
 import { initRealtimeControl } from '../services/RealtimeControl';
 
+//scores
+import { startAmbient, stopAmbient, playCollisionNote, resumeAudioOnGesture } from '$lib/scores/ambient'
+
 // ============================================================================
 // SCENE CLASS
 // ============================================================================
@@ -109,24 +112,10 @@ export class WormHoleScene2 {
 
 		(async () => {
 			try {
-				const audioEngine = await BABYLON.CreateAudioEngineAsync();
+			
+				startAmbient().catch(() => {});
+				resumeAudioOnGesture(canvas);
 
-				const narration = await BABYLON.CreateStreamingSoundAsync("narration",
-					//  "https://assets.babylonjs.com/sound/alarm-1.mp3"
-					"https://kolown.net/storage/library/chronoescape/audio/bg1.mp3"
-				);
-
-				// Wait until audio engine is ready to play sounds.
-				await audioEngine.unlockAsync();
-
-				narration.play();
-
-				// Register audio cleanup
-				WormHoleScene2.registerCleanup(() => {
-					narration?.stop();
-					narration?.dispose();
-					audioEngine?.dispose();
-				});
 			} catch (e) {
 				console.warn('Audio initialization failed:', e);
 			}
@@ -221,13 +210,32 @@ export class WormHoleScene2 {
 				
 				const collisionObservable = droneAggregate.body.getCollisionObservable();
 				const collisionObserver = collisionObservable.add((collisionEvent: any) => {
-					const collidedMesh = collisionEvent.collidedAgainst?.transformNode;
-					const collidedName = collidedMesh?.name || 'unknown';
+					// Try several places for the collided transform node depending on physics backend
+					const collidedMesh = collisionEvent.collidedAgainst?.transformNode
+						|| collisionEvent.other?.transformNode
+						|| collisionEvent.otherBody?.transformNode
+						|| collisionEvent.transformNode
+						|| collisionEvent.hitMesh
+						|| collisionEvent.mesh
+						|| null;
+					const collidedName = collidedMesh?.name || (collisionEvent.collidedAgainst?.name) || 'unknown';
 					
-					// Check if it's a model instance
-					if (collidedName.toLowerCase().includes('model_instance')) {
-						console.log(`✨ Drone hit model: ${collidedName}`);
+					if (!collidedMesh) {
+						console.debug('Collision event without transformNode, event:', collisionEvent);
+						return; // nothing we can match to
+					}
+					
+					const nameLower = collidedName.toLowerCase();
+					const isObstacle = nameLower.includes('model_instance') || nameLower.includes('hoverbox') || nameLower.includes('billboard');
+					
+					if (isObstacle) {
+						console.log(`✨ Drone hit obstacle: ${collidedName}`);
 						hitCollision({ percent: 0.2 }); // reduce speed by 20%
+						
+						// Trigger collision sound based on drone speed (0-1 normalized)
+						const state = get(droneControl);
+						const velocity = Math.min(state.speed / 0.0002, 1.0); // MAX_PROGRESS_SPEED = 0.0002
+						playCollisionNote(velocity);
 					}
 				});
 				WormHoleScene2.registerCleanup(() => {
