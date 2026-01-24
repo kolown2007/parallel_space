@@ -4,6 +4,7 @@ import { Portal } from './Portal';
 import { BillboardManager } from './Billboard';
 import { createFloatingCubes, type FloatingCubesResult } from './Cubes';
 import { createParticles, type ParticleOptions } from './Particles';
+import { getTextureUrl } from '../../assetsConfig';
 
 export type ObstacleType = 'cube' | 'model' | 'portal' | 'billboard' | 'floating-cube' | 'particles';
 
@@ -28,6 +29,14 @@ export interface CubeOptions extends BaseObstacleOptions {
 	thrustMs?: number;
 	thrustSpeed?: number;
 	distance?: number; // For inFrontOfDrone methods
+	// how long before auto-dispose (ms)
+	autoDisposeMs?: number;
+	// how many points ahead along path to place when using path-based placement
+	pointsAhead?: number;
+	// optional asset id to resolve via assetsConfig.getTextureUrl()
+	textureId?: string;
+	// optional texture URL to apply to the cube
+	textureUrl?: string;
 }
 
 export interface ModelOptions extends BaseObstacleOptions {
@@ -115,7 +124,9 @@ export class ObstacleManager {
 			thrustMs = 2000,
 			thrustSpeed = 5,
 			// semantic option for path-based placement
-			pointsAhead = 10
+			pointsAhead = 10,
+			// how long before the cube is automatically disposed (ms)
+			autoDisposeMs = 60000
 		} = options || {};
 
 		const pathPoints: BABYLON.Vector3[] = (scene as any).metadata?.pathPoints || (scene as any).pathPoints || [];
@@ -152,8 +163,32 @@ export class ObstacleManager {
 			cube.position.copyFrom(pos);
 
 			const mat = new BABYLON.StandardMaterial(`cubeMat_${Date.now()}`, scene);
-			mat.diffuseColor = color;
-			mat.emissiveColor = color.scale(0.3);
+			const applyFallbackColor = () => {
+				mat.diffuseColor = color;
+				mat.emissiveColor = color.scale(0.3);
+			};
+
+			if ((options as any)?.textureUrl) {
+				try {
+					mat.diffuseTexture = new BABYLON.Texture((options as any).textureUrl, scene);
+					mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+				} catch (e) {
+					applyFallbackColor();
+				}
+			} else if ((options as any)?.textureId) {
+				// resolve via assets config asynchronously and apply when ready
+				(async () => {
+					try {
+						const url = await getTextureUrl((options as any).textureId);
+						if (url) mat.diffuseTexture = new BABYLON.Texture(url, scene);
+					} catch (e) {
+						applyFallbackColor();
+					}
+				})();
+				applyFallbackColor();
+			} else {
+				applyFallbackColor();
+			}
 			cube.material = mat;
 
 			if (physics && scene.getPhysicsEngine()) {
@@ -173,16 +208,19 @@ export class ObstacleManager {
 					scene
 				);
 
-				// Optional thrust along path tangent (same as placeCube)
+				// Optional thrust along path tangent (use opposite direction to drone)
 				if (thrustMs && thrustSpeed && pathPoints.length > 1) {
 					const nextIdx = normalizeIndex(targetIndex + 1);
 					const dir = pathPoints[nextIdx].subtract(pathPoints[targetIndex]).normalize();
-					const initialVel = dir.scale(thrustSpeed);
+					const initialVel = dir.scale(-thrustSpeed); // opposite the forward/path tangent
 
 					setTimeout(() => {
 						try {
 							if ((cube as any).physicsBody?.setLinearVelocity) {
 								(cube as any).physicsBody.setLinearVelocity(initialVel);
+							}
+							if ((cube as any).physicsImpostor?.setLinearVelocity) {
+								(cube as any).physicsImpostor.setLinearVelocity(initialVel);
 							}
 						} catch (e) { /* ignore */ }
 					}, 0);
@@ -192,8 +230,18 @@ export class ObstacleManager {
 							if ((cube as any).physicsBody?.setLinearVelocity) {
 								(cube as any).physicsBody.setLinearVelocity(BABYLON.Vector3.Zero());
 							}
+							if ((cube as any).physicsImpostor?.setLinearVelocity) {
+								(cube as any).physicsImpostor.setLinearVelocity(BABYLON.Vector3.Zero());
+							}
 						} catch (e) { /* ignore */ }
 					}, thrustMs);
+				}
+
+				// Auto-dispose to free memory after a configurable delay
+				if (autoDisposeMs && typeof autoDisposeMs === 'number' && autoDisposeMs > 0) {
+					setTimeout(() => {
+						try { cube.dispose(); } catch (e) { /* ignore */ }
+					}, autoDisposeMs);
 				}
 			}
 
@@ -213,8 +261,31 @@ export class ObstacleManager {
 		cube.position.copyFrom(targetPos);
 
 		const mat = new BABYLON.StandardMaterial(`cubeMat_${Date.now()}`, scene);
-		mat.diffuseColor = color;
-		mat.emissiveColor = color.scale(0.3);
+		const applyFallbackColor2 = () => {
+			mat.diffuseColor = color;
+			mat.emissiveColor = color.scale(0.3);
+		};
+
+		if ((options as any)?.textureUrl) {
+			try {
+				mat.diffuseTexture = new BABYLON.Texture((options as any).textureUrl, scene);
+				mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+			} catch (e) {
+				applyFallbackColor2();
+			}
+		} else if ((options as any)?.textureId) {
+			(async () => {
+				try {
+					const url = await getTextureUrl((options as any).textureId);
+					if (url) mat.diffuseTexture = new BABYLON.Texture(url, scene);
+				} catch (e) {
+					applyFallbackColor2();
+				}
+			})();
+			applyFallbackColor2();
+		} else {
+			applyFallbackColor2();
+		}
 		cube.material = mat;
 
 		if (physics && scene.getPhysicsEngine()) {
@@ -234,13 +305,16 @@ export class ObstacleManager {
 				scene
 			);
 
-			// Apply thrust
+			// Apply thrust opposite the drone forward
 			if (thrustMs && thrustSpeed) {
-				const initialVel = forward.scale(thrustSpeed);
+				const initialVel = forward.scale(-thrustSpeed);
 				setTimeout(() => {
 					try {
 						if ((cube as any).physicsBody?.setLinearVelocity) {
 							(cube as any).physicsBody.setLinearVelocity(initialVel);
+						}
+						if ((cube as any).physicsImpostor?.setLinearVelocity) {
+							(cube as any).physicsImpostor.setLinearVelocity(initialVel);
 						}
 					} catch (e) { /* ignore */ }
 				}, 0);
@@ -250,8 +324,18 @@ export class ObstacleManager {
 						if ((cube as any).physicsBody?.setLinearVelocity) {
 							(cube as any).physicsBody.setLinearVelocity(BABYLON.Vector3.Zero());
 						}
+						if ((cube as any).physicsImpostor?.setLinearVelocity) {
+							(cube as any).physicsImpostor.setLinearVelocity(BABYLON.Vector3.Zero());
+						}
 					} catch (e) { /* ignore */ }
 				}, thrustMs);
+			}
+
+			// Auto-dispose to free memory after a configurable delay
+			if (autoDisposeMs && typeof autoDisposeMs === 'number' && autoDisposeMs > 0) {
+				setTimeout(() => {
+					try { cube.dispose(); } catch (e) { /* ignore */ }
+				}, autoDisposeMs);
 			}
 		}
 
@@ -359,8 +443,31 @@ export class ObstacleManager {
 			cube.position.copyFrom(pos);
 
 			const mat = new BABYLON.StandardMaterial(`cubeMat_${Date.now()}`, this.scene);
-			mat.diffuseColor = color;
-			mat.emissiveColor = color.scale(0.3);
+			const applyFallbackColor3 = () => {
+				mat.diffuseColor = color;
+				mat.emissiveColor = color.scale(0.3);
+			};
+
+			if ((options as any)?.textureUrl) {
+				try {
+					mat.diffuseTexture = new BABYLON.Texture((options as any).textureUrl, this.scene);
+					mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+				} catch (e) {
+					applyFallbackColor3();
+				}
+			} else if ((options as any)?.textureId) {
+				(async () => {
+					try {
+						const url = await getTextureUrl((options as any).textureId);
+						if (url) mat.diffuseTexture = new BABYLON.Texture(url, this.scene);
+					} catch (e) {
+						applyFallbackColor3();
+					}
+				})();
+				applyFallbackColor3();
+			} else {
+				applyFallbackColor3();
+			}
 			cube.material = mat;
 
 			if (physics && this.scene.getPhysicsEngine()) {
@@ -640,7 +747,7 @@ export function placeCubeInFrontOfDrone(
 	scene: BABYLON.Scene,
 	droneMesh: BABYLON.AbstractMesh,
 	options?: CubeOptions
-): BABYLON.Mesh {
+): BABYLON.Mesh | undefined {
 	return ObstacleManager.cubeInFrontOfDrone(scene, droneMesh, options);
 }
 

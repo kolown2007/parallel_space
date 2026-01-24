@@ -57,7 +57,9 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 							distance: 10,
 							size: 6,
 							thrustMs: 2000,
-							thrustSpeed: 30
+							thrustSpeed: 30,
+							autoDisposeMs: 60000,
+							textureId: 'metal'
 						});
 						console.log('📦 Placed obstacle via Ably');
 					}

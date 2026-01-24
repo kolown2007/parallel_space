@@ -342,10 +342,18 @@ export class WormHoleScene2 {
 			},
 			onPlaceCube: async () => {
 				try {
-					const currentPointIndex = getDronePathIndex();
-					const targetIndex = (currentPointIndex + 10) % pathPoints.length;
-					await obstacles.place('cube', { index: targetIndex, size: 2, physics: true });
-					console.log(`📦 Placed cube at point ${targetIndex} (drone @ ${currentPointIndex})`);
+					// Spawn a cube in front of the drone that flies opposite its forward vector
+					ObstacleManager.cubeInFrontOfDrone(scene, drone, {
+						distance: 8,
+						size: 2,
+						physics: true,
+						thrustMs: 2000,
+						thrustSpeed: 6,
+						autoDisposeMs: 60000,
+						textureId: 'metal'
+						
+					});
+					console.log('📦 Placed cube in front of drone (flies opposite direction, auto-dispose 60s)');
 				} catch (e) {
 					console.warn('Failed to place cube:', e);
 				}
@@ -423,13 +431,13 @@ export class WormHoleScene2 {
 					physics: true
 				});
 
-				portal = await obstacles.place('portal', {
-				index: Math.floor(pathPoints.length / 2),
-				posterRef: 'malunggay',
-				videoRef: 'plant1',
-				width: 15,
-				height: 25
-				}) as any;
+				// portal = await obstacles.place('portal', {
+				// index: Math.floor(pathPoints.length / 2),
+				// posterRef: 'malunggay',
+				// videoRef: 'plant1',
+				// width: 15,
+				// height: 25
+				// }) as any;
 				try {
 					console.log('Placed models + portal');
 				} catch (e) { /* ignore logging errors */ }
