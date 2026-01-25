@@ -58,17 +58,17 @@
       "filename": "malunggay.png",
       "type": "texture"
     },
-    "cube1": {
+    "cubeface": {
       "rootUrl": "https://kolown.net/storage/library/chronoescape/",
       "filename": "cube1.png",
       "type": "texture"
     },
-    "cube2": {
+    "cubecolor": {
       "rootUrl": "https://kolown.net/storage/library/chronoescape/",
       "filename": "cube2.png",
       "type": "texture"
     },
-    "cube3": {
+    "cubecolor2": {
       "rootUrl": "https://kolown.net/storage/library/chronoescape/",
       "filename": "cube3.png",
       "type": "texture"

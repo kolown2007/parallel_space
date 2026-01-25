@@ -15,6 +15,7 @@ import { visualizePathDebug } from '../chronoescape/world/debugPath';
 // Obstacles
 import { ObstacleManager } from '../chronoescape/obstacle/ObstacleManager';
 
+
 // System
 import preloadContainers, { getDefaultAssetList } from '../chronoescape/assetContainers';
 import { installKeyboardControls } from '../input/keyboardControls';
@@ -350,7 +351,7 @@ export class WormHoleScene2 {
 						thrustMs: 2000,
 						thrustSpeed: 6,
 						autoDisposeMs: 60000,
-						faceUVTextureId: randomFrom('metal', 'cube1', 'cube2', 'cube3'),
+						faceUVTextureId: randomFrom('metal', 'cubeface', 'cubecolor', 'cubecolor2'),
 						faceUVLayout: 'grid'
 
 						
