@@ -133,8 +133,7 @@ export class WormHoleScene2 {
 		// WORLD: TORUS TRACK
 		// ====================================================================
 
-		const metalTextureUrl = await getTextureUrl('metal');
-		const torusResult = createTorus(scene, {
+				const torusResult = await createTorus(scene, {
 			diameter: 80,
 			thickness: 30,
 			tessellation: 100,
@@ -144,7 +143,7 @@ export class WormHoleScene2 {
 			spiralTurns: 3,
 			segments: 128,
 			pointsPerCircle: 360,
-			materialTextureUrl: metalTextureUrl || '/metal.jpg'
+			materialTextureId: randomFrom('torus')
 		});
 		const torus = torusResult.torus;
 		const torusAggregate = torusResult.torusAggregate;
@@ -427,7 +426,7 @@ export class WormHoleScene2 {
 		setTimeout(async () => {
 			try {
 				await obstacles.place('model', {
-					modelNames: ['mario', 'jollibee'],
+					modelNames: [randomFrom('jollibee', 'rabbit', 'mario'), randomFrom('army', 'armycatbike', 'manikineko')],
 					count: 1,
 					randomPositions: true,
 					scaleRange: [4, 8],

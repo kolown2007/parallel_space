@@ -33,7 +33,7 @@ export async function startAmbient() {
   } as any)).connect(filter)
 
   // gentle evolving noise texture
-  texture = new Tone.Noise('pink')
+  texture = new Tone.Noise('brown')
   const textureFilter = new Tone.Filter(600, 'lowpass').connect(reverb)
   const textureGain = new Tone.Gain(0.2).connect(textureFilter)
   texture.connect(textureGain)
@@ -121,7 +121,8 @@ export function playCollisionNoteSingle(velocity: number = 1.0) {
   const scale = ['C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4']
   const note = scale[Math.floor(Math.random() * scale.length)]
   const duration = Math.min(0.25 + velocity * 0.75, 2) // shorter for single hits
-  const vol = Math.min(0.15 + velocity * 0.6, 0.9)
+  // const vol = Math.min(0.15 + velocity * 0.6, 0.9)
+   const vol = 1.0
 
   // Respect polyphony budget
   const available = Math.max(0, MAX_POLYPHONY - activeVoices)

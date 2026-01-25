@@ -7,6 +7,7 @@ import Ably from 'ably';
 import { burstAccelerate, adjustDroneSpeed } from '$lib/stores/droneControl.svelte';
 import { ObstacleManager } from '$lib/chronoescape/obstacle/ObstacleManager';
 import type * as BABYLON from '@babylonjs/core';
+import { randomFrom } from '$lib/assetsConfig';
 
 export interface RealtimeControlConfig {
 	scene: BABYLON.Scene;
@@ -59,9 +60,12 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 							thrustMs: 2000,
 							thrustSpeed: 30,
 							autoDisposeMs: 60000,
-							textureId: 'metal'
+							faceUVTextureId: randomFrom('metal', 'cubeface', 'cubecolor', 'cubecolor2'),
+						    faceUVLayout: 'grid'
+						
+					
 						});
-						console.log('📦 Placed obstacle via Ably');
+						console.log('📦 Placed obstacle via control');
 					}
 					break;
 

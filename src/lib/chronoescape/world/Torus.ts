@@ -1,4 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
+import { getTextureUrl } from '../../assetsConfig';
 
 export interface TorusOptions {
   diameter?: number;
@@ -13,6 +14,7 @@ export interface TorusOptions {
   /** Number of sampled points around the main circle (if provided, overrides `segments` sampling behaviour) */
   pointsPerCircle?: number;
   materialTextureUrl?: string;
+  materialTextureId?: string;
 }
 
 export interface TorusResult {
@@ -23,7 +25,7 @@ export interface TorusResult {
   pathPoints: BABYLON.Vector3[];
 }
 
-export function createTorus(scene: BABYLON.Scene, opts: TorusOptions = {}): TorusResult {
+export async function createTorus(scene: BABYLON.Scene, opts: TorusOptions = {}): Promise<TorusResult> {
   const diameter = opts.diameter ?? 80;
   const thickness = opts.thickness ?? 30;
   const tessellation = opts.tessellation ?? 80;
@@ -51,6 +53,15 @@ export function createTorus(scene: BABYLON.Scene, opts: TorusOptions = {}): Toru
   const mat = new BABYLON.StandardMaterial('materialTorus', scene);
   if (opts.materialTextureUrl) {
     mat.diffuseTexture = new BABYLON.Texture(opts.materialTextureUrl, scene);
+  } else if (opts.materialTextureId) {
+    try {
+      const url = await getTextureUrl(opts.materialTextureId);
+      if (url) {
+        mat.diffuseTexture = new BABYLON.Texture(url, scene);
+      }
+    } catch (e) {
+      console.warn('Failed to resolve materialTextureId', opts.materialTextureId, e);
+    }
   }
   mat.emissiveColor = new BABYLON.Color3(0.2, 0.2, 0.2);
   torus.material = mat;
