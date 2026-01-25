@@ -15,6 +15,7 @@ import { visualizePathDebug } from '../chronoescape/world/debugPath';
 // Obstacles
 import { ObstacleManager } from '../chronoescape/obstacle/ObstacleManager';
 
+
 // System
 import preloadContainers, { getDefaultAssetList } from '../chronoescape/assetContainers';
 import { installKeyboardControls } from '../input/keyboardControls';
