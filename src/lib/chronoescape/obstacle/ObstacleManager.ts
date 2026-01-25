@@ -44,7 +44,8 @@ export interface CubeOptions extends BaseObstacleOptions {
 }
 
 export interface ModelOptions extends BaseObstacleOptions {
-	modelNames: string[];
+	/** Single model id or array of model ids from assets.json */
+	modelNames: string | string[];
 	scaleRange?: [number, number];
 	targetSize?: number;
 }
@@ -669,10 +670,13 @@ export class ObstacleManager {
 			targetSize = 2.0
 		} = options;
 
+		// Normalize modelNames to array (allow passing a single id via randomFrom)
+		const namesArray = Array.isArray(modelNames) ? modelNames : [modelNames as string];
+
 		await ModelPlacer.placeModels(
 			this.scene,
 			this.pathPoints,
-			modelNames,
+			namesArray,
 			{
 				countPerModel: count,
 				randomPositions,
