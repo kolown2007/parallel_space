@@ -1,6 +1,8 @@
 import * as BABYLON from '@babylonjs/core';
 import { getTextureUrl } from '../../assetsConfig';
 
+//updates: 
+
 export type FloatingCube = {
   mesh: BABYLON.Mesh;
   agg: BABYLON.PhysicsAggregate;

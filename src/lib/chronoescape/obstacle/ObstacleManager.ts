@@ -8,6 +8,8 @@ import { getTextureUrl } from '../../assetsConfig';
 
 export type ObstacleType = 'cube' | 'model' | 'portal' | 'billboard' | 'floating-cube' | 'particles';
 
+//updates
+
 export interface BaseObstacleOptions {
 	index?: number;
 	indices?: number | number[];
