@@ -40,7 +40,9 @@ let cachedConfig: AssetsConfig | null = null;
 export async function loadAssetsConfig(): Promise<AssetsConfig> {
   if (cachedConfig) return cachedConfig;
   try {
-    const response = await fetch(ASSETS_CONFIG_URL);
+    // Add cache-busting parameter in development
+    const cacheBuster = import.meta.env.DEV ? `?t=${Date.now()}` : '';
+    const response = await fetch(ASSETS_CONFIG_URL + cacheBuster);
     if (!response.ok) {
       throw new Error(`Failed to load assets.json: ${response.status}`);
     }
@@ -149,4 +151,94 @@ export async function getPhysicsWasmUrl(): Promise<string> {
 export async function getLoadingImageUrl(): Promise<string> {
   const config = await loadAssetsConfig();
   return config.loading?.backgroundImage || '';
+}
+
+/**
+ * Pick a random ID from a list of provided IDs
+ * @example randomFrom('metal', 'cube1', 'cube2') // returns one of these randomly
+ */
+export function randomFrom<T>(...ids: T[]): T {
+  return ids[Math.floor(Math.random() * ids.length)];
+}
+
+/**
+ * Pick a random asset ID from a specific group in assets.json
+ * @param group - 'models' | 'textures' | 'shaders' | 'videos'
+ * @returns Promise<string> - random asset ID from that group, or empty string if none
+ * @example const textureId = await randomFromGroup('textures') // e.g. 'metal', 'cube1', etc.
+ */
+export async function randomFromGroup(group: 'models' | 'textures' | 'shaders' | 'videos'): Promise<string> {
+  const config = await loadAssetsConfig();
+  const groupData = config[group];
+  if (!groupData || typeof groupData !== 'object') return '';
+  const ids = Object.keys(groupData);
+  if (ids.length === 0) return '';
+  return ids[Math.floor(Math.random() * ids.length)];
+}
+
+/**
+ * Pick a random texture ID from assets.json
+ * @returns Promise<string> - random texture ID
+ */
+export async function randomTextureId(): Promise<string> {
+  return randomFromGroup('textures');
+}
+
+/**
+ * Pick a random model ID from assets.json
+ * @returns Promise<string> - random model ID
+ */
+export async function randomModelId(): Promise<string> {
+  return randomFromGroup('models');
+}
+
+/**
+ * Get all asset IDs from a specific group
+ * @param group - 'models' | 'textures' | 'shaders' | 'videos'
+ * @returns Promise<string[]> - array of all asset IDs in that group
+ */
+export async function getAssetIds(group: 'models' | 'textures' | 'shaders' | 'videos'): Promise<string[]> {
+  const config = await loadAssetsConfig();
+  const groupData = config[group];
+  if (!groupData || typeof groupData !== 'object') return [];
+  return Object.keys(groupData);
+}
+
+/**
+ * Ask the service worker to refresh and re-cache assets from `/assets.json`.
+ * Returns `true` if a refresh was requested or attempted, `false` otherwise.
+ */
+export async function refreshAssetsCache(): Promise<boolean> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return false;
+  try {
+    const reg = await navigator.serviceWorker.getRegistration();
+    const controller: any = navigator.serviceWorker.controller || (reg && reg.active) || (reg && reg.waiting);
+    if (controller && typeof controller.postMessage === 'function') {
+      (controller as any).postMessage({ type: 'refreshAssets' });
+      return true;
+    }
+
+    // Fallback: attempt to fetch assets.json and touch each asset (best-effort)
+    const cacheBuster = import.meta.env.DEV ? `?t=${Date.now()}` : '';
+    const res = await fetch(ASSETS_CONFIG_URL + cacheBuster);
+    if (!res.ok) return false;
+    const json = await res.json() as AssetsConfig;
+    const urls: string[] = [];
+    const add = (u?: string) => { if (u) urls.push(u); };
+    if (json.models) for (const a of Object.values(json.models)) add((/^https?:\/\//i.test(a.rootUrl) ? a.rootUrl : '') + (a.filename || ''));
+    if (json.textures) for (const a of Object.values(json.textures)) add((/^https?:\/\//i.test(a.rootUrl) ? a.rootUrl : '') + (a.filename || ''));
+    if (json.shaders) for (const s of Object.values(json.shaders)) { if (s.vertex) add((/^https?:\/\//i.test(s.vertex) ? s.vertex : s.vertex)); if (s.fragment) add((/^https?:\/\//i.test(s.fragment) ? s.fragment : s.fragment)); }
+    if (json.videos) for (const v of Object.values(json.videos)) add(v.url);
+    if (json.loading && json.loading.backgroundImage) add(json.loading.backgroundImage);
+    if (json.physics && json.physics.havokWasm) add(json.physics.havokWasm);
+
+    for (const url of urls) {
+      try { await fetch(url, { mode: 'cors' }); } catch (e) { /* ignore */ }
+    }
+
+    return true;
+  } catch (e) {
+    console.warn('refreshAssetsCache failed', e);
+    return false;
+  }
 }

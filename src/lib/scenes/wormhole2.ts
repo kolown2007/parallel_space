@@ -18,7 +18,7 @@ import { ObstacleManager } from '../chronoescape/obstacle/ObstacleManager';
 // System
 import preloadContainers, { getDefaultAssetList } from '../chronoescape/assetContainers';
 import { installKeyboardControls } from '../input/keyboardControls';
-import { getTextureUrl, getModelUrl, loadAssetsConfig } from '../assetsConfig';
+import { getTextureUrl, getModelUrl, randomFrom } from '../assetsConfig';
 import { droneControl, updateProgress, adjustDroneSpeed, hitCollision, enterPortal, burstAccelerate, cleanupDroneControl, type DroneControlState } from '../stores/droneControl.svelte.js';
 import { sceneRefStore } from '../stores/sceneRefStore';
 import { revolutionStore } from '../stores/droneRevolution';
@@ -350,7 +350,9 @@ export class WormHoleScene2 {
 						thrustMs: 2000,
 						thrustSpeed: 6,
 						autoDisposeMs: 60000,
-						textureId: 'metal'
+						faceUVTextureId: randomFrom('metal', 'cube1', 'cube2', 'cube3'),
+						faceUVLayout: 'grid'
+
 						
 					});
 					console.log('📦 Placed cube in front of drone (flies opposite direction, auto-dispose 60s)');

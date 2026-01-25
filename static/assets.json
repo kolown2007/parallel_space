@@ -57,6 +57,21 @@
       "rootUrl": "https://kolown.net/storage/library/chronoescape/",
       "filename": "malunggay.png",
       "type": "texture"
+    },
+    "cube1": {
+      "rootUrl": "https://kolown.net/storage/library/chronoescape/",
+      "filename": "cube1.png",
+      "type": "texture"
+    },
+    "cube2": {
+      "rootUrl": "https://kolown.net/storage/library/chronoescape/",
+      "filename": "cube2.png",
+      "type": "texture"
+    },
+    "cube3": {
+      "rootUrl": "https://kolown.net/storage/library/chronoescape/",
+      "filename": "cube3.png",
+      "type": "texture"
     }
   },
   "shaders": {
