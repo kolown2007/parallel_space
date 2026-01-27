@@ -170,3 +170,38 @@ export function stopAmbient() {
 export function isAmbientRunning() {
   return !!pad
 }
+
+// Play a triumphant sound when the drone completes a full revolution
+export function playRevolutionComplete(loopCount: number = 1) {
+  if (!pad) return
+
+  // Ascending triumphant chord progression
+  // Expanded celebratory chord palette (extended and voiced for richness)
+  const chords = [
+    ['C4', 'E4', 'G4', 'B4', 'D5'],    // Cmaj9
+    ['G3', 'D4', 'G4', 'B4', 'C5'],     // Gsus4(add9) — open, uplifting
+    ['A3', 'C#4', 'E4', 'G#4', 'B4'],   // Amaj7(add9) — bright
+    ['F3', 'A3', 'C4', 'E4', 'G4'],     // Fmaj9 — warm
+    ['E3', 'G#3', 'B3', 'D4', 'F#4'],   // Em9 — slightly wistful
+    ['D3', 'F#3', 'A3', 'B3', 'E4'],    // D6/9-ish — jazzy lift
+    ['Bb3', 'D4', 'F4', 'A4', 'C5'],    // Bbmaj9 — triumphant color
+    ['C4', 'G4', 'E5', 'C5']            // high-register spread triad for sparkle
+  ]
+
+  // Pick chord based on loop count for variety
+  const chord = chords[Math.abs(loopCount - 1) % chords.length]
+  const duration = 3
+  const vol = 0.6
+
+  // Respect polyphony budget
+  const available = Math.max(0, MAX_POLYPHONY - activeVoices)
+  const notesToPlay = Math.min(chord.length, available)
+  if (notesToPlay <= 0) return
+
+  chord.slice(0, notesToPlay).forEach((note, i) => {
+    pad!.triggerAttackRelease(note, duration, `+${i * 0.05}`, vol)
+    activeVoices += 1
+    const ms = Math.ceil(duration * 1000) + 100
+    setTimeout(() => { activeVoices = Math.max(0, activeVoices - 1) }, ms)
+  })
+}
