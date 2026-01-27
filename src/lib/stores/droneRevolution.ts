@@ -93,3 +93,39 @@ export const revolutionStore = createRevolutionStore();
 export const totalProgressLoops = derived(revolutionStore, ($r) => $r.totalProgressLoops);
 export const revolutionsLoops = derived(revolutionStore, ($r) => $r.revolutionsLoops);
 export const loopsCompleted = derived(revolutionStore, ($r) => $r.loopsCompletedCount);
+
+// Callback for when a revolution is completed
+let onRevolutionCompleteCallback: ((loopCount: number) => void) | null = null;
+
+export function setOnRevolutionComplete(callback: (loopCount: number) => void) {
+	onRevolutionCompleteCallback = callback;
+}
+
+export function triggerRevolutionComplete(loopCount: number) {
+	if (onRevolutionCompleteCallback) {
+		onRevolutionCompleteCallback(loopCount);
+	}
+}
+
+// Call the API route when a revolution is completed
+export async function notifyRevolutionComplete(loopCount: number) {
+	try {
+		const response = await fetch('https://kolown.net/api/chrono-escapes/1/increment-revolution', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				loopCount,
+				timestamp: Date.now()
+			})
+		});
+		if (!response.ok) {
+			console.warn('Revolution API call failed:', response.status);
+		}
+		return response;
+	} catch (error) {
+		console.warn('Revolution API call error:', error);
+		return null;
+	}
+}

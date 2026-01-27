@@ -22,13 +22,13 @@ import { installKeyboardControls } from '../input/keyboardControls';
 import { getTextureUrl, getModelUrl, randomFrom } from '../assetsConfig';
 import { droneControl, updateProgress, adjustDroneSpeed, hitCollision, enterPortal, burstAccelerate, cleanupDroneControl, type DroneControlState } from '../stores/droneControl.svelte.js';
 import { sceneRefStore } from '../stores/sceneRefStore';
-import { revolutionStore } from '../stores/droneRevolution';
+import { revolutionStore, notifyRevolutionComplete } from '../stores/droneRevolution';
 import { get } from 'svelte/store';
 import { registerScene, unregisterScene } from '../core/SceneRegistry';
 import { initRealtimeControl } from '../services/RealtimeControl';
 
 //scores
-import { startAmbient, stopAmbient, playCollisionNote, resumeAudioOnGesture,playCollisionNoteSingle } from '$lib/scores/ambient'
+import { startAmbient, stopAmbient, playCollisionNote, resumeAudioOnGesture, playCollisionNoteSingle, playRevolutionComplete } from '$lib/scores/ambient'
 
 // Debounce repeated quick collisions on the same obstacle (ms)
 const HIT_DEBOUNCE_MS = 500
@@ -500,6 +500,10 @@ export class WormHoleScene2 {
 			if (loops !== lastLoggedLoops) {
 				console.log(`Drone completed loop(s): ${loops}`);
 				lastLoggedLoops = loops;
+				// Play revolution complete sound
+				playRevolutionComplete(loops);
+				// Call API to notify revolution complete
+				notifyRevolutionComplete(loops);
 			}
 		} catch (e) { /* ignore if store missing */ }
 
