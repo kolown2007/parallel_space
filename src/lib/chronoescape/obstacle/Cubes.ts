@@ -67,7 +67,6 @@ export function createFloatingCubes(
     tex.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;
     tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
     mat.diffuseTexture = tex;
-    mat.emissiveTexture = tex;
     mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
     mat.backFaceCulling = false;
     return mat;
@@ -87,7 +86,6 @@ export function createFloatingCubes(
         tex.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;
         tex.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
         mat.diffuseTexture = tex;
-        mat.emissiveTexture = tex;
         mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
       }
     }).catch(() => {});

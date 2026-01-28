@@ -4,7 +4,7 @@ import '@babylonjs/loaders/glTF';
 
 // Drone
 import { setupSceneDrone } from '../chronoescape/drone/setupDrone';
-import { updateDronePhysics, updateFollowCamera } from '../chronoescape/drone/droneControllers';
+import { updateDronePhysics, updateFollowCamera, createKeysPressed } from '../chronoescape/drone/droneControllers';
 
 // World & Utilities
 import { createTorus } from '../chronoescape/world/Torus';
@@ -133,7 +133,7 @@ export class WormHoleScene2 {
 		// WORLD: TORUS TRACK
 		// ====================================================================
 
-				const torusResult = await createTorus(scene, {
+			const torusResult = await createTorus(scene, {
 			diameter: 300,
 			thickness: 50,
 			tessellation: 100,
@@ -143,7 +143,7 @@ export class WormHoleScene2 {
 			spiralTurns: 3,
 			segments: 128,
 			pointsPerCircle: 360,
-			materialTextureId: randomFrom('torus','collage1')
+			materialTextureId: randomFrom('collage1')
 		});
 		const torus = torusResult.torus;
 		const torusAggregate = torusResult.torusAggregate;
@@ -173,18 +173,31 @@ export class WormHoleScene2 {
 		// ====================================================================
 
 		const initialPosition = getPositionOnPath(WormHoleScene2.pathPoints, 0);
-		const droneGlbUrl = await getModelUrl('drone');
-		const { drone, droneAggregate } = await setupSceneDrone(scene, {
-			glbUrl: droneGlbUrl || '/glb/usb.glb',
-			initialPosition: initialPosition,
-			initialRotation: new BABYLON.Vector3(0, 0, -Math.PI / 2),
-			mass: 2,
-			restitution: 0.6,
-			friction: 0.1,
-			glowIntensity: 0.2,
-			glowSubmeshIndex: 1,
-			enableDebug: false
-		});
+		let drone: any, droneAggregate: any;
+		{
+			const res = await setupSceneDrone(scene, {
+				assetId: 'drone',
+				initialPosition: initialPosition,
+				initialRotation: new BABYLON.Vector3(0, 0, -Math.PI / 2),
+				mass: 2,
+				restitution: 0.6,
+				friction: 0.1,
+				glowIntensity: 0,
+				glowSubmeshIndex: 0,
+				enableDebug: false
+			});
+			drone = res.drone;
+			droneAggregate = res.droneAggregate;
+
+
+
+			if (drone.material && drone.material instanceof BABYLON.StandardMaterial) {
+    const mat = drone.material as BABYLON.StandardMaterial;
+    mat.emissiveColor = BABYLON.Color3.Blue(); // Remove emissive glow
+    // Optional: adjust diffuse color if needed
+     mat.diffuseColor = new BABYLON.Color3(0.5, 0.5, 0.5);
+}
+		}
 
 		// Ensure drone always starts at pathpoint 0
 		try {
@@ -299,12 +312,7 @@ export class WormHoleScene2 {
 		};
 
 		// Keyboard controls state
-		const keysPressed: { [key: string]: boolean } = {
-			w: false,
-			a: false,
-			s: false,
-			d: false
-		};
+		const keysPressed = createKeysPressed();
 
 		// Install keyboard handlers
 		const uninstallKeyboard = installKeyboardControls({

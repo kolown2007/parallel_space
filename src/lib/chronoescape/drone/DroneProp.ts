@@ -6,24 +6,35 @@ import { getModelUrl } from '../../assetsConfig';
 // TYPES & INTERFACES
 // ============================================================================
 
+/** Result from loading a drone mesh */
 export interface DroneResult {
 	drone: BABYLON.Mesh;
 	droneVisual?: BABYLON.Mesh;
 }
 
-interface DebugHelperOptions {
-	useBox?: boolean;
-	color?: BABYLON.Color3;
-}
-
-interface InstanceOptions {
+/** Options for creating drone instances */
+export interface DroneInstanceOptions {
 	id?: string;
 	position?: BABYLON.Vector3;
 	scale?: number;
 	material?: BABYLON.Material;
 	physicsShape?: BABYLON.PhysicsShapeType;
-	physicsOptions?: any;
+	physicsOptions?: { mass?: number; restitution?: number; friction?: number };
 	debug?: boolean;
+}
+
+/** Options for debug visualization */
+export interface DebugHelperOptions {
+	useBox?: boolean;
+	color?: BABYLON.Color3;
+	wireframe?: boolean;
+	alpha?: number;
+}
+
+/** Options for glow configuration */
+export interface GlowOptions {
+	intensity?: number;
+	color?: BABYLON.Color3;
 }
 
 // ============================================================================
@@ -44,99 +55,13 @@ function getSourceMesh(mesh: BABYLON.AbstractMesh): BABYLON.Mesh {
 /** Safely get bounding info from a mesh */
 function getBoundingInfo(mesh: BABYLON.AbstractMesh): BABYLON.BoundingInfo | null {
 	try {
-		return (mesh as any).getBoundingInfo?.() || null;
+		return mesh.getBoundingInfo?.() || null;
 	} catch {
 		return null;
 	}
 }
 
-/** Create a wireframe helper material */
-function createDebugMaterial(
-	name: string,
-	scene: BABYLON.Scene,
-	color: BABYLON.Color3,
-	alpha = 0.3
-): BABYLON.StandardMaterial {
-	const mat = new BABYLON.StandardMaterial(name, scene);
-	mat.diffuseColor = color;
-	mat.emissiveColor = color;
-	mat.alpha = alpha;
-	mat.wireframe = true;
-	return mat;
-}
-
-/** Mark mesh as debug helper (so it's ignored by glow layer) */
-function markAsDebugHelper(mesh: BABYLON.Mesh): void {
-	const metadata = ensureMetadata(mesh);
-	metadata._debugHelper = true;
-	mesh.isPickable = false;
-}
-
-/** Sync helper position with source mesh each frame */
-function syncHelperPosition(
-	helper: BABYLON.Mesh,
-	source: BABYLON.AbstractMesh,
-	scene: BABYLON.Scene
-): void {
-	const updatePosition = () => {
-		try {
-			helper.position.copyFrom((source as any).getAbsolutePosition());
-		} catch {
-			// Ignore sync errors
-		}
-	};
-
-	// Initial position
-	updatePosition();
-
-	// Keep synced per-frame
-	const observer = scene.onBeforeRenderObservable.add(updatePosition);
-	(helper as any)._debugObserver = observer;
-}
-
-// ============================================================================
-// DRONE LOADING & CREATION
-// ============================================================================
-
-/**
- * Load a GLB file and merge all geometry meshes into a single drone mesh.
- * Falls back to a simple box if loading fails.
- */
-export async function createDrone(
-	scene: BABYLON.Scene,
-	glbUrl?: string
-): Promise<DroneResult> {
-	// resolve default GLB url from assets.json when not provided
-	let resolved = glbUrl;
-	if (!resolved) {
-		try {
-			resolved = await getModelUrl('drone');
-		} catch (e) {
-			resolved = '/glb/usb.glb';
-		}
-	}
-	try {
-		const { rootUrl, fileName } = parseGlbUrl(resolved as string);
-		const container = await loadGlbContainer(scene, rootUrl, fileName);
-		const meshes = extractGeometryMeshes(container);
-
-		addContainerToScene(container);
-
-		const drone = mergeMeshes(meshes) || meshes[0];
-		drone.name = 'drone_merged';
-
-		return { drone, droneVisual: drone };
-	} catch (e) {
-		console.warn('Failed to load drone GLB, using fallback box', e);
-		const fallback = BABYLON.MeshBuilder.CreateBox('drone_fallback', {
-			width: 1,
-			height: 2,
-			depth: 1
-		}, scene);
-		return { drone: fallback, droneVisual: fallback };
-	}
-}
-
+/** Parse GLB URL into root and filename */
 function parseGlbUrl(url: string): { rootUrl: string; fileName: string } {
 	if (!url.includes('/')) {
 		return { rootUrl: '', fileName: url };
@@ -148,22 +73,24 @@ function parseGlbUrl(url: string): { rootUrl: string; fileName: string } {
 	};
 }
 
-async function loadGlbContainer(scene: BABYLON.Scene, rootUrl: string, fileName: string) {
-	const loader =
-		(BABYLON as any).loadAssetContainerAsync || (BABYLON as any).loadAssetContainer;
+/** Load GLB as asset container */
+async function loadGlbContainer(
+	scene: BABYLON.Scene,
+	rootUrl: string,
+	fileName: string
+): Promise<BABYLON.AssetContainer> {
+	const loader = (BABYLON as any).loadAssetContainerAsync || (BABYLON as any).loadAssetContainer;
 	if (typeof loader !== 'function') {
 		throw new Error('BabylonJS loadAssetContainerAsync not available');
 	}
-	return await loader.call(BABYLON, fileName, scene, {
-		rootUrl,
-		pluginOptions: { gltf: {} }
-	});
+	return await loader.call(BABYLON, fileName, scene, { rootUrl, pluginOptions: { gltf: {} } });
 }
 
-function extractGeometryMeshes(container: any): BABYLON.Mesh[] {
+/** Extract meshes with geometry from container */
+function extractGeometryMeshes(container: BABYLON.AssetContainer): BABYLON.Mesh[] {
 	const meshes = (container?.meshes || []) as BABYLON.AbstractMesh[];
 	const withGeometry = meshes.filter(
-		(m: any) => m instanceof BABYLON.Mesh && m.geometry
+		(m) => m instanceof BABYLON.Mesh && (m as BABYLON.Mesh).geometry
 	) as BABYLON.Mesh[];
 	if (withGeometry.length === 0) {
 		throw new Error('No geometry meshes found in GLB');
@@ -171,16 +98,52 @@ function extractGeometryMeshes(container: any): BABYLON.Mesh[] {
 	return withGeometry;
 }
 
-function addContainerToScene(container: any): void {
-	try {
-		container?.addAllToScene?.();
-	} catch {
-		// Ignore if already added or unavailable
-	}
-}
+// ============================================================================
+// DRONE LOADING
+// ============================================================================
 
-function mergeMeshes(meshes: BABYLON.Mesh[]): BABYLON.Mesh | null {
-	return BABYLON.Mesh.MergeMeshes(meshes, true, true, undefined, false, true);
+/**
+ * Load a GLB file and merge all geometry meshes into a single drone mesh.
+ * Falls back to a simple box if loading fails.
+ * 
+ * @param scene - The Babylon.js scene
+ * @param glbUrl - Optional URL to the GLB file (defaults to 'drone' asset)
+ * @returns Promise with drone mesh and optional visual mesh
+ */
+export async function createDrone(
+	scene: BABYLON.Scene,
+	glbUrl?: string
+): Promise<DroneResult> {
+	// Resolve GLB URL from assets.json when not provided
+	let resolved = glbUrl;
+	if (!resolved) {
+		try {
+			resolved = await getModelUrl('drone');
+		} catch {
+			resolved = '/glb/usb.glb';
+		}
+	}
+
+	try {
+		const { rootUrl, fileName } = parseGlbUrl(resolved);
+		const container = await loadGlbContainer(scene, rootUrl, fileName);
+		const meshes = extractGeometryMeshes(container);
+
+		container.addAllToScene?.();
+
+		const drone = BABYLON.Mesh.MergeMeshes(meshes, true, true, undefined, false, true) || meshes[0];
+		drone.name = 'drone_merged';
+
+		return { drone, droneVisual: drone };
+	} catch (e) {
+		console.warn('Failed to load drone GLB, using fallback box:', e);
+		const fallback = BABYLON.MeshBuilder.CreateBox('drone_fallback', {
+			width: 1,
+			height: 2,
+			depth: 1
+		}, scene);
+		return { drone: fallback, droneVisual: fallback };
+	}
 }
 
 // ============================================================================
@@ -188,25 +151,50 @@ function mergeMeshes(meshes: BABYLON.Mesh[]): BABYLON.Mesh | null {
 // ============================================================================
 
 /**
- * Create an instance from a template mesh with optional physics and debug visualization.
+ * Create an instance from a template mesh with optional physics.
+ * 
+ * @param template - The source mesh to instance
+ * @param scene - The Babylon.js scene
+ * @param options - Instance configuration options
+ * @returns The created instance and optional physics aggregate
  */
-export function createDroneInstanceFromTemplate(
+export function createDroneInstance(
 	template: BABYLON.Mesh,
 	scene: BABYLON.Scene,
-	options: InstanceOptions = {}
-): { instance: BABYLON.InstancedMesh; aggregate?: BABYLON.PhysicsAggregate | null } {
-	const id = options.id ?? `instance_${Math.floor(Math.random() * 10000)}`;
+	options: DroneInstanceOptions = {}
+): { instance: BABYLON.InstancedMesh; aggregate: BABYLON.PhysicsAggregate | null } {
+	const id = options.id ?? `drone_instance_${Date.now()}`;
 	const instance = template.createInstance(id);
 
 	instance.isPickable = true;
 	ensureMetadata(instance as unknown as BABYLON.AbstractMesh);
 
-	applyInstanceTransforms(instance, options);
+	// Apply transforms
+	if (options.position) instance.position.copyFrom(options.position);
+	if (options.scale) instance.scaling.setAll(options.scale);
+	if (options.material) instance.material = options.material;
 
-	const aggregate = attachPhysics(instance, scene, options);
+	// Attach physics
+	let aggregate: BABYLON.PhysicsAggregate | null = null;
+	try {
+		const physicsOpts = {
+			mass: options.physicsOptions?.mass ?? 0.05,
+			restitution: options.physicsOptions?.restitution ?? 0.3,
+			friction: options.physicsOptions?.friction ?? 0.05
+		};
+		aggregate = new BABYLON.PhysicsAggregate(
+			instance as unknown as BABYLON.AbstractMesh,
+			options.physicsShape ?? BABYLON.PhysicsShapeType.MESH,
+			physicsOpts,
+			scene
+		);
+	} catch (e) {
+		console.warn('Failed to create physics for instance:', e);
+	}
 
+	// Debug visualization
 	if (options.debug) {
-		createDebugHelperForMesh(instance as unknown as BABYLON.AbstractMesh, scene, {
+		createDebugHelper(instance as unknown as BABYLON.AbstractMesh, scene, {
 			useBox: options.physicsShape === BABYLON.PhysicsShapeType.BOX
 		});
 	}
@@ -214,41 +202,75 @@ export function createDroneInstanceFromTemplate(
 	return { instance, aggregate };
 }
 
-function applyInstanceTransforms(instance: BABYLON.InstancedMesh, options: InstanceOptions): void {
-	if (options.position) instance.position.copyFrom(options.position);
-	if (options.scale) instance.scaling.setAll(options.scale);
-	if (options.material) instance.material = options.material;
-}
+// ============================================================================
+// MATERIALS
+// ============================================================================
 
-function attachPhysics(
-	instance: BABYLON.InstancedMesh,
+/**
+ * Create the standard drone material with emissive glow.
+ * 
+ * @param scene - The Babylon.js scene
+ * @param color - Optional emissive color (defaults to cyan)
+ * @returns StandardMaterial configured for drone
+ */
+export function createDroneMaterial(
 	scene: BABYLON.Scene,
-	options: InstanceOptions
-): BABYLON.PhysicsAggregate | null {
-	try {
-		return new BABYLON.PhysicsAggregate(
-			instance as unknown as BABYLON.AbstractMesh,
-			options.physicsShape ?? BABYLON.PhysicsShapeType.MESH,
-			options.physicsOptions ?? { mass: 0.05, restitution: 0.3, friction: 0.05 },
-			scene
-		);
-	} catch (e) {
-		console.warn('Failed to create PhysicsAggregate for instance', e);
-		return null;
-	}
+	color?: BABYLON.Color3
+): BABYLON.StandardMaterial {
+	const material = new BABYLON.StandardMaterial('droneMat', scene);
+	material.diffuseColor = new BABYLON.Color3(0.05, 0.05, 0.05);
+	material.emissiveColor = color ?? new BABYLON.Color3(0.1, 0.6, 1.0);
+	return material;
 }
 
 // ============================================================================
-// GLOW CONTROL
+// LIGHTING
 // ============================================================================
 
-/** Enable/disable glow on an entire mesh */
+/**
+ * Attach a point light to the drone mesh.
+ * 
+ * @param scene - The Babylon.js scene
+ * @param drone - The drone mesh to attach light to
+ * @param attachTo - Optional specific mesh to parent the light to
+ * @returns The created PointLight
+ */
+export function attachDroneLight(
+	scene: BABYLON.Scene,
+	drone: BABYLON.Mesh,
+	attachTo?: BABYLON.Mesh
+): BABYLON.PointLight {
+	const light = new BABYLON.PointLight('droneLight', BABYLON.Vector3.Zero(), scene);
+	light.diffuse = new BABYLON.Color3(0.1, 0.6, 1.0);
+	light.specular = new BABYLON.Color3(0.6, 0.9, 1.0);
+	light.intensity = 5.0;
+	light.range = 5;
+	light.parent = attachTo ?? drone;
+	light.position = new BABYLON.Vector3(0.5, 0.5, 0);
+	return light;
+}
+
+// ============================================================================
+// GLOW SYSTEM
+// ============================================================================
+
+/**
+ * Enable/disable glow on an entire mesh via metadata.
+ * 
+ * @param mesh - The mesh to configure
+ * @param enabled - Whether glow is enabled
+ */
 export function setMeshGlow(mesh: BABYLON.AbstractMesh, enabled = true): void {
 	const metadata = ensureMetadata(mesh);
-	metadata.glow = !!enabled;
+	metadata.glow = enabled;
 }
 
-/** Set which submesh index should glow (null to disable submesh glow) */
+/**
+ * Set which submesh index should glow (null to disable submesh-specific glow).
+ * 
+ * @param mesh - The mesh to configure
+ * @param subIndex - The submesh index to glow, or null to disable
+ */
 export function setMeshSubmeshGlow(mesh: BABYLON.AbstractMesh, subIndex: number | null): void {
 	const metadata = ensureMetadata(mesh);
 	if (subIndex === null) {
@@ -261,6 +283,12 @@ export function setMeshSubmeshGlow(mesh: BABYLON.AbstractMesh, subIndex: number 
 /**
  * Install a GlowLayer that respects per-submesh glow settings.
  * Uses metadata.selectedSubmesh to highlight specific submeshes.
+ * 
+ * @param scene - The Babylon.js scene
+ * @param drone - The main drone mesh
+ * @param droneVisual - Optional visual mesh (if different from physics mesh)
+ * @param intensity - Glow intensity (0-1, default 0.8)
+ * @returns The created GlowLayer
  */
 export function installDroneGlow(
 	scene: BABYLON.Scene,
@@ -268,18 +296,24 @@ export function installDroneGlow(
 	droneVisual?: BABYLON.Mesh,
 	intensity = 0.8
 ): BABYLON.GlowLayer {
-	const glow = new BABYLON.GlowLayer('glow', scene);
+	const glow = new BABYLON.GlowLayer('droneGlow', scene);
 	glow.intensity = intensity;
 
 	glow.customEmissiveColorSelector = (mesh, subMesh, material, result) => {
 		const source = getSourceMesh(mesh as BABYLON.AbstractMesh);
 		const metadata = (source as any).metadata || {};
 
+		// Skip debug helpers
+		if (metadata._debugHelper) {
+			result.set(0, 0, 0, 0);
+			return;
+		}
+
 		// Check if specific submesh is selected
 		if (typeof metadata.selectedSubmesh === 'number' && source.subMeshes) {
 			const index = source.subMeshes.indexOf(subMesh);
 			if (index === metadata.selectedSubmesh) {
-				setEmissiveColor(result, material);
+				applyEmissiveColor(result, material);
 				return;
 			}
 			result.set(0, 0, 0, 0);
@@ -288,7 +322,7 @@ export function installDroneGlow(
 
 		// Otherwise check if this is the drone mesh
 		if (mesh === droneVisual || mesh === drone) {
-			setEmissiveColor(result, material);
+			applyEmissiveColor(result, material);
 		} else {
 			result.set(0, 0, 0, 0);
 		}
@@ -297,38 +331,11 @@ export function installDroneGlow(
 	return glow;
 }
 
-function setEmissiveColor(result: BABYLON.Color4, material: BABYLON.Material): void {
+/** Apply emissive color from material to glow result */
+function applyEmissiveColor(result: BABYLON.Color4, material: BABYLON.Material): void {
 	const mat = material as BABYLON.StandardMaterial | null;
 	const emissive = mat?.emissiveColor || new BABYLON.Color3(0.1, 0.6, 1.0);
 	result.set(emissive.r, emissive.g, emissive.b, 1.0);
-}
-
-// ============================================================================
-// MATERIALS & LIGHTING
-// ============================================================================
-
-/** Create the standard drone material with emissive glow */
-export function createDroneMaterial(scene: BABYLON.Scene): BABYLON.StandardMaterial {
-	const material = new BABYLON.StandardMaterial('droneMat', scene);
-	material.diffuseColor = new BABYLON.Color3(0.05, 0.05, 0.05);
-	material.emissiveColor = new BABYLON.Color3(0.1, 0.6, 1.0);
-	return material;
-}
-
-/** Attach a point light to the drone (parents to attachTo mesh if provided) */
-export function attachDroneLight(
-	scene: BABYLON.Scene,
-	drone: BABYLON.Mesh,
-	attachTo?: BABYLON.Mesh
-): BABYLON.PointLight {
-	const light = new BABYLON.PointLight('droneLight', BABYLON.Vector3.Zero(), scene);
-	light.diffuse = new BABYLON.Color3(0.1, 0.6, 1.0);
-	light.specular = new BABYLON.Color3(0.6, 0.9, 1.0);
-	light.intensity = 3.0;
-	light.range = 12;
-	light.parent = attachTo ?? drone;
-	light.position = new BABYLON.Vector3(0.5, 0.5, 0);
-	return light;
 }
 
 // ============================================================================
@@ -337,62 +344,83 @@ export function attachDroneLight(
 
 /**
  * Create a wireframe helper to visualize mesh bounds.
- * Helper syncs position with the source mesh each frame.
+ * 
+ * @param mesh - The mesh to visualize
+ * @param scene - The Babylon.js scene
+ * @param options - Debug visualization options
+ * @returns The created helper mesh, or null on failure
  */
-export function createDebugHelperForMesh(
+export function createDebugHelper(
 	mesh: BABYLON.AbstractMesh,
 	scene: BABYLON.Scene,
-	opts: DebugHelperOptions = {}
+	options: DebugHelperOptions = {}
 ): BABYLON.Mesh | null {
 	const source = getSourceMesh(mesh);
 	const bounds = getBoundingInfo(source);
 
 	try {
-		const helper = createHelperGeometry(source, scene, bounds, opts);
-		const color = opts.color ?? new BABYLON.Color3(1, 0.2, 0.2);
+		const color = options.color ?? new BABYLON.Color3(1, 0.2, 0.2);
+		const alpha = options.alpha ?? 0.3;
+		let helper: BABYLON.Mesh;
 
-		helper.material = createDebugMaterial(`${source.name}_helper_mat`, scene, color);
-		markAsDebugHelper(helper);
-		syncHelperPosition(helper, source, scene);
+		if (options.useBox && bounds?.boundingBox) {
+			const size = bounds.boundingBox.maximumWorld.subtract(bounds.boundingBox.minimumWorld);
+			helper = BABYLON.MeshBuilder.CreateBox(`${source.name}_debug`, {
+				width: Math.max(0.01, Math.abs(size.x)),
+				height: Math.max(0.01, Math.abs(size.y)),
+				depth: Math.max(0.01, Math.abs(size.z))
+			}, scene);
+		} else {
+			const radius = bounds?.boundingSphere?.radiusWorld ?? 0.5;
+			helper = BABYLON.MeshBuilder.CreateSphere(`${source.name}_debug`, {
+				diameter: radius * 2,
+				segments: 12
+			}, scene);
+		}
+
+		// Create debug material
+		const mat = new BABYLON.StandardMaterial(`${helper.name}_mat`, scene);
+		mat.diffuseColor = color;
+		mat.emissiveColor = color;
+		mat.alpha = alpha;
+		mat.wireframe = options.wireframe ?? true;
+		helper.material = mat;
+
+		// Mark as debug helper
+		const metadata = ensureMetadata(helper);
+		metadata._debugHelper = true;
+		helper.isPickable = false;
+
+		// Sync position with source
+		const updatePosition = () => {
+			try {
+				helper.position.copyFrom(source.getAbsolutePosition());
+			} catch { /* ignore */ }
+		};
+		updatePosition();
+		scene.onBeforeRenderObservable.add(updatePosition);
 
 		return helper;
 	} catch (e) {
-		console.warn('Failed to create debug helper', e);
+		console.warn('Failed to create debug helper:', e);
 		return null;
 	}
 }
 
-function createHelperGeometry(
-	source: BABYLON.Mesh,
-	scene: BABYLON.Scene,
-	bounds: BABYLON.BoundingInfo | null,
-	opts: DebugHelperOptions
-): BABYLON.Mesh {
-	if (opts.useBox && bounds?.boundingBox) {
-		const size = bounds.boundingBox.maximumWorld.subtract(bounds.boundingBox.minimumWorld);
-		return BABYLON.MeshBuilder.CreateBox(`${source.name}_helper`, {
-			width: Math.max(0.01, Math.abs(size.x)),
-			height: Math.max(0.01, Math.abs(size.y)),
-			depth: Math.max(0.01, Math.abs(size.z))
-		}, scene);
-	}
-
-	const radius = bounds?.boundingSphere?.radiusWorld ?? 0.5;
-	return BABYLON.MeshBuilder.CreateSphere(`${source.name}_helper`, {
-		diameter: radius * 2,
-		segments: 12
-	}, scene);
-}
-
 /**
  * Visualize physics aggregate bounds with a synced wireframe box.
- * Uses the owner mesh's world-space bounding box.
+ * 
+ * @param scene - The Babylon.js scene
+ * @param aggregate - The physics aggregate to visualize
+ * @param owner - The mesh that owns the aggregate
+ * @param options - Debug visualization options
+ * @returns The created helper mesh, or null on failure
  */
 export function debugPhysicsAggregate(
 	scene: BABYLON.Scene,
 	aggregate: BABYLON.PhysicsAggregate | null | undefined,
 	owner: BABYLON.AbstractMesh,
-	opts: { color?: BABYLON.Color3; wireframe?: boolean } = {}
+	options: DebugHelperOptions = {}
 ): BABYLON.Mesh | null {
 	if (!aggregate || !owner) {
 		console.warn('debugPhysicsAggregate: missing aggregate or owner');
@@ -403,57 +431,44 @@ export function debugPhysicsAggregate(
 	const bounds = getBoundingInfo(source);
 
 	if (!bounds?.boundingBox) {
-		console.warn('debugPhysicsAggregate: no bounding box available', source.name);
+		console.warn('debugPhysicsAggregate: no bounding box for', source.name);
 		return null;
 	}
 
 	try {
-		const helper = createBoundingBoxHelper(source, scene, bounds);
-		const color = opts.color ?? new BABYLON.Color3(1, 0.2, 0.2);
+		// Get bounding box in local space
+		const min = bounds.boundingBox.minimum;
+		const max = bounds.boundingBox.maximum;
+		const size = max.subtract(min);
+		const localCenter = min.add(max).scale(0.5);
 
-		helper.material = createDebugMaterial(`${helper.name}_mat`, scene, color, 0.28);
-		if (opts.wireframe !== undefined) {
-			(helper.material as BABYLON.StandardMaterial).wireframe = opts.wireframe;
-		}
+		const helper = BABYLON.MeshBuilder.CreateBox(`${source.name}_physics_debug`, {
+			width: Math.max(0.01, Math.abs(size.x)),
+			height: Math.max(0.01, Math.abs(size.y)),
+			depth: Math.max(0.01, Math.abs(size.z))
+		}, scene);
 
-		markAsDebugHelper(helper);
-		syncBoundingBoxHelper(helper, source, scene);
+		// Create material
+		const color = options.color ?? new BABYLON.Color3(1, 0.2, 0.2);
+		const mat = new BABYLON.StandardMaterial(`${helper.name}_mat`, scene);
+		mat.diffuseColor = color;
+		mat.emissiveColor = color;
+		mat.alpha = options.alpha ?? 0.28;
+		mat.wireframe = options.wireframe ?? true;
+		helper.material = mat;
+
+		// Mark as debug helper
+		const metadata = ensureMetadata(helper);
+		metadata._debugHelper = true;
+		helper.isPickable = false;
+
+		// Parent to source so it follows automatically
+		helper.parent = source;
+		helper.position.copyFrom(localCenter);
 
 		return helper;
 	} catch (e) {
-		console.warn('Failed to create aggregate debug helper', e);
+		console.warn('Failed to create physics debug helper:', e);
 		return null;
 	}
-}
-
-function createBoundingBoxHelper(
-	source: BABYLON.Mesh,
-	scene: BABYLON.Scene,
-	bounds: BABYLON.BoundingInfo
-): BABYLON.Mesh {
-	// Get bounding box in local space
-	const min = bounds.boundingBox.minimum;
-	const max = bounds.boundingBox.maximum;
-	const size = max.subtract(min);
-	const localCenter = min.add(max).scale(0.5);
-
-	const helper = BABYLON.MeshBuilder.CreateBox(`${source.name}_physics_box`, {
-		width: Math.max(0.01, Math.abs(size.x)),
-		height: Math.max(0.01, Math.abs(size.y)),
-		depth: Math.max(0.01, Math.abs(size.z))
-	}, scene);
-
-	// Parent to source so it moves with it
-	helper.parent = source;
-	helper.position.copyFrom(localCenter);
-	return helper;
-}
-
-function syncBoundingBoxHelper(
-	helper: BABYLON.Mesh,
-	source: BABYLON.AbstractMesh,
-	scene: BABYLON.Scene
-): void {
-	// Helper is parented to source, so it automatically follows
-	// No need for manual sync in render loop
 }

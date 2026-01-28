@@ -1,44 +1,102 @@
 import * as BABYLON from '@babylonjs/core';
-import { createDrone } from './DroneProp';
 import {
+	createDrone,
 	createDroneMaterial,
 	installDroneGlow,
 	attachDroneLight,
 	debugPhysicsAggregate,
-	setMeshSubmeshGlow
+	setMeshSubmeshGlow,
+	type DroneResult
 } from './DroneProp';
 
+// ============================================================================
+// TYPES & INTERFACES
+// ============================================================================
+
+/** Complete result from drone setup */
 export interface DroneSetupResult {
+	/** The main drone mesh (used for physics) */
 	drone: BABYLON.Mesh;
+	/** Visual mesh if different from physics mesh */
 	droneVisual?: BABYLON.Mesh;
+	/** Physics aggregate for collision/movement */
 	droneAggregate: BABYLON.PhysicsAggregate;
+	/** Material applied to the drone */
 	droneMaterial: BABYLON.StandardMaterial;
+	/** Point light attached to the drone */
 	droneLight: BABYLON.PointLight;
+	/** Glow layer for the drone */
 	glowLayer: BABYLON.GlowLayer;
+	/** Toggle glow on/off */
+	toggleGlow: (enabled: boolean) => void;
+	/** Set glow intensity */
+	setGlowIntensity: (intensity: number) => void;
 }
 
+/** Options for drone setup */
 export interface DroneSetupOptions {
+	/** Asset ID to load from assets.json (e.g., 'drone', 'spacecraft') */
+	assetId?: string;
+	/** Direct URL to GLB file (overrides assetId) */
 	glbUrl?: string;
+	/** Initial position in world space */
 	initialPosition?: BABYLON.Vector3;
+	/** Initial rotation in radians */
 	initialRotation?: BABYLON.Vector3;
+	/** Physics mass (default: 2) */
 	mass?: number;
+	/** Physics restitution/bounciness (default: 1) */
 	restitution?: number;
+	/** Physics friction (default: 0.3) */
 	friction?: number;
+	/** Glow layer intensity (default: 0.4) */
 	glowIntensity?: number;
+	/** Submesh index to apply glow to (default: 1) */
 	glowSubmeshIndex?: number;
+	/** Enable debug physics visualization (default: false) */
 	enableDebug?: boolean;
 }
 
+// ============================================================================
+// MAIN SETUP FUNCTION
+// ============================================================================
+
 /**
  * Create and fully configure a drone with physics, materials, glow, and lighting.
- * Consolidates all drone setup into a single function call.
+ * This is the main entry point for drone creation - consolidates all setup into a single call.
+ * 
+ * @param scene - The Babylon.js scene
+ * @param options - Configuration options
+ * @returns Promise resolving to complete drone setup result
+ * 
+ * @example
+ * ```typescript
+ * // Using asset ID (recommended)
+ * const result = await setupSceneDrone(scene, {
+ *   assetId: 'drone',
+ *   initialPosition: new BABYLON.Vector3(0, 1, 0),
+ *   glowIntensity: 0.5
+ * });
+ * 
+ * // Using direct GLB URL
+ * const result = await setupSceneDrone(scene, {
+ *   glbUrl: '/models/custom-ship.glb',
+ *   mass: 5
+ * });
+ * 
+ * // Toggle glow at runtime
+ * result.toggleGlow(false); // off
+ * result.toggleGlow(true);  // on
+ * result.setGlowIntensity(0.8); // adjust intensity
+ * ```
  */
 export async function setupSceneDrone(
 	scene: BABYLON.Scene,
 	options: DroneSetupOptions = {}
 ): Promise<DroneSetupResult> {
 	const {
-		glbUrl = '/glb/usb.glb',
+		assetId,
+		glbUrl,
 		initialPosition = BABYLON.Vector3.Zero(),
 		initialRotation = new BABYLON.Vector3(0, 0, -Math.PI / 2),
 		mass = 2,
@@ -46,28 +104,25 @@ export async function setupSceneDrone(
 		friction = 0.3,
 		glowIntensity = 0.4,
 		glowSubmeshIndex = 1,
-		enableDebug = true
+		enableDebug = false
 	} = options;
 
-	// resolve default GLB URL from assets.json if not provided
-	let resolvedGlbUrl = glbUrl;
-	if (!resolvedGlbUrl) {
-		try {
-			const { getModelUrl } = await import('../../assetsConfig');
-			resolvedGlbUrl = await getModelUrl('drone');
-		} catch (e) {
-			resolvedGlbUrl = '/glb/usb.glb';
-		}
-	}
+	// -------------------------------------------------------------------------
+	// 1. RESOLVE GLB URL
+	// -------------------------------------------------------------------------
+	const resolvedGlbUrl = await resolveGlbUrl(assetId, glbUrl);
 
-	// Load drone mesh
+	// -------------------------------------------------------------------------
+	// 2. LOAD DRONE MESH
+	// -------------------------------------------------------------------------
 	const { drone, droneVisual } = await createDrone(scene, resolvedGlbUrl);
 	
-	// Set position and rotation
 	drone.position.copyFrom(initialPosition);
 	drone.rotation.copyFrom(initialRotation);
 
-	// Create physics aggregate
+	// -------------------------------------------------------------------------
+	// 3. CREATE PHYSICS
+	// -------------------------------------------------------------------------
 	const droneAggregate = new BABYLON.PhysicsAggregate(
 		drone,
 		BABYLON.PhysicsShapeType.MESH,
@@ -75,7 +130,9 @@ export async function setupSceneDrone(
 		scene
 	);
 
-	// Debug visualization
+	// -------------------------------------------------------------------------
+	// 4. DEBUG VISUALIZATION (optional)
+	// -------------------------------------------------------------------------
 	if (enableDebug) {
 		try {
 			const debugBox = debugPhysicsAggregate(scene, droneAggregate, drone, {
@@ -83,52 +140,123 @@ export async function setupSceneDrone(
 				wireframe: true
 			});
 			if (debugBox) {
-				console.log('Created physics aggregate debug box:', debugBox.name);
+				console.log('✓ Physics debug visualization created');
 			}
 		} catch (e) {
-			console.warn('Failed to create aggregate debug box', e);
+			console.warn('Failed to create physics debug:', e);
 		}
 	}
 
-	// Apply material
+	// -------------------------------------------------------------------------
+	// 5. APPLY MATERIAL
+	// -------------------------------------------------------------------------
 	const droneMaterial = createDroneMaterial(scene);
-	if (droneVisual) {
-		droneVisual.material = droneMaterial;
-	} else {
-		drone.material = droneMaterial;
-	}
+	const targetMesh = droneVisual ?? drone;
+	targetMesh.material = droneMaterial;
 
-	// Install glow layer
+	// -------------------------------------------------------------------------
+	// 6. INSTALL GLOW
+	// -------------------------------------------------------------------------
 	const glowLayer = installDroneGlow(scene, drone, droneVisual, glowIntensity);
 
-	// Set submesh glow
+	// Set submesh glow if applicable
 	try {
-		const srcMesh =
-			droneVisual && (droneVisual as any).sourceMesh
-				? (droneVisual as any).sourceMesh
-				: (droneVisual ?? drone);
+		const srcMesh = (droneVisual as any)?.sourceMesh ?? droneVisual ?? drone;
 		if (srcMesh?.subMeshes?.length > 0) {
 			const indexToGlow = Math.min(glowSubmeshIndex, srcMesh.subMeshes.length - 1);
 			setMeshSubmeshGlow(srcMesh, indexToGlow);
-			console.log('Set glow on submesh', indexToGlow, 'of', srcMesh.name);
 		}
 	} catch (e) {
-		console.warn('Failed to set submesh glow', e);
+		console.warn('Failed to set submesh glow:', e);
 	}
 
-	// Attach light
-	const droneLight = attachDroneLight(
-		scene,
-		drone,
-		(droneVisual as BABYLON.Mesh) ?? drone
-	);
+	// -------------------------------------------------------------------------
+	// 7. ATTACH LIGHT
+	// -------------------------------------------------------------------------
+	const droneLight = attachDroneLight(scene, drone, droneVisual as BABYLON.Mesh);
 
+	// -------------------------------------------------------------------------
+	// 8. CREATE CONTROL FUNCTIONS
+	// -------------------------------------------------------------------------
+	const toggleGlow = (enabled: boolean) => {
+		glowLayer.intensity = enabled ? glowIntensity : 0;
+		droneLight.intensity = enabled ? 3.0 : 0;
+	};
+
+	const setGlowIntensity = (intensity: number) => {
+		glowLayer.intensity = intensity;
+	};
+
+	// -------------------------------------------------------------------------
+	// 9. RETURN RESULT
+	// -------------------------------------------------------------------------
 	return {
 		drone,
 		droneVisual,
 		droneAggregate,
 		droneMaterial,
 		droneLight,
-		glowLayer
+		glowLayer,
+		toggleGlow,
+		setGlowIntensity
 	};
 }
+
+// ============================================================================
+// HELPERS
+// ============================================================================
+
+/**
+ * Resolve GLB URL from assetId or direct URL.
+ * Priority: glbUrl > assetId > default 'drone' asset
+ */
+async function resolveGlbUrl(assetId?: string, glbUrl?: string): Promise<string> {
+	// Direct URL takes priority
+	if (glbUrl) {
+		return glbUrl;
+	}
+
+	// Try to resolve from asset ID
+	if (assetId) {
+		try {
+			const { getModelUrl } = await import('../../assetsConfig');
+			const url = await getModelUrl(assetId);
+			if (url) return url;
+		} catch (e) {
+			console.warn(`Failed to resolve assetId '${assetId}':`, e);
+		}
+	}
+
+	// Fallback to default drone asset
+	try {
+		const { getModelUrl } = await import('../../assetsConfig');
+		const url = await getModelUrl('drone');
+		if (url) return url;
+	} catch {
+		// Ignore
+	}
+
+	// Ultimate fallback
+	return '/glb/usb.glb';
+}
+
+// ============================================================================
+// RE-EXPORTS
+// ============================================================================
+
+// Re-export commonly used functions from DroneProp for convenience
+export {
+	createDrone,
+	createDroneMaterial,
+	createDroneInstance,
+	installDroneGlow,
+	attachDroneLight,
+	setMeshGlow,
+	setMeshSubmeshGlow,
+	createDebugHelper,
+	debugPhysicsAggregate,
+	type DroneResult,
+	type DroneInstanceOptions,
+	type DebugHelperOptions,
+	type GlowOptions
+} from './DroneProp';
