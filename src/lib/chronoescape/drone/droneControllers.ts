@@ -28,9 +28,9 @@ export function updateDronePhysics(
 	config: DronePhysicsConfig = {}
 ): void {
 	const {
-		maxFollowSpeed = 12,
-		followStrength = 6.0,
-		velocityDamping = 0.995,
+		maxFollowSpeed = 40,
+		followStrength = 100.0, // Very strong pull back to path
+		velocityDamping = 0.98,
 		lateralForce = 8
 	} = config;
 
@@ -44,19 +44,23 @@ export function updateDronePhysics(
 
 	let desiredVel = BABYLON.Vector3.Zero();
 	if (distance > 0.02) {
-		const speed = Math.min(maxFollowSpeed, distance * followStrength);
+		// Scale strength based on distance - farther = stronger pull
+		const distanceMultiplier = Math.min(3.0, 1.0 + (distance / 5.0));
+		const effectiveStrength = followStrength * distanceMultiplier;
+		const speed = Math.min(maxFollowSpeed, distance * effectiveStrength);
 		desiredVel = toTarget.normalize().scale(speed);
 	}
 
+	// Very strong snap-back: use desired velocity directly
 	aggregate.body.setLinearVelocity(desiredVel.scale(velocityDamping));
 
-	// Apply lateral controls
+	// Apply lateral controls with very reduced force to minimize drift
 	if (keysPressed.a) {
-		const leftForce = new BABYLON.Vector3(0, 0, lateralForce);
+		const leftForce = new BABYLON.Vector3(0, 0, lateralForce * 0.3); // Further reduced
 		aggregate.body.applyForce(leftForce, drone.position);
 	}
 	if (keysPressed.d) {
-		const rightForce = new BABYLON.Vector3(0, 0, -lateralForce);
+		const rightForce = new BABYLON.Vector3(0, 0, -lateralForce * 0.3); // Further reduced
 		aggregate.body.applyForce(rightForce, drone.position);
 	}
 }
