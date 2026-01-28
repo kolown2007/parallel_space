@@ -80,7 +80,8 @@ export type ObstacleOptions =
 	| ModelOptions 
 	| PortalOptions 
 	| BillboardOptions 
-	| FloatingCubeOptions;
+	| FloatingCubeOptions
+	| ParticleOptions;
 
 /**
  * Unified obstacle management system for the game.

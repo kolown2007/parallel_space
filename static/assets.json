@@ -48,6 +48,11 @@
       "filename": "torus.png",
       "type": "texture"
     },
+       "collage1": {
+      "rootUrl": "https://kolown.net/storage/library/chronoescape/torus/",
+      "filename": "collage1.png",
+      "type": "texture"
+    },
     "tribal": {
       "rootUrl": "https://kolown.net/storage/library/chronoescape/",
       "filename": "tribal.png",

@@ -20,7 +20,7 @@ import { ObstacleManager } from '../chronoescape/obstacle/ObstacleManager';
 import preloadContainers, { getDefaultAssetList } from '../chronoescape/assetContainers';
 import { installKeyboardControls } from '../input/keyboardControls';
 import { getTextureUrl, getModelUrl, randomFrom } from '../assetsConfig';
-import { droneControl, updateProgress, adjustDroneSpeed, hitCollision, enterPortal, burstAccelerate, cleanupDroneControl, type DroneControlState } from '../stores/droneControl.svelte.js';
+import { droneControl, updateProgress, adjustDroneSpeed, hitCollision, enterPortal, burstAccelerate, cleanupDroneControl, SPEED_INCREMENT, MAX_SPEED, type DroneControlState } from '../stores/droneControl.svelte.js';
 import { sceneRefStore } from '../stores/sceneRefStore';
 import { revolutionStore, notifyRevolutionComplete } from '../stores/droneRevolution';
 import { get } from 'svelte/store';
@@ -134,8 +134,8 @@ export class WormHoleScene2 {
 		// ====================================================================
 
 				const torusResult = await createTorus(scene, {
-			diameter: 80,
-			thickness: 30,
+			diameter: 300,
+			thickness: 50,
 			tessellation: 100,
 			positionY: 1,
 			lineRadiusFactor: 0.0,
@@ -143,7 +143,7 @@ export class WormHoleScene2 {
 			spiralTurns: 3,
 			segments: 128,
 			pointsPerCircle: 360,
-			materialTextureId: randomFrom('torus')
+			materialTextureId: randomFrom('torus','collage1')
 		});
 		const torus = torusResult.torus;
 		const torusAggregate = torusResult.torusAggregate;
@@ -251,7 +251,7 @@ export class WormHoleScene2 {
 
 						// Trigger collision sound based on drone speed (0-1 normalized)
 						const state = get(droneControl);
-						const velocity = Math.min(state.speed / 0.0002, 1.0); // MAX_PROGRESS_SPEED = 0.0002
+						const velocity = Math.min(state.speed / MAX_SPEED, 1.0); // normalize to max speed
 						if (nameLower.includes('obstacle_cube')) {
 							// play single random key for simple box collisions
 							playCollisionNoteSingle(velocity);
@@ -327,14 +327,16 @@ export class WormHoleScene2 {
 			},
 			onSwitchCamera: switchCamera,
 			onSpeedUp: () => {
-				adjustDroneSpeed(0.00002);
+				adjustDroneSpeed(SPEED_INCREMENT);
 				const newSpeed = get(droneControl).speed;
-				console.log('Speed increased:', (newSpeed * 10000).toFixed(3));
+				const displaySpeed = Math.round(newSpeed * 21600); // points/sec (360 points × 60fps)
+				console.log(`Speed: ${displaySpeed} points/sec`);
 			},
 			onSpeedDown: () => {
-				adjustDroneSpeed(-0.00002);
+				adjustDroneSpeed(-SPEED_INCREMENT);
 				const newSpeed = get(droneControl).speed;
-				console.log('Speed decreased:', (newSpeed * 10000).toFixed(3));
+				const displaySpeed = Math.round(newSpeed * 21600); // points/sec (360 points × 60fps)
+				console.log(`Speed: ${displaySpeed} points/sec`);
 			},
 			onBurst: () => {
 				burstAccelerate(5, 500);
@@ -484,10 +486,19 @@ export class WormHoleScene2 {
 		// 	floating.update(dt);
 		// }
 
-
-
-		// Update path progress using store value
-		let newProgress = control.progress + control.speed;
+		// Check drone distance from path - pause forward progress if too far
+		const targetPathPos = getPositionOnPath(WormHoleScene2.pathPoints, control.progress);
+		const distanceFromPath = BABYLON.Vector3.Distance(drone.position, targetPathPos);
+		const maxSafeDistance = 3.0; // If farther than this, focus on returning to path
+		
+		// Update path progress using store value (but reduce/pause if off-track)
+		let progressMultiplier = 1.0;
+		if (distanceFromPath > maxSafeDistance) {
+			// Pause forward movement when far from path to focus on snap-back
+			progressMultiplier = 0.1; // 10% speed when off-track
+		}
+		
+		let newProgress = control.progress + (control.speed * progressMultiplier);
 		if (newProgress > 1) {
 			newProgress = 0;
 		}
@@ -504,6 +515,25 @@ export class WormHoleScene2 {
 				playRevolutionComplete(loops);
 				// Call API to notify revolution complete
 				notifyRevolutionComplete(loops);
+
+				// Spawn particle bursts on revolution complete near obstacles / drone
+				try {
+					// Spawn 5 points ahead of drone so particles are visible
+					const droneIdx = getDronePathIndex();
+					const aheadIdx = (droneIdx + 5) % pathPoints.length;
+					obstacles.place('particles', {
+						index: aheadIdx + 20,
+						count: 700,
+						size: 1.0,
+						autoDispose: 30000,
+						offsetY: 1.2
+					});
+
+					// Also spawn a few additional bursts at random path positions for variety
+				
+				} catch (e) {
+					console.warn('Failed to spawn revolution particles:', e);
+				}
 			}
 		} catch (e) { /* ignore if store missing */ }
 
