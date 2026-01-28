@@ -197,7 +197,7 @@ export class ObstacleManager {
 			mat.backFaceCulling = false;
 			const applyFallbackColor = () => {
 				mat.diffuseColor = color;
-				mat.emissiveColor = color.scale(0.3);
+				mat.emissiveColor = BABYLON.Color3.Black();
 			};
 
 			// Apply faceUV texture helper
@@ -206,7 +206,6 @@ export class ObstacleManager {
 				texture.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;
 				texture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
 				mat.diffuseTexture = texture;
-				mat.emissiveTexture = texture;
 				mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
 				mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
 			};
@@ -368,7 +367,6 @@ export class ObstacleManager {
 			texture.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;
 			texture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
 			mat.diffuseTexture = texture;
-			mat.emissiveTexture = texture;
 			mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
 			mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
 		};
@@ -579,7 +577,7 @@ export class ObstacleManager {
 			const mat = new BABYLON.StandardMaterial(`cubeMat_${Date.now()}`, this.scene);
 			const applyFallbackColor3 = () => {
 				mat.diffuseColor = color;
-				mat.emissiveColor = color.scale(0.3);
+				mat.emissiveColor = BABYLON.Color3.Black();
 			};
 
 			if ((options as any)?.textureUrl) {
