@@ -6,6 +6,7 @@
 import Ably from 'ably';
 import { burstAccelerate, adjustDroneSpeed } from '$lib/stores/droneControl.svelte';
 import { ObstacleManager } from '$lib/chronoescape/obstacle/ObstacleManager';
+import { WormHoleScene2 } from '$lib/scenes/wormhole2';
 import type * as BABYLON from '@babylonjs/core';
 import { randomFrom } from '$lib/assetsConfig';
 
@@ -38,7 +39,7 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 	let connected = false;
 
 	// Safe command execution with scene validation
-	function executeCommand(action: string, data?: any) {
+	async function executeCommand(action: string, data?: any) {
 		try {
 			// Validate scene not disposed
 			if (scene.isDisposed) {
@@ -54,18 +55,44 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 
 				case 'obstruct':
 					if (droneMesh && !scene.isDisposed) {
-						ObstacleManager.cubeInFrontOfDrone(scene, droneMesh, {
-							distance: 10,
-							size: 6,
-							thrustMs: 2000,
-							thrustSpeed: 30,
-							autoDisposeMs: 60000,
-							faceUVTextureId: randomFrom('metal', 'cubeface', 'cubecolor', 'cubecolor2'),
-						    faceUVLayout: 'grid'
-						
-					
-						});
-						console.log('📦 Placed obstacle via control');
+						try {
+							const pathPoints = WormHoleScene2.pathPoints;
+							
+							if (!pathPoints || pathPoints.length === 0) {
+								console.warn('⚠️ No pathPoints available - obstacle placement requires path');
+								break;
+							}
+
+							const modelCache = new Map<string, any>();
+							const cleanupRegistry: Array<() => void> = [];
+							const obstacles = new ObstacleManager(scene, pathPoints, modelCache, cleanupRegistry);
+
+							// Find nearest path index to drone
+							let minDistSq = Number.POSITIVE_INFINITY;
+							let nearest = 0;
+							const dronePos = (droneMesh as any).position ?? droneMesh.getAbsolutePosition?.();
+							for (let i = 0; i < pathPoints.length; i++) {
+								const d = pathPoints[i].subtract(dronePos).lengthSquared();
+								if (d < minDistSq) { minDistSq = d; nearest = i; }
+							}
+							const pointsAhead = 10;
+							const targetIdx = ((nearest + pointsAhead) % pathPoints.length + pathPoints.length) % pathPoints.length;
+
+							await obstacles.place('cube', {
+								index: targetIdx,
+								size: 3,
+								physics: true,
+								thrustMs: 2000,
+								thrustSpeed: -30,
+								autoDisposeMs: 60000,
+								faceUVTextureId: randomFrom('metal', 'cubeface', 'cubecolor', 'cubecolor2'),
+								faceUVLayout: 'grid'
+							});
+
+							console.log('📦 Placed obstacle via control');
+						} catch (e) {
+							console.warn('Failed to place obstacle via control:', e);
+						}
 					}
 					break;
 

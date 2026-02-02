@@ -4,9 +4,10 @@ import { Portal } from './Portal';
 import { BillboardManager } from './Billboard';
 import { createFloatingCubes, type FloatingCubesResult } from './Cubes';
 import { createParticles, type ParticleOptions } from './Particles';
+import { createOrb, type OrbResult } from './Orb';
 import { getTextureUrl } from '../../assetsConfig';
 
-export type ObstacleType = 'cube' | 'model' | 'portal' | 'billboard' | 'floating-cube' | 'particles';
+export type ObstacleType = 'cube' | 'model' | 'portal' | 'billboard' | 'floating-cube' | 'particles' | 'orb';
 
 //updates
 
@@ -75,13 +76,22 @@ export interface FloatingCubeOptions extends BaseObstacleOptions {
 	spread?: number; // For inFrontOfDrone methods
 }
 
+export interface OrbOptions extends BaseObstacleOptions {
+	diameter?: number;
+	glowIntensity?: number;
+	lightIntensity?: number;
+	lightRange?: number;
+	color?: BABYLON.Color3;
+}
+
 export type ObstacleOptions = 
 	| CubeOptions 
 	| ModelOptions 
 	| PortalOptions 
 	| BillboardOptions 
 	| FloatingCubeOptions
-	| ParticleOptions;
+	| ParticleOptions
+	| OrbOptions;
 
 /**
  * Unified obstacle management system for the game.
@@ -542,6 +552,8 @@ export class ObstacleManager {
 				return this.placeParticles(options as any);
 			case 'floating-cube':
 				return this.placeFloatingCubes(options as FloatingCubeOptions);
+			case 'orb':
+				return this.placeOrb(options as OrbOptions);
 			default:
 				throw new Error(`Unknown obstacle type: ${type}`);
 		}
@@ -558,7 +570,10 @@ export class ObstacleManager {
 			offsetY = 0,
 			count = 1,
 			thrustMs,
-			thrustSpeed
+			thrustSpeed,
+			faceUVTextureUrl,
+			faceUVTextureId,
+			faceUVLayout = 'grid'
 		} = options;
 
 		const indices = this.resolveIndices(options, count);
@@ -567,27 +582,88 @@ export class ObstacleManager {
 			const pos = this.pathPoints[actualIndex].clone();
 			pos.y += offsetY;
 
+			// Generate faceUV if using faceUV texture
+			let faceUV: BABYLON.Vector4[] | undefined;
+			if (faceUVTextureUrl || faceUVTextureId) {
+				faceUV = new Array(6);
+				if (faceUVLayout === 'vertical') {
+					for (let i = 0; i < 6; i++) {
+						faceUV[i] = new BABYLON.Vector4(0, i / 6, 1, (i + 1) / 6);
+					}
+				} else if (faceUVLayout === 'horizontal') {
+					for (let i = 0; i < 6; i++) {
+						faceUV[i] = new BABYLON.Vector4(i / 6, 0, (i + 1) / 6, 1);
+					}
+				} else {
+					// Grid layout (3x2)
+					faceUV[0] = new BABYLON.Vector4(0, 0.5, 1/3, 1);
+					faceUV[1] = new BABYLON.Vector4(1/3, 0.5, 2/3, 1);
+					faceUV[2] = new BABYLON.Vector4(2/3, 0.5, 1, 1);
+					faceUV[3] = new BABYLON.Vector4(0, 0, 1/3, 0.5);
+					faceUV[4] = new BABYLON.Vector4(1/3, 0, 2/3, 0.5);
+					faceUV[5] = new BABYLON.Vector4(2/3, 0, 1, 0.5);
+				}
+			}
+
+			const boxOptions: any = { size };
+			if (faceUV) boxOptions.faceUV = faceUV;
+
 			const cube = BABYLON.MeshBuilder.CreateBox(
 				`obstacle_cube_${actualIndex}_${Date.now()}`,
-				{ size },
+				boxOptions,
 				this.scene
 			);
 			cube.position.copyFrom(pos);
 
 			const mat = new BABYLON.StandardMaterial(`cubeMat_${Date.now()}`, this.scene);
+			mat.backFaceCulling = false;
 			const applyFallbackColor3 = () => {
 				mat.diffuseColor = color;
 				mat.emissiveColor = BABYLON.Color3.Black();
 			};
 
-			if ((options as any)?.textureUrl) {
+			// Helper to apply a face-UV texture
+			const applyFaceUVTexture = (url: string) => {
+				const texture = new BABYLON.Texture(url, this.scene, false, true, BABYLON.Texture.TRILINEAR_SAMPLINGMODE);
+				texture.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;
+				texture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+				mat.diffuseTexture = texture;
+				mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+				mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+			};
+
+			// Priority 1: faceUVTextureUrl
+			if (faceUVTextureUrl) {
+				applyFaceUVTexture(faceUVTextureUrl);
+			}
+			// Priority 2: faceUVTextureId (async resolve)
+			else if (faceUVTextureId) {
+				(async () => {
+					try {
+						const url = await getTextureUrl(faceUVTextureId);
+						if (url) {
+							applyFaceUVTexture(url);
+						} else {
+							applyFallbackColor3();
+						}
+					} catch (e) {
+						applyFallbackColor3();
+					}
+				})();
+				// Apply placeholder color immediately while texture loads
+				applyFallbackColor3();
+			}
+			// Priority 3: textureUrl
+			else if ((options as any)?.textureUrl) {
 				try {
 					mat.diffuseTexture = new BABYLON.Texture((options as any).textureUrl, this.scene);
 					mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
 				} catch (e) {
 					applyFallbackColor3();
 				}
-			} else if ((options as any)?.textureId) {
+			}
+			// Priority 4: textureId (async resolve)
+			else if ((options as any)?.textureId) {
 				(async () => {
 					try {
 						const url = await getTextureUrl((options as any).textureId);
@@ -598,6 +674,7 @@ export class ObstacleManager {
 				})();
 				applyFallbackColor3();
 			} else {
+				// Priority 5: Fallback color
 				applyFallbackColor3();
 			}
 			cube.material = mat;
@@ -802,8 +879,7 @@ export class ObstacleManager {
 			count,
 			size,
 			maxDistance,
-			offsetY,
-			autoDispose
+			offsetY
 		});
 
 		this.cleanupRegistry.push(() => {
@@ -811,6 +887,61 @@ export class ObstacleManager {
 		});
 
 		return result;
+	}
+
+	/**
+	 * Place glowing orb(s) along the path
+	 */
+	private placeOrb(options: OrbOptions): OrbResult | OrbResult[] {
+		const {
+			count = 1,
+			diameter = 1.5,
+			glowIntensity = 2,
+			lightIntensity = 5,
+			lightRange = 15,
+			color = new BABYLON.Color3(1, 0.9, 0.6),
+			physics = false,
+			offsetY = 0
+		} = options;
+
+		console.log(`🔮 placeOrb called, pathPoints length: ${this.pathPoints?.length}, options:`, options);
+		console.log(`🔮 DEBUG: Scene exists:`, !!this.scene, 'PathPoints array exists:', !!this.pathPoints);
+		
+		if (!this.pathPoints || this.pathPoints.length === 0) {
+			console.error('❌ No pathPoints available for orb placement!');
+			console.error('❌ DEBUG: pathPoints:', this.pathPoints);
+			return [] as OrbResult[];
+		}
+
+		const indices = this.resolveIndices(options, count);
+		console.log(`🔮 Resolved indices:`, indices);
+		
+		const createAt = (idx: number) => {
+			const actualIndex = this.normalizeIndex(idx);
+			const pos = this.pathPoints[actualIndex].clone();
+			pos.y += offsetY;
+			
+			console.log(`🔮 Creating orb at index ${actualIndex}, pos: ${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)}`);
+
+			const orbResult = createOrb(this.scene, pos, {
+				diameter,
+				glowIntensity,
+				lightIntensity,
+				lightRange,
+				color,
+				physics: typeof physics === 'boolean' ? physics : false
+			});
+
+			this.cleanupRegistry.push(() => orbResult.dispose());
+			this.instances.push(orbResult.mesh);
+			return orbResult;
+		};
+
+		if (Array.isArray(indices)) {
+			return indices.map((i) => createAt(i));
+		} else {
+			return createAt(indices as number);
+		}
 	}
 
 	// ===================================================================
@@ -875,25 +1006,5 @@ export class ObstacleManager {
 // BACKWARDS COMPATIBILITY - Export standalone functions
 // ===================================================================
 
-/**
- * @deprecated Use ObstacleManager.cubeInFrontOfDrone() instead
- */
-export function placeCubeInFrontOfDrone(
-	scene: BABYLON.Scene,
-	droneMesh: BABYLON.AbstractMesh,
-	options?: CubeOptions
-): BABYLON.Mesh | undefined {
-	return ObstacleManager.cubeInFrontOfDrone(scene, droneMesh, options);
-}
-
-/**
- * @deprecated Use ObstacleManager.floatingCubesInFrontOfDrone() instead
- */
-export function placeFloatingCubesInFrontOfDrone(
-	scene: BABYLON.Scene,
-	droneMesh: BABYLON.AbstractMesh,
-	cleanupRegistry: Array<() => void>,
-	options?: FloatingCubeOptions
-): FloatingCubesResult {
-	return ObstacleManager.floatingCubesInFrontOfDrone(scene, droneMesh, cleanupRegistry, options);
-}
+// Backwards-compat helper functions removed. Use the instance API `obstacles.place(...)`
+// or the static helpers `ObstacleManager.cubeInFrontOfDrone` / `ObstacleManager.floatingCubesInFrontOfDrone`.
