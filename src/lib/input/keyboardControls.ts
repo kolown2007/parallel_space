@@ -35,6 +35,8 @@ export interface KeyboardCallbacks {
     onPlaceCube?: () => void;        // Space - place cube ahead
     onPlaceModel?: () => void;       // F - place model
     onSpawn?: () => void;            // P - spawn obstacle
+    // Portal obstacle
+    onPlacePortal?: () => void;      // O - place portal obstacle
 }
 
 /**
@@ -72,6 +74,9 @@ export function installKeyboardControls(callbacks: KeyboardCallbacks) {
                 break;
             case 'b':
                 callbacks.onBurst?.();
+                break;
+            case 'o':
+                callbacks.onPlacePortal?.();
                 break;
             case ' ':
                 event.preventDefault(); // prevent page scroll

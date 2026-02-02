@@ -32,7 +32,7 @@ export function setupLighting(
 	scene.fogEnabled = true;
 	scene.fogColor = options.fogColor ?? new BABYLON.Color3(0.9, 0.9, 0.85);
 	// Slightly increased default density for a light atmospheric haze
-	scene.fogDensity = options.fogDensity ?? 0.0009;
+	scene.fogDensity = options.fogDensity ?? 0.0005;
 
 	return light;
 }

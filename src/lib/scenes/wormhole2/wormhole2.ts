@@ -3,35 +3,35 @@ import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
 
 // Drone
-import { setupSceneDrone } from '../chronoescape/drone/setupDrone';
-import { getPositionOnPath } from '../chronoescape/world/PathUtils';
+import { setupSceneDrone } from '../../chronoescape/drone/setupDrone';
+import { getPositionOnPath } from '../../chronoescape/world/PathUtils';
 
 // World & Utilities
-import { createTorus } from '../chronoescape/world/Torus';
-import { setupPhysics, setupLighting, setupCameras } from '../chronoescape/world/sceneUtils';
-import { visualizePathDebug } from '../chronoescape/world/debugPath';
+import { createTorus } from '../../chronoescape/world/Torus';
+import { setupPhysics, setupLighting, setupCameras } from '../../chronoescape/world/sceneUtils';
+import { visualizePathDebug } from '../../chronoescape/world/debugPath';
 
 // Obstacles
-import { ObstacleManager } from '../chronoescape/obstacle/ObstacleManager';
+import { ObstacleManager } from '../../chronoescape/obstacle/ObstacleManager';
 
 // System
-import preloadContainers, { getDefaultAssetList } from '../chronoescape/assetContainers';
-import { installKeyboardControls } from '../input/keyboardControls';
-import { randomFrom } from '../assetsConfig';
-import { updateProgress, cleanupDroneControl } from '../stores/droneControl.svelte.js';
-import { sceneRefStore } from '../stores/sceneRefStore';
-import { registerScene, unregisterScene } from '../core/SceneRegistry';
-import { initRealtimeControl } from '../services/RealtimeControl';
+import preloadContainers, { getDefaultAssetList } from '../../chronoescape/assetContainers';
+import { installKeyboardControls } from '../../input/keyboardControls';
+import { randomFrom } from '../../assetsConfig';
+import { updateProgress, cleanupDroneControl } from '../../stores/droneControl.svelte.js';
+import { sceneRefStore } from '../../stores/sceneRefStore';
+import { registerScene, unregisterScene } from '../../core/SceneRegistry';
+import { initRealtimeControl } from '../../services/RealtimeControl';
 
 // Scores
 import { startAmbient, resumeAudioOnGesture } from '$lib/scores/ambient';
 
 // Scene modules
-import { WORMHOLE2_CONFIG } from './wormhole2/wormhole2.config';
-import { getDronePathIndexFactory } from './wormhole2/wormhole2.helpers';
-import { createKeyboardHandlers } from './wormhole2/wormhole2.keyboard';
-import { setupDroneCollision } from './wormhole2/wormhole2.collision';
-import { createRenderLoop } from './wormhole2/wormhole2.render';
+import { WORMHOLE2_CONFIG } from './wormhole2.config';
+import { getDronePathIndexFactory } from './wormhole2.helpers';
+import { createKeyboardHandlers } from './wormhole2.keyboard';
+import { setupDroneCollision } from './wormhole2.collision';
+import { createRenderLoop } from './wormhole2.render';
 
 // ============================================================================
 // SCENE CLASS
@@ -107,6 +107,13 @@ export class WormHoleScene2 {
 
 		const { followCamera, switchCamera } = setupCameras(scene, canvas, 'follow');
 		setupLighting(scene);
+
+		// Create glow layer for emissive objects (orbs, particles, etc.)
+		const glowLayer = new BABYLON.GlowLayer('defaultGlowLayer', scene, {
+			mainTextureFixedSize: 512,
+			blurKernelSize: 64
+		});
+		glowLayer.intensity = 1.0;
 
 
 		
@@ -326,15 +333,41 @@ export class WormHoleScene2 {
 					physics: true
 				});
 
-				// portal = await obstacles.place('portal', {
-				// index: Math.floor(pathPoints.length / 2),
-				// posterRef: 'malunggay',
-				// videoRef: 'plant1',
-				// width: 15,
-				// height: 25
-				// }) as any;
+				// Place fluorescent orbs after models
+				console.log('🚀 STARTING ORB PLACEMENT - pathPoints.length:', pathPoints.length);
+				
+				console.log('🔥 About to place first orb at index 30');
+				const orb1Result = await obstacles.place('orb', {
+					index: 30,
+					height: 5.0,
+					diameter: 1.2,
+					glowIntensity: 3,
+					lightIntensity: 15,
+					lightRange: 40,
+					color: new BABYLON.Color3(1, 0.95, 0.8),
+					physics: false,
+					offsetY: 8
+				});
+				console.log('✅ First orb placement result:', orb1Result);
+
+				console.log('🔥 About to place second orb at index 50');
+				const orb2Result = await obstacles.place('orb', {
+					index: 50,
+					height: 5.0,
+					diameter: 1.2,
+					glowIntensity: 3,
+					lightIntensity: 15,
+					lightRange: 40,
+					color: new BABYLON.Color3(1, 0.95, 0.8),
+					physics: false,
+					offsetY: 8
+				});
+				console.log('✅ Second orb placement result:', orb2Result);
+				
+				console.log('🎉 FINISHED ORB PLACEMENT');
+
 				try {
-					console.log('Placed models + portal');
+					console.log('Placed models + orbs');
 				} catch (e) { /* ignore logging errors */ }
 			} catch (e) {
 				console.warn('Delayed model/portal placement failed:', e);

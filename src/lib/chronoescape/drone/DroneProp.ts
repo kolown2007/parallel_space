@@ -244,7 +244,7 @@ export function attachDroneLight(
 	light.diffuse = new BABYLON.Color3(0.1, 0.6, 1.0);
 	light.specular = new BABYLON.Color3(0.6, 0.9, 1.0);
 	light.intensity = 5.0;
-	light.range = 5;
+	light.range = 10.0 ;
 	light.parent = attachTo ?? drone;
 	light.position = new BABYLON.Vector3(0.5, 0.5, 0);
 	return light;
