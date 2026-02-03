@@ -24,7 +24,8 @@ export interface DroneSetupResult {
 	/** Material applied to the drone */
 	droneMaterial: BABYLON.StandardMaterial;
 	/** Point light attached to the drone */
-	droneLight: BABYLON.PointLight;
+	/** Light attached to the drone (point/spot/rect visual) */
+	droneLight: BABYLON.Light;
 	/** Glow layer for the drone */
 	glowLayer: BABYLON.GlowLayer;
 	/** Toggle glow on/off */
@@ -55,6 +56,10 @@ export interface DroneSetupOptions {
 	glowSubmeshIndex?: number;
 	/** Enable debug physics visualization (default: false) */
 	enableDebug?: boolean;
+	/** If true, attach a small rectangular-style light to the drone (visual plane + short-range spot) */
+	rectangularLight?: boolean;
+	/** Range for the attached light when using rectangularLight (default: 3) */
+	lightRange?: number;
 }
 
 // ============================================================================
@@ -99,13 +104,17 @@ export async function setupSceneDrone(
 		glbUrl,
 		initialPosition = BABYLON.Vector3.Zero(),
 		initialRotation = new BABYLON.Vector3(0, 0, -Math.PI / 2),
-		mass = 2,
-		restitution = 1,
-		friction = 0.3,
-		glowIntensity = 0.4,
-		glowSubmeshIndex = 1,
-		enableDebug = false
+			mass = 2,
+			restitution = 1,
+			friction = 0.3,
+			glowIntensity = 0.4,
+			glowSubmeshIndex = 1,
+			enableDebug = false,
+			rectangularLight = true,
+			lightRange = 3.0
 	} = options;
+
+
 
 	// -------------------------------------------------------------------------
 	// 1. RESOLVE GLB URL
@@ -173,7 +182,12 @@ export async function setupSceneDrone(
 	// -------------------------------------------------------------------------
 	// 7. ATTACH LIGHT
 	// -------------------------------------------------------------------------
-	const droneLight = attachDroneLight(scene, drone, droneVisual as BABYLON.Mesh);
+	const droneLight = attachDroneLight(
+		scene,
+		drone,
+		droneVisual as BABYLON.Mesh,
+		options.rectangularLight ? { type: 'rect', range: options.lightRange ?? 3.0 } : undefined
+	);
 
 	// -------------------------------------------------------------------------
 	// 8. CREATE CONTROL FUNCTIONS

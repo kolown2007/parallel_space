@@ -1,8 +1,8 @@
 import * as BABYLON from '@babylonjs/core';
 import { get } from 'svelte/store';
-import { droneControl, updateProgress, enterPortal } from '../../stores/droneControl.svelte';
+import { droneControl, updateProgress, enterPortal, FPS, MAX_SPEED } from '../../stores/droneControl.svelte';
 import { revolutionStore, notifyRevolutionComplete } from '../../stores/droneRevolution';
-import { playRevolutionComplete } from '../../scores/ambient';
+import { playRevolutionComplete, playPortalSound, playCollisionNoteSingle } from '../../scores/ambient';
 import { updateDronePhysics, updateFollowCamera } from '../../chronoescape/drone/droneControllers';
 import { getPositionOnPath } from '../../chronoescape/world/PathUtils';
 import type { ObstacleManager } from '../../chronoescape/obstacle/ObstacleManager';
@@ -78,6 +78,15 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 				};
 				
 				if (portal.intersects(usbAabb)) {
+					try { console.debug('portal collision detected — calling playPortalSound'); } catch {}
+					try { playPortalSound(); } catch (e) { console.warn('playPortalSound failed', e); }
+					try {
+						// also trigger a collision-style note (mirrors cube collision behaviour)
+						const state = get(droneControl);
+						const velocity = Math.min(state.speed / (MAX_SPEED || 1), 1.0);
+						try { playCollisionNoteSingle(velocity); } catch (e) {}
+					} catch (e) {}
+					console.log('✨ Drone entered portal');
 					enterPortal();
 					onPortalTrigger();
 					try {
@@ -99,7 +108,9 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 			progressMultiplier = WORMHOLE2_CONFIG.path.offTrackProgressMultiplier;
 		}
 		
-		let newProgress = control.progress + (control.speed * progressMultiplier);
+		// Scale speed by frame time so movement is consistent across variable FPS.
+		const frameFactor = Math.max(0, dt * FPS); // at 60fps dt~1/60 -> frameFactor ~1
+		let newProgress = control.progress + (control.speed * progressMultiplier * frameFactor);
 		if (newProgress > 1) {
 			newProgress = 0;
 		}
@@ -138,13 +149,16 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 		}
 
 		// Update drone physics
+		// Do not clamp `maxFollowSpeed` to a low constant here — allow the physics
+		// defaults (or scene overrides) to control top speed so `droneControl.speed`
+		// has visible effect.
 		updateDronePhysics(
 			drone,
 			droneAggregate,
 			pathPoints,
 			control.progress,
 			keysPressed,
-			{ lateralForce: control.lateralForce, maxFollowSpeed: 5 }
+			{ lateralForce: control.lateralForce }
 		);
 
 		// Update follow camera

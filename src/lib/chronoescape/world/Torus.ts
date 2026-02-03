@@ -15,6 +15,7 @@ export interface TorusOptions {
   pointsPerCircle?: number;
   materialTextureUrl?: string;
   materialTextureId?: string;
+  emissiveIntensity?: number; // 0..1 range for light emission strength
 }
 
 export interface TorusResult {
@@ -63,7 +64,8 @@ export async function createTorus(scene: BABYLON.Scene, opts: TorusOptions = {})
       console.warn('Failed to resolve materialTextureId', opts.materialTextureId, e);
     }
   }
-  // mat.emissiveColor = new BABYLON.Color3(0.2, 0.2, 0.2);
+  const emissionLevel = typeof opts.emissiveIntensity === 'number' ? opts.emissiveIntensity : 1.0;
+  mat.emissiveColor = new BABYLON.Color3(emissionLevel, emissionLevel, emissionLevel);
   torus.material = mat;
 
   // Recompute radii from the actual mesh bounding box so the path aligns

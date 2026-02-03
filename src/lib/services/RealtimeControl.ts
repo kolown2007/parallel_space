@@ -49,7 +49,7 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 
 			switch (action) {
 				case 'move':
-					burstAccelerate(5, 1000);
+					burstAccelerate();
 					console.log('🚀 Burst acceleration via Ably');
 					break;
 

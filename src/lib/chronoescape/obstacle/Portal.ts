@@ -1,6 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-import { getVideoUrl, getTextureUrl, getLoadingImageUrl } from '../../assetsConfig';
-import { playVideoScene } from '../../scenes/videoscene';
+import { getTextureUrl, getLoadingImageUrl } from '../../assetsConfig';
 
 export interface Vec3 { x: number; y: number; z: number; }
 export interface AABB { min: Vec3; max: Vec3 }
@@ -10,18 +9,21 @@ export interface AABB { min: Vec3; max: Vec3 }
  * Constructor accepts either direct URLs or asset ids (if not starting with http it will try to resolve via `getVideoUrl`).
  */
 export class Portal {
-    posterRef: string; // poster url or id
-    videoRef: string; // video url or id
+    posterRef?: string; // poster url or id
     aabb: AABB;
     triggered = false;
     cleanupOnClose?: () => void;
     mesh?: BABYLON.Mesh;
     material?: BABYLON.StandardMaterial;
-    _prefetchVideo?: HTMLVideoElement;
-
-    constructor(posterRef: string, videoRef: string, center: Vec3, size: Vec3, scene?: BABYLON.Scene, opts?: { width?: number; height?: number }) {
+    private _onTrigger?: () => void;
+    private _scene?: BABYLON.Scene;
+    private _rotationObserver?: BABYLON.Observer<BABYLON.Scene> | undefined;
+    private _rotationSpeed = 0.18; // radians per second (slow spin)
+    private _root?: BABYLON.TransformNode;
+    private _billboard?: BABYLON.Mesh;
+    constructor(posterRef: string | undefined, center: Vec3, size: Vec3, scene?: BABYLON.Scene, opts?: { width?: number; height?: number }, onTrigger?: () => void) {
         this.posterRef = posterRef;
-        this.videoRef = videoRef;
+        this._onTrigger = onTrigger;
         const half = { x: size.x / 2, y: size.y / 2, z: size.z / 2 };
         this.aabb = {
             min: { x: center.x - half.x, y: center.y - half.y, z: center.z - half.z },
@@ -30,8 +32,6 @@ export class Portal {
         if (scene) {
             // create visual representation immediately (fire-and-forget)
             this.createVisual(scene, { x: center.x, y: center.y, z: center.z }, opts).catch(() => {});
-            // start prefetching the video to warm network / decoder
-            this.prefetchVideo().catch(() => {});
         }
     }
 
@@ -40,27 +40,44 @@ export class Portal {
         const height = opts?.height ?? 4;
         let posterUrl: string | undefined;
         try {
-            if (/^https?:\/\//i.test(this.posterRef)) {
+            if (this.posterRef && /^https?:\/\//i.test(this.posterRef)) {
                 posterUrl = this.posterRef;
-            } else {
+            } else if (this.posterRef) {
                 try {
                     const resolved = await getTextureUrl(this.posterRef);
                     if (resolved) {
                         posterUrl = resolved;
                     } else {
-                        // fallback to the configured loading image when texture id missing
                         try { posterUrl = await getLoadingImageUrl(); } catch {}
                     }
                 } catch {
                     try { posterUrl = await getLoadingImageUrl(); } catch {}
                 }
+            } else {
+                try { posterUrl = await getLoadingImageUrl(); } catch {}
             }
         } catch {}
 
         try {
+            // create root at portal position
+            this._root = new BABYLON.TransformNode('portal_root', scene);
+            this._root.position = new BABYLON.Vector3(center.x, center.y, center.z);
+
+            // create a tiny billboard mesh as a parent so it always faces the camera
+            try {
+                this._billboard = BABYLON.MeshBuilder.CreatePlane('portal_billboard', { width: 0.01, height: 0.01 }, scene);
+                this._billboard.isVisible = false;
+                this._billboard.parent = this._root;
+                this._billboard.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+            } catch (e) {
+                // fallback: null billboard
+                this._billboard = undefined;
+            }
+
+            // create visible poster plane as child of billboard (so it faces camera via parent)
             this.mesh = BABYLON.MeshBuilder.CreatePlane('portal_plane', { width, height }, scene);
-            this.mesh.position = new BABYLON.Vector3(center.x, center.y, center.z);
-            this.mesh.billboardMode = BABYLON.Mesh.BILLBOARDMODE_ALL;
+            this.mesh.parent = this._billboard ?? this._root;
+            this.mesh.position = new BABYLON.Vector3(0, 0, 0);
             this.material = new BABYLON.StandardMaterial('portalMat', scene);
             this.material.backFaceCulling = false;
             if (posterUrl) {
@@ -69,37 +86,32 @@ export class Portal {
                 this.material.diffuseTexture = tex;
                 this.material.useAlphaFromDiffuseTexture = true;
             } else {
-                this.material.emissiveColor = new BABYLON.Color3(1, 1, 1);
+                this.material.emissiveColor = new BABYLON.Color3(0.12, 0.12, 0.12);
             }
             this.mesh.material = this.material;
+            // always add a subtle emissive tint so the portal is visible from a distance
+            try { this.material.emissiveColor = new BABYLON.Color3(0.06, 0.06, 0.07); } catch {}
+            // store scene reference and add a slow rotation effect (billboard parent faces camera; poster rotates locally)
+            try {
+                this._scene = scene;
+                this._rotationObserver = scene.onBeforeRenderObservable.add(() => {
+                    try {
+                        if (!this._scene) return;
+                        // poster is parented to billboard which faces the camera; rotate poster around its local Z axis
+                        const dt = this._scene.getEngine().getDeltaTime();
+                        const angle = this._rotationSpeed * (dt / 1000);
+                        if (this.mesh) {
+                            this.mesh.rotate(BABYLON.Axis.Z, angle, BABYLON.Space.LOCAL);
+                        }
+                    } catch (e) { /* ignore per-frame errors */ }
+                });
+            } catch (e) { /* ignore rotation setup errors */ }
         } catch (e) {
             // ignore visual creation failures
         }
     }
 
-    async prefetchVideo() {
-        try {
-            let videoUrl = this.videoRef;
-            if (!/^https?:\/\//i.test(String(this.videoRef))) {
-                try {
-                    const u = await getVideoUrl(this.videoRef);
-                    if (u) videoUrl = u;
-                } catch {}
-            }
-            if (!videoUrl) return;
-            const v = document.createElement('video');
-            v.preload = 'auto';
-            v.muted = true;
-            v.playsInline = true;
-            v.crossOrigin = 'anonymous';
-            v.style.display = 'none';
-            v.src = videoUrl;
-            document.body.appendChild(v);
-            this._prefetchVideo = v;
-            // attempt to load resource
-            try { v.load(); } catch {}
-        } catch {}
-    }
+    // no-op: portals now trigger the central video scene which handles its own random selection
 
     intersects(other: AABB) {
         return !(
@@ -118,43 +130,29 @@ export class Portal {
         if (!this.intersects(usbAabb)) return false;
         this.triggered = true;
 
-        // Resolve videoRef to URL if it's an id
-        let videoUrl = this.videoRef;
+
+        // Resolve poster if it's an id (best-effort)
+        let posterUrl: string | undefined = undefined;
         try {
-            if (!/^https?:\/\//i.test(this.videoRef)) {
-                const u = await getVideoUrl(this.videoRef);
-                if (u) videoUrl = u;
+            if (this.posterRef && /^https?:\/\//i.test(this.posterRef)) {
+                posterUrl = this.posterRef;
+            } else if (this.posterRef) {
+                try {
+                    const resolved = await getTextureUrl(this.posterRef);
+                    if (resolved) posterUrl = resolved;
+                    else posterUrl = await getLoadingImageUrl();
+                } catch {
+                    try { posterUrl = await getLoadingImageUrl(); } catch {}
+                }
+            } else {
+                try { posterUrl = await getLoadingImageUrl(); } catch {}
             }
         } catch {}
 
-        // Resolve poster if it's an id (best-effort, but poster can remain an id for renderer to use)
-        let posterUrl = this.posterRef;
         try {
-            if (!/^https?:\/\//i.test(this.posterRef)) {
-                // we don't have a getTextureUrl helper here; leave as-is so renderer can resolve, or use as-is
-            }
-        } catch {}
-
-        try {
-            // if we prefetched a hidden video element, try to reuse it by passing its src quickly
-            const mount = await playVideoScene(videoUrl, () => {
-                // when video ends, allow retriggering
-                this.triggered = false;
-                if (this.cleanupOnClose) {
-                    try { this.cleanupOnClose(); } catch {}
-                    this.cleanupOnClose = undefined;
-                }
-            }, posterUrl);
-            this.cleanupOnClose = mount.cleanup;
-            // remove prefetch video element now that scene-mounted video is playing
-            try {
-                if (this._prefetchVideo && this._prefetchVideo.parentElement) {
-                    this._prefetchVideo.remove();
-                }
-                this._prefetchVideo = undefined;
-            } catch {}
+            // Call optional trigger callback (scene owner can handle video switching)
+            try { this._onTrigger?.(); } catch (e) { /* ignore handler errors */ }
         } catch (e) {
-            // failed to play; reset trigger so can be retried
             this.triggered = false;
         }
 
@@ -168,17 +166,22 @@ export class Portal {
             this.cleanupOnClose = undefined;
         }
         try {
+            if (this._rotationObserver && this._scene) {
+                try { this._scene.onBeforeRenderObservable.remove(this._rotationObserver); } catch (e) {}
+                this._rotationObserver = undefined;
+                this._scene = undefined;
+            }
             if (this.mesh) {
                 try { this.mesh.dispose(); } catch {}
                 this.mesh = undefined;
             }
+            if (this._root) {
+                try { this._root.dispose(); } catch {}
+                this._root = undefined;
+            }
             if (this.material) {
                 try { this.material.dispose(); } catch {}
                 this.material = undefined;
-            }
-            if (this._prefetchVideo) {
-                try { this._prefetchVideo.remove(); } catch {}
-                this._prefetchVideo = undefined;
             }
         } catch {}
     }
