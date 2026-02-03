@@ -205,3 +205,105 @@ export function playRevolutionComplete(loopCount: number = 1) {
     setTimeout(() => { activeVoices = Math.max(0, activeVoices - 1) }, ms)
   })
 }
+
+/**
+ * Play a short eerie sound for portal collisions.
+ */
+export async function playPortalSound() {
+  try {
+    console.debug('[ambient] playPortalSound() called');
+    const ok = await ensureAudioStarted();
+    console.debug('[ambient] ensureAudioStarted ->', ok);
+    if (!ok) return; // user gesture required or audio blocked
+
+    // Use existing reverb if available, otherwise destination
+    const dest: any = reverb || Tone.Destination;
+    // Dungeon-like, bass-forward variant: master lowpass, big drone + sub, deep thump, softened metallics, low arp, subtle noise
+    const now = Tone.now()
+    const dur = 4.0
+
+    // Master lowpass filter to remove excessive highs and emphasize low-mid
+    const masterFilter = new Tone.Filter({ type: 'lowpass', frequency: 1200, Q: 0.8 }).connect(dest)
+    // gently move cutoff downward for darker result
+    masterFilter.frequency.setValueAtTime(1200, now)
+    masterFilter.frequency.exponentialRampToValueAtTime(600, now + dur * 0.6)
+
+    // Low sustaining drone (thickened by two detuned voices)
+    const droneA = new Tone.Synth({
+      oscillator: { type: 'sawtooth' },
+      envelope: { attack: 0.5, decay: 2.8, sustain: 0.8, release: 3.6 }
+    }).connect(masterFilter)
+    const droneB = new Tone.Synth({
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.6, decay: 2.8, sustain: 0.72, release: 3.6 }
+    }).connect(masterFilter)
+    droneA.volume.value = -8
+    droneB.volume.value = -10
+    droneA.triggerAttack('C1', now)
+    // slight detune for warmth
+    droneB.triggerAttack(Tone.Frequency('C1').transpose(-0.02), now)
+
+    // Sub-bass fundamental for weight
+    const sub = new Tone.Synth({
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.02, decay: 1.8, sustain: 0.9, release: 2.8 }
+    }).connect(masterFilter)
+    sub.volume.value = -6
+    sub.triggerAttack('C0', now)
+
+    // Deeper, rounder thump
+    const thump = new Tone.MembraneSynth({
+      pitchDecay: 0.12,
+      octaves: 2,
+      envelope: { attack: 0.001, decay: 0.9, sustain: 0 }
+    }).connect(masterFilter)
+    thump.triggerAttackRelease('C1', 0.9, now + 0.02, 1.0)
+
+    // Soft metallic resonance reduced in level (adds texture but not sharpness)
+    const metal = new Tone.MetalSynth({
+      envelope: { attack: 0.004, decay: 1.2, release: 1.8 },
+      harmonicity: 3.5,
+      modulationIndex: 18,
+      resonance: 3000
+    }).connect(masterFilter)
+    metal.volume.value = -18
+    metal.triggerAttackRelease('C2', 1.2, now + 0.06)
+
+    // Lower-register arpeggiated cluster for unease (more bassy)
+    const arp = new Tone.PolySynth(Tone.Synth, ({
+      maxPolyphony: 4,
+      voice: {
+        oscillator: { type: 'triangle' },
+        envelope: { attack: 0.02, decay: 1.2, sustain: 0.0, release: 2.0 }
+      }
+    } as any)).connect(masterFilter)
+    arp.triggerAttackRelease(['C2', 'Db2', 'E2'], 1.6, now + 0.18, 0.36)
+    arp.triggerAttackRelease(['B1', 'C2', 'Eb2'], 1.6, now + 0.9, 0.28)
+
+    // Subtle, lower-level noise swell
+    const noise = new Tone.Noise('pink')
+    const ng = new Tone.Gain(0.06).connect(masterFilter)
+    noise.connect(ng)
+    noise.start(now)
+    ng.gain.setValueAtTime(0.06, now)
+    ng.gain.exponentialRampTo(0.0001, dur)
+
+    // Schedule release and cleanup
+    setTimeout(() => {
+      try { droneA.triggerRelease(); } catch (e) {}
+      try { droneB.triggerRelease(); } catch (e) {}
+      try { sub.triggerRelease(); } catch (e) {}
+      try { noise.stop(); } catch (e) {}
+      try { droneA.dispose(); } catch (e) {}
+      try { droneB.dispose(); } catch (e) {}
+      try { sub.dispose(); } catch (e) {}
+      try { thump.dispose(); } catch (e) {}
+      try { metal.dispose(); } catch (e) {}
+      try { arp.dispose(); } catch (e) {}
+      try { ng.dispose(); } catch (e) {}
+      try { masterFilter.dispose(); } catch (e) {}
+    }, Math.ceil(dur * 1000) + 400)
+  } catch (e) {
+    // swallow errors; this is non-critical
+  }
+}

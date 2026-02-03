@@ -193,6 +193,24 @@ export async function randomModelId(): Promise<string> {
 }
 
 /**
+ * Pick a random video ID from assets.json
+ * @returns Promise<string> - random video ID
+ */
+export async function randomVideoId(): Promise<string> {
+  return randomFromGroup('videos');
+}
+
+/**
+ * Resolve a random video URL from assets.json
+ * @returns Promise<string> - random video URL
+ */
+export async function randomVideoUrl(): Promise<string> {
+  const id = await randomVideoId();
+  if (!id) return '';
+  return getVideoUrl(id);
+}
+
+/**
  * Get all asset IDs from a specific group
  * @param group - 'models' | 'textures' | 'shaders' | 'videos'
  * @returns Promise<string[]> - array of all asset IDs in that group

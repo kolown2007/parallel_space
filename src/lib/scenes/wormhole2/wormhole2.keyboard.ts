@@ -74,7 +74,7 @@ export function createKeyboardHandlers(deps: KeyboardHandlerDeps) {
 		},
 
 		onBurst: () => {
-			burstAccelerate(5, 500);
+			burstAccelerate();
 			console.log('🚀 Burst acceleration activated!');
 		},
 
@@ -107,8 +107,7 @@ export function createKeyboardHandlers(deps: KeyboardHandlerDeps) {
 				
 				const portal = await obstacles.place('portal', {
 					index: targetIdx,
-					posterRef: 'malunggay',
-					videoRef: 'plant1',
+					posterTextureId: randomFrom('portal1','portal2'),
 					width: WORMHOLE2_CONFIG.obstacles.portalWidth,
 					height: WORMHOLE2_CONFIG.obstacles.portalHeight,
 					offsetY: 0,

@@ -11,7 +11,7 @@ export type VideoMount = {
  * - Muted autoplay for instant playback
  * - Calls onEnd when video finishes
  */
-import { getVideoUrl } from '../assetsConfig';
+import { randomVideoUrl, getVideoUrl } from '../assetsConfig';
 
 export function mountVideoScene(
     container?: HTMLElement,
@@ -63,15 +63,19 @@ export function mountVideoScene(
         video.src = src;
     } else {
         video.src = '';
-        try {1
-            getVideoUrl('plant2').then(u => {
-                if (u) {
-                    video.src = u;
+        const loadRandomVideo = async () => {
+            try {
+                const url = await randomVideoUrl();
+                if (url) {
+                    video.src = url;
                     // try to autoplay once src arrives
                     setTimeout(() => video.play().catch(() => {}), 100);
                 }
-            }).catch(() => {});
-        } catch (e) {}
+            } catch (error) {
+                // ignore failures to keep the scene resilient
+            }
+        };
+        loadRandomVideo();
     }
     video.loop = false; // Play once, then call onEnd
     video.playsInline = true;

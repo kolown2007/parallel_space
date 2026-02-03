@@ -1,10 +1,3 @@
-// Drone control state using Svelte stores for universal reactivity
-// SPEED SYSTEM (path-point based):
-//   Path has 360 points total (pointsPerCircle from torus config)
-//   Internal speed: progress per frame [0, 1] where 1.0 = full loop
-//   Display speed: points per second (how many path points traveled per second)
-//   Conversion at 60fps: display = internal × 60 × 360 = internal × 21600
-//   Example: 0.00023 internal ≈ 5 points/sec
 
 import { writable, derived } from 'svelte/store';
 
@@ -19,7 +12,7 @@ export const PATH_POINTS_TOTAL = 360;                     // Total points in pat
 export const FPS = 60;                                     // Assumed frame rate
 export const DEFAULT_SPEED = 2 / (FPS * PATH_POINTS_TOTAL); // 2 points/sec
 export const DEFAULT_LATERAL_FORCE = 10;                   // Babylon impulse magnitude
-export const MAX_SPEED = 4 / (FPS * PATH_POINTS_TOTAL); // 5 points/sec max
+export const MAX_SPEED = 20/ (FPS * PATH_POINTS_TOTAL); // 5 points/sec max
 export const SPEED_INCREMENT = .5 / (FPS * PATH_POINTS_TOTAL); // 0.5 points/sec per adjustment
 export const COLLISION_SPEED_PERCENT = 0.1;               // 20% speed reduction on hit
 
@@ -72,49 +65,28 @@ let burstTimeout: any = null;
 let burstOriginalSpeed: number | null = null;
 
 /**
- * Quick burst acceleration - speeds up then returns to normal speed
- * @param boostMultiplier - How much faster (default 5x)
- * @param duration - How long the boost lasts in ms (default 500ms)
+ * Burst accelerate: each call increases the base speed by +1 point/sec.
+ * This converts the +1 display-point into internal units and clamps to MAX_SPEED.
  */
-export function burstAccelerate(boostMultiplier = 5, duration = 500) {
-  // Cancel any previous burst
-  clearTimeout(burstTimeout);
-  // capture original speed so we can restore/adjust later
+export function burstAccelerate() {
+  const deltaInternal = 1 / DISPLAY_FACTOR; // 1 point/sec -> internal
   droneControl.update(d => {
-    burstOriginalSpeed = d.speed;
-    // Use a fixed burst speed based on DEFAULT_SPEED, independent of current speed
-    const boosted = Math.min(MAX_SPEED, DEFAULT_SPEED * boostMultiplier);
-    droneEvents.set({ type: 'burstStart', data: { boost: boostMultiplier, duration, boosted } });
-    return { ...d, speed: boosted };
+    const newSpeed = Math.max(0, Math.min(MAX_SPEED, d.speed + deltaInternal));
+    droneEvents.set({ type: 'burstAdd', data: { deltaInternal, newSpeed } });
+    return { ...d, speed: newSpeed };
   });
-
-  burstTimeout = setTimeout(() => {
-    // After burst, add +1 point/sec to the original speed (converted to internal units)
-    const minimalInternal = 1 / DISPLAY_FACTOR; // 1 point/sec -> internal
-    const base = Math.max(0, (burstOriginalSpeed ?? 0));
-    const newBase = Math.max(0, Math.min(MAX_SPEED, base + minimalInternal));
-    droneControl.update(d => ({ ...d, speed: newBase }));
-    droneEvents.set({ type: 'burstEnd', data: { addedInternal: minimalInternal, newBase } });
-    burstTimeout = null;
-    burstOriginalSpeed = null;
-  }, duration);
 }
 
 /**
- * Cancel an active burst acceleration
+ * Cancel an active burst (keeps behavior simple since bursts are now permanent increments).
  */
 export function cancelBurst() {
   if (burstTimeout !== null) {
     clearTimeout(burstTimeout);
-    // restore original speed if we have it
-    if (burstOriginalSpeed !== null) {
-      const restore = Math.max(0, Math.min(MAX_SPEED, burstOriginalSpeed));
-      droneControl.update(d => ({ ...d, speed: restore }));
-    }
     burstTimeout = null;
-    burstOriginalSpeed = null;
-    droneEvents.set({ type: 'burstCancelled' });
   }
+  burstOriginalSpeed = null;
+  droneEvents.set({ type: 'burstCancelled' });
 }
 
 /**

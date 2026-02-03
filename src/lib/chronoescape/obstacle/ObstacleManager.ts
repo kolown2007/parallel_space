@@ -52,8 +52,8 @@ export interface ModelOptions extends BaseObstacleOptions {
 }
 
 export interface PortalOptions extends BaseObstacleOptions {
-	posterRef: string;
-	videoRef: string;
+	/** texture id or direct url for the poster; may be a single id/string or an array of ids for random selection */
+	posterTextureId?: string | string[];
 	width?: number;
 	height?: number;
 	onTrigger?: () => void;
@@ -114,6 +114,11 @@ export class ObstacleManager {
 		this.pathPoints = pathPoints;
 		this.modelCache = modelCache;
 		this.cleanupRegistry = cleanupRegistry;
+
+		// Ensure the manager disposes its instances when the global cleanup runs
+		this.cleanupRegistry.push(() => {
+			try { this.dispose(); } catch (e) { /* ignore */ }
+		});
 	}
 
 	// ===================================================================
@@ -571,6 +576,7 @@ export class ObstacleManager {
 			count = 1,
 			thrustMs,
 			thrustSpeed,
+			autoDisposeMs,
 			faceUVTextureUrl,
 			faceUVTextureId,
 			faceUVLayout = 'grid'
@@ -685,7 +691,7 @@ export class ObstacleManager {
 					restitution: 0.3,
 					friction: 0.05
 				};
-				new BABYLON.PhysicsAggregate(
+				const agg = new BABYLON.PhysicsAggregate(
 					cube,
 					physicsOptions.shape ?? BABYLON.PhysicsShapeType.BOX,
 					{
@@ -695,17 +701,22 @@ export class ObstacleManager {
 					},
 					this.scene
 				);
+				// attach aggregate reference for later disposal
+				(cube as any)._physicsAgg = agg;
 
 				// Optional thrust along path tangent
 				if (thrustMs && thrustSpeed && this.pathPoints.length > 1) {
 					const nextIdx = this.normalizeIndex(actualIndex + 1);
 					const dir = this.pathPoints[nextIdx].subtract(this.pathPoints[actualIndex]).normalize();
 					const initialVel = dir.scale(thrustSpeed);
-					
+
 					setTimeout(() => {
 						try {
 							if ((cube as any).physicsBody?.setLinearVelocity) {
 								(cube as any).physicsBody.setLinearVelocity(initialVel);
+							}
+							if ((cube as any).physicsImpostor?.setLinearVelocity) {
+								(cube as any).physicsImpostor.setLinearVelocity(initialVel);
 							}
 						} catch (e) { /* ignore */ }
 					}, 0);
@@ -715,8 +726,22 @@ export class ObstacleManager {
 							if ((cube as any).physicsBody?.setLinearVelocity) {
 								(cube as any).physicsBody.setLinearVelocity(BABYLON.Vector3.Zero());
 							}
+							if ((cube as any).physicsImpostor?.setLinearVelocity) {
+								(cube as any).physicsImpostor.setLinearVelocity(BABYLON.Vector3.Zero());
+							}
 						} catch (e) { /* ignore */ }
 					}, thrustMs);
+				}
+
+				// Auto-dispose to free memory after a configurable delay
+				if (autoDisposeMs && typeof autoDisposeMs === 'number' && autoDisposeMs > 0) {
+					const t = setTimeout(() => {
+						try { if ((cube as any)._physicsAgg) { try { (cube as any)._physicsAgg.dispose(); } catch {} } } catch {}
+						try { cube.dispose(); } catch (e) { /* ignore */ }
+						try { this.instances = this.instances.filter(i => i !== cube); } catch (e) {}
+					}, autoDisposeMs);
+					// ensure timeout is cleared if manager cleanup runs earlier
+					this.cleanupRegistry.push(() => { try { clearTimeout(t); } catch {} });
 				}
 			}
 
@@ -772,13 +797,13 @@ export class ObstacleManager {
 	private placePortal(options: PortalOptions): Portal {
 		const {
 			index = 0,
-			posterRef,
-			videoRef,
+			posterTextureId,
 			width = 3,
 			height = 4,
 			offsetY = 0,
-			count = 1
-		} = options;
+			count = 1,
+			onTrigger
+		} = options as any;
 
 		const indices = this.resolveIndices(options, count);
 		const createPortalAt = (idx: number) => {
@@ -786,13 +811,23 @@ export class ObstacleManager {
 			const pos = this.pathPoints[actualIndex].clone();
 			pos.y += offsetY;
 
+			// allow posterTextureId to be an array (pick randomly) or a single id/url
+			let posterArg: string | undefined = undefined;
+			try {
+				if (Array.isArray(posterTextureId)) {
+					if (posterTextureId.length > 0) posterArg = posterTextureId[Math.floor(Math.random() * posterTextureId.length)];
+				} else if (typeof posterTextureId === 'string') {
+					posterArg = posterTextureId;
+				}
+			} catch {}
+
 			const portal = new Portal(
-				posterRef,
-				videoRef,
+				posterArg,
 				pos,
 				{ x: width, y: height, z: 0.5 },
 				this.scene,
-				{ width, height }
+				{ width, height },
+				typeof onTrigger === 'function' ? onTrigger : undefined
 			);
 			return portal;
 		};
@@ -879,7 +914,8 @@ export class ObstacleManager {
 			count,
 			size,
 			maxDistance,
-			offsetY
+			offsetY,
+			autoDispose
 		});
 
 		this.cleanupRegistry.push(() => {
@@ -996,7 +1032,13 @@ export class ObstacleManager {
 	 */
 	dispose(): void {
 		for (const instance of this.instances) {
-			try { instance.dispose(); } catch (e) { /* ignore */ }
+			try {
+				// dispose any physics aggregate attached
+				if ((instance as any)._physicsAgg) {
+					try { (instance as any)._physicsAgg.dispose(); } catch (e) {}
+				}
+				try { instance.dispose(); } catch (e) { /* ignore */ }
+			} catch (e) { /* ignore */ }
 		}
 		this.instances = [];
 	}

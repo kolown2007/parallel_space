@@ -14,7 +14,9 @@ export const WORMHOLE2_CONFIG = {
 		turns: 1,
 		spiralTurns: 3,
 		segments: 128,
-		pointsPerCircle: 360
+		pointsPerCircle: 360,
+		emissiveIntensity: 0.05
+		
 	},
 
 	/** Drone physics and starting state */
@@ -48,8 +50,8 @@ export const WORMHOLE2_CONFIG = {
 		cubeAutoDispose: 60000, // ms
 		cubeThrustMs: 2000,
 		cubeThrustSpeed: -10,
-		portalWidth: 6,
-		portalHeight: 8
+		portalWidth: 30,
+		portalHeight: 30
 	},
 
 	/** Collision detection */

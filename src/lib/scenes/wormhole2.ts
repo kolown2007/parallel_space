@@ -143,7 +143,8 @@ export class WormHoleScene2 {
 			spiralTurns: cfg.torus.spiralTurns,
 			segments: cfg.torus.segments,
 			pointsPerCircle: cfg.torus.pointsPerCircle,
-			materialTextureId: randomFrom('collage1')
+			emissiveIntensity: cfg.torus.emissiveIntensity,
+			materialTextureId: randomFrom('paint1','rag','mat')
 		});
 		const torus = torusResult.torus;
 		const torusAggregate = torusResult.torusAggregate;
