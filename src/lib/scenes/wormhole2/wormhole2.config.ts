@@ -51,8 +51,8 @@ export const WORMHOLE2_CONFIG = {
 		cubeAutoDispose: 60000, // ms
 		cubeThrustMs: 2000,
 		cubeThrustSpeed: -10,
-		portalWidth: 30,
-		portalHeight: 30
+		portalWidth: 20,
+		portalHeight: 20
 	},
 
 	/** Collision detection */
