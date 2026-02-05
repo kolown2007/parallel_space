@@ -192,9 +192,17 @@ export async function setupSceneDrone(
 	// -------------------------------------------------------------------------
 	// 8. CREATE CONTROL FUNCTIONS
 	// -------------------------------------------------------------------------
+	// Detect WebGPU engine to pick softer defaults when necessary
+	const engineAny = (scene.getEngine && (scene.getEngine() as any)) || {};
+	const isWebGPU = typeof engineAny?.constructor?.name === 'string' && engineAny.constructor.name.toLowerCase().includes('webgpu');
+	const defaultOnLightIntensity = isWebGPU ? 1.5 : 3.0;
+
+	// Ensure the created light uses a reasonable base intensity for current backend
+	try { droneLight.intensity = defaultOnLightIntensity; } catch (e) { /* ignore */ }
+
 	const toggleGlow = (enabled: boolean) => {
 		glowLayer.intensity = enabled ? glowIntensity : 0;
-		droneLight.intensity = enabled ? 3.0 : 0;
+		try { droneLight.intensity = enabled ? defaultOnLightIntensity : 0; } catch (e) { /* ignore */ }
 	};
 
 	const setGlowIntensity = (intensity: number) => {
