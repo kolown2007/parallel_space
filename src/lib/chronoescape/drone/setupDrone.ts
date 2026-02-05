@@ -101,8 +101,8 @@ export async function setupSceneDrone(
 			restitution = 1,
 			friction = 0.3,
 			enableDebug = false,
-			rectangularLight = true,
-			lightRange = 3.0
+			// rectangularLight = true,
+			// lightRange = 3.0
 	} = options;
 
 

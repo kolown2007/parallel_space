@@ -235,6 +235,21 @@ export class WormHoleScene2 {
 					console.warn('Model placement loop failed:', e);
 				}
 
+				// Place a single physics-enabled Jollibee model separately
+				try {
+					await obstacles.place('model', {
+						modelNames: ['jollibee'],
+						count: 1,
+						index: 25,
+						offsetY: -1,
+						scaleRange: [5, 7],
+						physics: true
+					});
+					console.log('Placed physics-enabled Jollibee at index 25');
+				} catch (e) {
+					console.warn('Failed to place physics-enabled Jollibee:', e);
+				}
+
 				// Place billboards and move them to explicit path indices
 				try {
 					const indices = [10, 60, 110, 160, 210, 260];
