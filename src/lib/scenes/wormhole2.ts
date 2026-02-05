@@ -186,8 +186,6 @@ export class WormHoleScene2 {
 				mass: cfg.drone.mass,
 				restitution: cfg.drone.restitution,
 				friction: cfg.drone.friction,
-				glowIntensity: cfg.drone.glowIntensity,
-				glowSubmeshIndex: 0,
 				enableDebug: cfg.debug.enableDroneDebug
 			});
 			drone = res.drone;

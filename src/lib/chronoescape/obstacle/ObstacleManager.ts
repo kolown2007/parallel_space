@@ -81,14 +81,11 @@ export interface FloatingCubeOptions extends BaseObstacleOptions {
 export interface OrbOptions extends BaseObstacleOptions {
 	height?: number;
 	diameter?: number;
-	glowIntensity?: number;
 	lightIntensity?: number;
 	lightRange?: number;
 	color?: BABYLON.Color3;
 	/** Local point-light radius to limit illumination around the orb */
 	localRange?: number;
-	/** Enable glow/bloom around the orb */
-	glow?: boolean;
 	/** Use a rectangular area light when available (fallback to point light) */
 	areaLight?: boolean;
 	/** [width, height] for rectangular area light */
@@ -954,7 +951,6 @@ export class ObstacleManager {
 			count = 1,
 			height = 5.0,
 			diameter = 1.5,
-			glowIntensity = 2,
 			lightIntensity = 5,
 			lightRange = 15,
 			color = new BABYLON.Color3(1, 0.9, 0.6),
@@ -989,7 +985,6 @@ export class ObstacleManager {
 			const orbResult = createOrb(this.scene, pos, {
 				height,
 				diameter,
-				glowIntensity,
 				lightIntensity,
 				lightRange,
 				areaLight,
@@ -998,8 +993,7 @@ export class ObstacleManager {
 				areaLightOffset,
 				color,
 				physics: typeof physics === 'boolean' ? physics : false,
-				localRange: (options as any).localRange,
-				glow: (options as any).glow
+				localRange: (options as any).localRange
 			});
 
 			this.cleanupRegistry.push(() => orbResult.dispose());
