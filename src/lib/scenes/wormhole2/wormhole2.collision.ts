@@ -5,6 +5,14 @@ import { WORMHOLE2_CONFIG } from './wormhole2.config';
 
 const obstacleLastHit = new Map<any, number>();
 
+// Periodically clear old collision entries to prevent memory leak
+setInterval(() => {
+	const now = Date.now();
+	for (const [key, time] of obstacleLastHit.entries()) {
+		if (now - time > 60000) obstacleLastHit.delete(key);
+	}
+}, 30000);
+
 export function setupDroneCollision(droneAggregate: any): () => void {
 	if (!droneAggregate?.body) {
 		console.warn('No physics body for collision setup');

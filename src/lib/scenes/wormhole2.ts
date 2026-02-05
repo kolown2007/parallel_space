@@ -338,7 +338,7 @@ export class WormHoleScene2 {
 			try {
 				// Place multiple models using a for-loop for easy configuration
 				try {
-					const modelIndices = [ 0,80,100,150,];
+					const modelIndices = [ 0,150];
 					for (const mi of modelIndices) {
 						try {
 							await obstacles.place('model', {

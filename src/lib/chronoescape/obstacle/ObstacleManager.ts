@@ -118,6 +118,7 @@ export class ObstacleManager {
 	private modelCache: Map<string, BABYLON.AssetContainer>;
 	private cleanupRegistry: Array<() => void>;
 	private instances: BABYLON.AbstractMesh[] = [];
+	private activeTimers: Set<ReturnType<typeof setTimeout>> = new Set();
 
 	constructor(
 		scene: BABYLON.Scene,
@@ -750,13 +751,13 @@ export class ObstacleManager {
 
 				// Auto-dispose to free memory after a configurable delay
 				if (autoDisposeMs && typeof autoDisposeMs === 'number' && autoDisposeMs > 0) {
-					const t = setTimeout(() => {
+					const timer = setTimeout(() => {
+						this.activeTimers.delete(timer);
 						try { if ((cube as any)._physicsAgg) { try { (cube as any)._physicsAgg.dispose(); } catch {} } } catch {}
 						try { cube.dispose(); } catch (e) { /* ignore */ }
 						try { this.instances = this.instances.filter(i => i !== cube); } catch (e) {}
 					}, autoDisposeMs);
-					// ensure timeout is cleared if manager cleanup runs earlier
-					this.cleanupRegistry.push(() => { try { clearTimeout(t); } catch {} });
+					this.activeTimers.add(timer);
 				}
 			}
 
@@ -1065,6 +1066,12 @@ export class ObstacleManager {
 	 * Dispose all managed obstacles
 	 */
 	dispose(): void {
+		// Clear all pending timers
+		for (const timer of this.activeTimers) {
+			try { clearTimeout(timer); } catch {}
+		}
+		this.activeTimers.clear();
+		
 		for (const instance of this.instances) {
 			try {
 				// dispose any physics aggregate attached
