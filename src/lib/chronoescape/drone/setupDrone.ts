@@ -2,10 +2,8 @@ import * as BABYLON from '@babylonjs/core';
 import {
 	createDrone,
 	createDroneMaterial,
-	installDroneGlow,
 	attachDroneLight,
 	debugPhysicsAggregate,
-	setMeshSubmeshGlow,
 	type DroneResult
 } from './DroneProp';
 
@@ -26,12 +24,7 @@ export interface DroneSetupResult {
 	/** Point light attached to the drone */
 	/** Light attached to the drone (point/spot/rect visual) */
 	droneLight: BABYLON.Light;
-	/** Glow layer for the drone */
-	glowLayer: BABYLON.GlowLayer;
-	/** Toggle glow on/off */
-	toggleGlow: (enabled: boolean) => void;
-	/** Set glow intensity */
-	setGlowIntensity: (intensity: number) => void;
+	/** Toggle helpers removed: glow handled by material/light only */
 }
 
 /** Options for drone setup */
@@ -46,14 +39,13 @@ export interface DroneSetupOptions {
 	initialRotation?: BABYLON.Vector3;
 	/** Physics mass (default: 2) */
 	mass?: number;
+	/** Physics collision shape type (default: BOX) */
+	physicsShape?: BABYLON.PhysicsShapeType;
 	/** Physics restitution/bounciness (default: 1) */
 	restitution?: number;
 	/** Physics friction (default: 0.3) */
 	friction?: number;
-	/** Glow layer intensity (default: 0.4) */
-	glowIntensity?: number;
-	/** Submesh index to apply glow to (default: 1) */
-	glowSubmeshIndex?: number;
+	/** (Glow removed) */
 	/** Enable debug physics visualization (default: false) */
 	enableDebug?: boolean;
 	/** If true, attach a small rectangular-style light to the drone (visual plane + short-range spot) */
@@ -105,10 +97,9 @@ export async function setupSceneDrone(
 		initialPosition = BABYLON.Vector3.Zero(),
 		initialRotation = new BABYLON.Vector3(0, 0, -Math.PI / 2),
 			mass = 2,
+			physicsShape = BABYLON.PhysicsShapeType.BOX,
 			restitution = 1,
 			friction = 0.3,
-			glowIntensity = 0.4,
-			glowSubmeshIndex = 1,
 			enableDebug = false,
 			rectangularLight = true,
 			lightRange = 3.0
@@ -134,7 +125,7 @@ export async function setupSceneDrone(
 	// -------------------------------------------------------------------------
 	const droneAggregate = new BABYLON.PhysicsAggregate(
 		drone,
-		BABYLON.PhysicsShapeType.MESH,
+		physicsShape,
 		{ mass, restitution, friction },
 		scene
 	);
@@ -163,21 +154,7 @@ export async function setupSceneDrone(
 	const targetMesh = droneVisual ?? drone;
 	targetMesh.material = droneMaterial;
 
-	// -------------------------------------------------------------------------
-	// 6. INSTALL GLOW
-	// -------------------------------------------------------------------------
-	const glowLayer = installDroneGlow(scene, drone, droneVisual, glowIntensity);
-
-	// Set submesh glow if applicable
-	try {
-		const srcMesh = (droneVisual as any)?.sourceMesh ?? droneVisual ?? drone;
-		if (srcMesh?.subMeshes?.length > 0) {
-			const indexToGlow = Math.min(glowSubmeshIndex, srcMesh.subMeshes.length - 1);
-			setMeshSubmeshGlow(srcMesh, indexToGlow);
-		}
-	} catch (e) {
-		console.warn('Failed to set submesh glow:', e);
-	}
+	// (Glow layer removed) use material emissive and attached lights only
 
 	// -------------------------------------------------------------------------
 	// 7. ATTACH LIGHT
@@ -192,22 +169,7 @@ export async function setupSceneDrone(
 	// -------------------------------------------------------------------------
 	// 8. CREATE CONTROL FUNCTIONS
 	// -------------------------------------------------------------------------
-	// Detect WebGPU engine to pick softer defaults when necessary
-	const engineAny = (scene.getEngine && (scene.getEngine() as any)) || {};
-	const isWebGPU = typeof engineAny?.constructor?.name === 'string' && engineAny.constructor.name.toLowerCase().includes('webgpu');
-	const defaultOnLightIntensity = isWebGPU ? 1.5 : 3.0;
-
-	// Ensure the created light uses a reasonable base intensity for current backend
-	try { droneLight.intensity = defaultOnLightIntensity; } catch (e) { /* ignore */ }
-
-	const toggleGlow = (enabled: boolean) => {
-		glowLayer.intensity = enabled ? glowIntensity : 0;
-		try { droneLight.intensity = enabled ? defaultOnLightIntensity : 0; } catch (e) { /* ignore */ }
-	};
-
-	const setGlowIntensity = (intensity: number) => {
-		glowLayer.intensity = intensity;
-	};
+	// glow control removed; keep light intensity adjustments via droneLight
 
 	// -------------------------------------------------------------------------
 	// 9. RETURN RESULT
@@ -217,10 +179,7 @@ export async function setupSceneDrone(
 		droneVisual,
 		droneAggregate,
 		droneMaterial,
-		droneLight,
-		glowLayer,
-		toggleGlow,
-		setGlowIntensity
+		droneLight
 	};
 }
 
@@ -271,14 +230,10 @@ export {
 	createDrone,
 	createDroneMaterial,
 	createDroneInstance,
-	installDroneGlow,
 	attachDroneLight,
-	setMeshGlow,
-	setMeshSubmeshGlow,
 	createDebugHelper,
 	debugPhysicsAggregate,
 	type DroneResult,
 	type DroneInstanceOptions,
-	type DebugHelperOptions,
-	type GlowOptions
+	type DebugHelperOptions
 } from './DroneProp';

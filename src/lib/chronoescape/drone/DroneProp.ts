@@ -31,11 +31,7 @@ export interface DebugHelperOptions {
 	alpha?: number;
 }
 
-/** Options for glow configuration */
-export interface GlowOptions {
-	intensity?: number;
-	color?: BABYLON.Color3;
-}
+// Glow options removed
 
 // ============================================================================
 // PRIVATE UTILITIES
@@ -320,95 +316,7 @@ export function attachDroneLight(
 	return light;
 }
 
-// ============================================================================
-// GLOW SYSTEM
-// ============================================================================
-
-/**
- * Enable/disable glow on an entire mesh via metadata.
- * 
- * @param mesh - The mesh to configure
- * @param enabled - Whether glow is enabled
- */
-export function setMeshGlow(mesh: BABYLON.AbstractMesh, enabled = true): void {
-	const metadata = ensureMetadata(mesh);
-	metadata.glow = enabled;
-}
-
-/**
- * Set which submesh index should glow (null to disable submesh-specific glow).
- * 
- * @param mesh - The mesh to configure
- * @param subIndex - The submesh index to glow, or null to disable
- */
-export function setMeshSubmeshGlow(mesh: BABYLON.AbstractMesh, subIndex: number | null): void {
-	const metadata = ensureMetadata(mesh);
-	if (subIndex === null) {
-		delete metadata.selectedSubmesh;
-	} else {
-		metadata.selectedSubmesh = subIndex;
-	}
-}
-
-/**
- * Install a GlowLayer that respects per-submesh glow settings.
- * Uses metadata.selectedSubmesh to highlight specific submeshes.
- * 
- * @param scene - The Babylon.js scene
- * @param drone - The main drone mesh
- * @param droneVisual - Optional visual mesh (if different from physics mesh)
- * @param intensity - Glow intensity (0-1, default 0.8)
- * @returns The created GlowLayer
- */
-export function installDroneGlow(
-	scene: BABYLON.Scene,
-	drone: BABYLON.Mesh,
-	droneVisual?: BABYLON.Mesh,
-	intensity = 0.8
-): BABYLON.GlowLayer {
-	const glow = new BABYLON.GlowLayer('droneGlow', scene);
-	glow.intensity = intensity;
-
-	glow.customEmissiveColorSelector = (mesh, subMesh, material, result) => {
-		const source = getSourceMesh(mesh as BABYLON.AbstractMesh);
-		const metadata = (source as any).metadata || {};
-
-		// Skip debug helpers
-		if (metadata._debugHelper) {
-			result.set(0, 0, 0, 0);
-			return;
-		}
-
-		// Check if specific submesh is selected
-		if (typeof metadata.selectedSubmesh === 'number' && source.subMeshes) {
-			const index = source.subMeshes.indexOf(subMesh);
-			if (index === metadata.selectedSubmesh) {
-				applyEmissiveColor(result, material);
-				return;
-			}
-			result.set(0, 0, 0, 0);
-			return;
-		}
-
-		// Otherwise check metadata marker for drone identity. This is more robust
-		// than strict object identity (which can vary for instanced/merged meshes
-		// or during render updates) and prevents intermittent flicker.
-		if ((source as any).metadata?._isDrone) {
-			applyEmissiveColor(result, material);
-		} else {
-			result.set(0, 0, 0, 0);
-		}
-	};
-
-	return glow;
-}
-
-/** Apply emissive color from material to glow result */
-function applyEmissiveColor(result: BABYLON.Color4, material: BABYLON.Material): void {
-	const mat = material as BABYLON.StandardMaterial | null;
-	const emissive = mat?.emissiveColor || new BABYLON.Color3(0.1, 0.6, 1.0);
-	result.set(emissive.r, emissive.g, emissive.b, 1.0);
-}
+// (Glow system removed) use material emissive & lights for bloom-like effects
 
 // ============================================================================
 // DEBUG VISUALIZATION

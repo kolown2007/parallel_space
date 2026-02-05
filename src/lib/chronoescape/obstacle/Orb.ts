@@ -6,7 +6,8 @@ export interface OrbOptions {
 	/** Orb diameter (cylinder diameter) */
 	diameter?: number;
 	/** Glow intensity */
-	glowIntensity?: number;
+	/** (Glow removed) */
+	// glowIntensity?: number;
 	/** Point light intensity */
 	lightIntensity?: number;
 	/** Light range */
@@ -17,8 +18,8 @@ export interface OrbOptions {
 	physics?: boolean;
 	/** Local point-light radius to limit illumination around the orb */
 	localRange?: number;
-	/** Enable glow/bloom around the orb */
-	glow?: boolean;
+	/** (Glow removed) */
+	// glow?: boolean;
 	/** Use a rectangular-like area light (approximated with multiple point lights). */
 	areaLight?: boolean;
 	/** Width/height for area light approximation */
@@ -34,7 +35,6 @@ export interface OrbResult {
 	light: BABYLON.Light | undefined;
 	areaLights?: BABYLON.Light[];
 	material: BABYLON.StandardMaterial;
-	glowLayer?: any;
 	dispose: () => void;
 }
 
@@ -49,13 +49,13 @@ export function createOrb(
 	const {
 		height = 3.0,
 		diameter = 0.8,
-		glowIntensity = 2,
+		// glowIntensity = 2,
 		lightIntensity = 5,
 		lightRange = undefined,
 		color = new BABYLON.Color3(1, 0.9, 0.6), // warm white-yellow
 		physics = false,
 		localRange,
-		glow = true,
+		// glow = true,
 		areaLight = false,
 		areaLightSize,
 		areaLightIntensity,
@@ -143,32 +143,16 @@ export function createOrb(
 
 	// No area-light support in public API anymore; use local point light only.
 
-	// Optional glow layer for bloom effect
-	let glowLayer: any | undefined;
-	if (glow) {
-		try {
-			glowLayer = new (BABYLON as any).GlowLayer ? new (BABYLON as any).GlowLayer(`orbGlow_${Date.now()}`, scene, { mainTextureFixedSize: 256, blurKernelSize: 64 }) : null;
-			if (glowLayer) {
-				glowLayer.intensity = glowIntensity;
-				try { glowLayer.addIncludedOnlyMesh?.(orb); } catch (_) { /* ignore if method missing */ }
-			}
-	} catch (e) {
-			console.warn('Orb.create: failed creating glow layer', e);
-			glowLayer = undefined;
-		}
-	}
-
-	// Add to glow layer if available (disabled - plain sphere)
-	// Glow layer code removed for plain appearance
+	// Glow layer removed — orb uses emissive material and lights only
 
 	const dispose = () => {
 		try { aggregate?.dispose(); } catch {}
 		try { if (areaLights) { for (const l of areaLights) try { l.dispose(); } catch {} } } catch {}
 		try { if (light && !areaLights) light.dispose(); } catch {}
-		try { if (glowLayer && typeof glowLayer.dispose === 'function') glowLayer.dispose(); } catch {}
+		// glowLayer disposal removed
 		try { mat.dispose(); } catch {}
 		try { orb.dispose(); } catch {}
 	};
 
-	return { mesh: orb, light, areaLights, material: mat, glowLayer: glowLayer, dispose };
+	return { mesh: orb, light, areaLights, material: mat, dispose };
 }

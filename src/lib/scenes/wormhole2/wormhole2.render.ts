@@ -131,18 +131,20 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 				playRevolutionComplete(loops);
 				notifyRevolutionComplete(loops);
 
-				// Spawn particle bursts on revolution complete
+				// Spawn particle bursts on revolution complete (guarded by config)
 				try {
-					const droneIdx = getDronePathIndex();
-					const aheadIdx = (droneIdx + WORMHOLE2_CONFIG.particles.revolutionAheadOffset) % pathPoints.length;
-					
-					obstacles.place('particles', {
-						index: aheadIdx + WORMHOLE2_CONFIG.particles.revolutionSpawnOffset,
-						count: WORMHOLE2_CONFIG.particles.revolutionCount,
-						size: WORMHOLE2_CONFIG.particles.revolutionSize,
-						autoDispose: WORMHOLE2_CONFIG.particles.revolutionAutoDispose,
-						offsetY: 1.2
-					});
+					if (WORMHOLE2_CONFIG.particles.revolutionEnabled) {
+						const droneIdx = getDronePathIndex();
+						const aheadIdx = (droneIdx + WORMHOLE2_CONFIG.particles.revolutionAheadOffset) % pathPoints.length;
+
+						obstacles.place('particles', {
+							index: aheadIdx + WORMHOLE2_CONFIG.particles.revolutionSpawnOffset,
+							count: WORMHOLE2_CONFIG.particles.revolutionCount,
+							size: WORMHOLE2_CONFIG.particles.revolutionSize,
+							autoDispose: WORMHOLE2_CONFIG.particles.revolutionAutoDispose,
+							offsetY: 1.2
+						});
+					}
 				} catch (e) {
 					console.warn('Failed to spawn revolution particles:', e);
 				}
