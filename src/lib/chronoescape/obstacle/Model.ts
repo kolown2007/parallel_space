@@ -1,6 +1,11 @@
 import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
 
+// Toggle to enable verbose logging for debugging (set true temporarily when needed)
+const MODEL_PLACER_DEBUG = false;
+function log(...args: any[]) { if (MODEL_PLACER_DEBUG) console.log(...args); }
+function warn(...args: any[]) { if (MODEL_PLACER_DEBUG) console.warn(...args); }
+
 export interface ModelPlacerConfig {
 	rootUrl: string;
 	filename: string;
@@ -33,19 +38,19 @@ export class ModelPlacer {
 	constructor(scene: BABYLON.Scene, pathPoints: BABYLON.Vector3[]) {
 		this.scene = scene;
 		this.pathPoints = pathPoints;
-		console.log(`🔍 ModelPlacer constructor: pathPoints.length=${this.pathPoints?.length}, pathPoints[30]=`, this.pathPoints?.[30]);
+		log(`🔍 ModelPlacer constructor: pathPoints.length=${this.pathPoints?.length}, pathPoints[30]=`, this.pathPoints?.[30]);
 	}
 
 	/**
 	 * Load and place model instances along the path
 	 */
 	async load(config: ModelPlacerConfig): Promise<void> {
-		console.log(`📦 ModelPlacer.load: ${config.filename}, count: ${config.count}, scale: ${config.scale ?? 1}`);
+		log(`📦 ModelPlacer.load: ${config.filename}, count: ${config.count}, scale: ${config.scale ?? 1}`);
 
 		try {
 			if (config.container) {
 				// Use provided preloaded container
-				console.log(`  ↳ Using preloaded container (not owned by placer)`);
+				log(`  ↳ Using preloaded container (not owned by placer)`);
 				this.container = config.container;
 				this.ownsContainer = false;
 				
@@ -54,23 +59,23 @@ export class ModelPlacer {
 				this.containerWasInScene = !!(firstMesh && firstMesh.getScene());
 				
 				if (!this.containerWasInScene && this.container?.addAllToScene) {
-					console.log(`  ↳ Adding container to scene for first time`);
+					log(`  ↳ Adding container to scene for first time`);
 					this.container.addAllToScene();
 					this.containerWasInScene = true;
 				} else {
-					console.log(`  ↳ Container already in scene, will instantiate from existing meshes`);
+					log(`  ↳ Container already in scene, will instantiate from existing meshes`);
 				}
 			} else {
-				console.log(`  ↳ Loading new container from URL: ${config.rootUrl}${config.filename}`);
+				log(`  ↳ Loading new container from URL: ${config.rootUrl}${config.filename}`);
 				const moduleLoader = (BABYLON as any).SceneLoader.LoadAssetContainerAsync;
 				if (typeof moduleLoader !== 'function') {
 					console.error('✗ SceneLoader.LoadAssetContainerAsync not available!');
-					console.log('Available BABYLON.SceneLoader methods:', Object.keys(BABYLON.SceneLoader || {}));
+					log('Available BABYLON.SceneLoader methods:', Object.keys(BABYLON.SceneLoader || {}));
 					throw new Error('SceneLoader.LoadAssetContainerAsync not available');
 				}
 
 				// Correct order: rootUrl, sceneFilename, scene, onSuccess, onProgress, onError, pluginExtension
-				console.log(`  ↳ Calling LoadAssetContainerAsync with:`, { rootUrl: config.rootUrl, filename: config.filename });
+				log(`  ↳ Calling LoadAssetContainerAsync with:`, { rootUrl: config.rootUrl, filename: config.filename });
 				this.container = await moduleLoader.call(
 					BABYLON.SceneLoader,
 					config.rootUrl,
@@ -81,14 +86,14 @@ export class ModelPlacer {
 					undefined, // onError
 					'.glb' // pluginExtension
 				);
-				console.log(`  ↳ Container loaded, meshes count:`, this.container?.meshes?.length);
+				log(`  ↳ Container loaded, meshes count:`, this.container?.meshes?.length);
 				this.ownsContainer = true;
 				this.containerWasInScene = false;
 
 				if (this.container?.addAllToScene) {
 					this.container.addAllToScene();
 					this.containerWasInScene = true;
-					console.log(`  ↳ Added container to scene`);
+					log(`  ↳ Added container to scene`);
 				}
 			}
 
@@ -98,13 +103,13 @@ export class ModelPlacer {
 				throw new Error('No valid mesh found in model');
 			}
 
-			console.log(`  ↳ Using template mesh:`, this.template.name, `(isVisible: ${this.template.isVisible})`);
+			log(`  ↳ Using template mesh:`, this.template.name, `(isVisible: ${this.template.isVisible})`);
 			try {
-				console.log('  ↳ Template scene:', !!this.template.getScene(), 'template parent:', this.template.parent?.name ?? null);
-				console.log('  ↳ Template position:', this.template.position?.toString?.() ?? this.template.position);
-				console.log('  ↳ Scene mesh count (before instances):', this.scene.meshes.length);
+				log('  ↳ Template scene:', !!this.template.getScene(), 'template parent:', this.template.parent?.name ?? null);
+				log('  ↳ Template position:', this.template.position?.toString?.() ?? this.template.position);
+				log('  ↳ Scene mesh count (before instances):', this.scene.meshes.length);
 			} catch (e) {
-				console.warn('  ⚠ Template debug log failed:', e);
+				warn('  ⚠ Template debug log failed:', e);
 			}
 
 			// Hide template but keep enabled so instances work
@@ -117,7 +122,7 @@ export class ModelPlacer {
 
 			await this.createInstances(config);
 
-			console.log(`✓ ModelPlacer created ${this.instances.length}/${config.count} instances`);
+			log(`✓ ModelPlacer created ${this.instances.length}/${config.count} instances`);
 		} catch (error) {
 			console.error('✗ ModelPlacer.load failed:', error);
 			throw error;
@@ -127,24 +132,24 @@ export class ModelPlacer {
 	private findTemplateMesh(): BABYLON.Mesh | undefined {
 		// Try container first - this is most reliable
 		if (this.container?.meshes) {
-			console.log(`  ↳ Container has ${this.container.meshes.length} meshes:`, this.container.meshes.map((m: any) => m.name));
+			log(`  ↳ Container has ${this.container.meshes.length} meshes:`, this.container.meshes.map((m: any) => m.name));
 			const mesh = this.container.meshes.find((m: any) => m.geometry) as BABYLON.Mesh | undefined;
 			if (mesh) {
-				console.log(`  ↳ Found template mesh in container:`, mesh.name);
+				log(`  ↳ Found template mesh in container:`, mesh.name);
 				return mesh;
 			}
-			console.warn(`  ⚠ No mesh with geometry found in container!`);
+			warn(`  ⚠ No mesh with geometry found in container!`);
 		} else {
-			console.warn(`  ⚠ Container has no meshes!`);
+			warn(`  ⚠ Container has no meshes!`);
 		}
 		// Fallback: Search scene for recently added meshes with geometry
 		// This is less reliable and can grab wrong meshes like billboards/portals
-		console.warn(`  ⚠ Falling back to scene search for template mesh`);
+		warn(`  ⚠ Falling back to scene search for template mesh`);
 		const meshes = this.scene.meshes.filter(m => m.geometry && !m.name.includes('billboard') && !m.name.includes('portal')) as BABYLON.Mesh[];
-		console.log(`  ↳ Found ${meshes.length} candidate meshes in scene (last 5):`, meshes.slice(-5).map(m => m.name));
+		log(`  ↳ Found ${meshes.length} candidate meshes in scene (last 5):`, meshes.slice(-5).map(m => m.name));
 		const candidate = meshes[meshes.length - 1];
 		if (candidate) {
-			console.warn(`  ⚠ Using fallback template search, found:`, candidate.name);
+			warn(`  ⚠ Using fallback template search, found:`, candidate.name);
 		}
 		return candidate;
 	}
@@ -157,30 +162,30 @@ export class ModelPlacer {
 		const offsetY = config.offsetY ?? 0;
 		const startIndex = config.startIndex ?? 0;
 
-		console.log(`  ↳ createInstances: count=${config.count}, step=${step}, scale=${scale}, startIndex=${startIndex}, pathPoints.length=${this.pathPoints.length}`);
+		log(`  ↳ createInstances: count=${config.count}, step=${step}, scale=${scale}, startIndex=${startIndex}, pathPoints.length=${this.pathPoints.length}`);
 
 		for (let i = 0; i < config.count; i++) {
 			const pathIndex = (startIndex + (i * step)) % this.pathPoints.length;
 			const pos = this.pathPoints[pathIndex]?.clone();
 			if (!pos) continue;
 
-			console.log(`  ↳ Instance ${i}: computed pathIndex=${pathIndex}, pos=${pos.x.toFixed(2)},${pos.y.toFixed(2)},${pos.z.toFixed(2)}`);
+			log(`  ↳ Instance ${i}: computed pathIndex=${pathIndex}, pos=${pos.x.toFixed(2)},${pos.y.toFixed(2)},${pos.z.toFixed(2)}`);
 
 			pos.y += offsetY;
 
 			const instance = this.template.createInstance(`model_instance_${i}`);
 			if (!instance) {
-				console.warn('  ⚠ createInstance returned null for', this.template.name);
+				warn('  ⚠ createInstance returned null for', this.template.name);
 				continue;
 			}
 			instance.position.copyFrom(pos);
 			instance.scaling.setAll(scale);
 			instance.isVisible = true;
-			try {
-				console.log(`  ↳ Created instance: ${instance.name}, visible: ${instance.isVisible}, pos: ${pos.toString()}, scene?: ${!!instance.getScene()}`);
-			} catch (e) {
-				/* ignore logging errors */
-			}
+				try {
+					log(`  ↳ Created instance: ${instance.name}, visible: ${instance.isVisible}, pos: ${pos.toString()}, scene?: ${!!instance.getScene()}`);
+				} catch (e) {
+					/* ignore logging errors */
+				}
 
 		if (config.physics) {
 			this.addPhysics(instance, config.physics);
@@ -218,8 +223,8 @@ export class ModelPlacer {
 		}
 	}
 
-	dispose(): void {
-		console.log(`🗑️ ModelPlacer.dispose: disposing ${this.instances.length} instances, ownsContainer: ${this.ownsContainer}`);
+		dispose(): void {
+			log(`🗑️ ModelPlacer.dispose: disposing ${this.instances.length} instances, ownsContainer: ${this.ownsContainer}`);
 		
 		this.instances.forEach((instance) => {
 			try {
@@ -290,14 +295,14 @@ export class ModelPlacer {
 				offsetY: callerOffsetY
 			} = options;
 
-		console.log(`🎨 Placing models: ${modelNames.join(', ')}, normalized to ${targetSize}m`);
-		console.log(`🔍 ModelPlacer.placeModels: received pathPoints.length=${pathPoints?.length}, pathPoints[30]=`, pathPoints?.[30]);
+		log(`🎨 Placing models: ${modelNames.join(', ')}, normalized to ${targetSize}m`);
+		log(`🔍 ModelPlacer.placeModels: received pathPoints.length=${pathPoints?.length}, pathPoints[30]=`, pathPoints?.[30]);
 
 			for (const modelId of modelNames) {
 				try {
 					const def = cfg.models?.[modelId];
 					if (!def?.rootUrl || !def?.filename) {
-						console.warn(`⚠️ Model "${modelId}" not found in assets`);
+						warn(`⚠️ Model "${modelId}" not found in assets`);
 						continue;
 					}
 
@@ -354,13 +359,13 @@ export class ModelPlacer {
 							
 							if (maxDimension > 0) {
 								normalizeScale = targetSize / maxDimension;
-								console.log(`  ↳ ${modelId}: native size=${sizeX.toFixed(3)}×${sizeY.toFixed(3)}×${sizeZ.toFixed(3)}m, max=${maxDimension.toFixed(3)}m, normalize scale=${normalizeScale.toFixed(3)}`);
+								log(`  ↳ ${modelId}: native size=${sizeX.toFixed(3)}×${sizeY.toFixed(3)}×${sizeZ.toFixed(3)}m, max=${maxDimension.toFixed(3)}m, normalize scale=${normalizeScale.toFixed(3)}`);
 							}
 						} else {
-							console.warn(`  ⚠ ${modelId}: No meshes with geometry found for normalization`);
+							warn(`  ⚠ ${modelId}: No meshes with geometry found for normalization`);
 						}
 					} catch (e) {
-						console.warn(`  ⚠ ${modelId}: Failed to calculate normalization:`, e);
+						warn(`  ⚠ ${modelId}: Failed to calculate normalization:`, e);
 					}
 
 					for (let i = 0; i < instanceCount; i++) {
@@ -382,7 +387,7 @@ export class ModelPlacer {
 					}
 					// normalize index into range
 					pathIndex = ((pathIndex % pathPoints.length) + pathPoints.length) % pathPoints.length;
-					console.log(`🎯 Model ${modelId} #${i + 1}: requestedIndex=${requestedIndex ?? 'auto'}, normalizedIndex=${pathIndex}, pathPoints.length=${pathPoints.length}`);
+					log(`🎯 Model ${modelId} #${i + 1}: requestedIndex=${requestedIndex ?? 'auto'}, normalizedIndex=${pathIndex}, pathPoints.length=${pathPoints.length}`);
 
 					await placer.load({
 						container,
@@ -406,14 +411,14 @@ export class ModelPlacer {
 
 					const placedPos = pathPoints[pathIndex] ? pathPoints[pathIndex].clone() : undefined;
 						if (placedPos) placedPos.y += (def as any).offsetY ?? 0;
-						console.log(`✓ Placed ${modelId} #${i + 1} at index ${pathIndex}` + (placedPos ? `, pos: ${placedPos.x.toFixed(2)},${placedPos.y.toFixed(2)},${placedPos.z.toFixed(2)}` : '') + `, userScale: ${userScale.toFixed(2)}, finalScale: ${finalScale.toFixed(2)}`);
+						log(`✓ Placed ${modelId} #${i + 1} at index ${pathIndex}` + (placedPos ? `, pos: ${placedPos.x.toFixed(2)},${placedPos.y.toFixed(2)},${placedPos.z.toFixed(2)}` : '') + `, userScale: ${userScale.toFixed(2)}, finalScale: ${finalScale.toFixed(2)}`);
 					}
 				} catch (e) {
-					console.warn(`Failed to place model ${modelId}:`, e);
+					warn(`Failed to place model ${modelId}:`, e);
 				}
 			}
 
-			console.log(`✨ Placed ${modelNames.length} model types`);
+			log(`✨ Placed ${modelNames.length} model types`);
 		} catch (e) {
 			console.error('placeModels failed:', e);
 		}

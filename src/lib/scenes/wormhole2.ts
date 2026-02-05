@@ -336,16 +336,16 @@ export class WormHoleScene2 {
 			try {
 				// Place multiple models using a for-loop for easy configuration
 				try {
-					const modelIndices = [ 0,80,100,150,];
+					const modelIndices = [ 0,80,100,150,200,];
 					for (const mi of modelIndices) {
 						try {
 							await obstacles.place('model', {
 								modelNames: [randomFrom('jollibee', 'rabbit', 'mario','army','armycatbike','manikineko')],
 								count: 1,
 								index: mi,
-								offsetY: -1,
-								scaleRange: [4, 8],
-								physics: true
+								offsetY: -10,
+								scaleRange: [2, 5],
+								physics: false
 							});
 							console.log('Placed model at index', mi);
 						} catch (e) {
