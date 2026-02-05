@@ -168,109 +168,17 @@ export class WormHoleScene2 {
 			torusTubeRadius
 		});
 
-		// ====================================================================
-		// DRONE: LOADING & SETUP
-		// ====================================================================
-
-		const initialPosition = getPositionOnPath(WormHoleScene2.pathPoints, cfg.drone.startPathPoint);
+		// Drone will be created after obstacle placement to avoid being selected as template
 		let drone: any, droneAggregate: any;
-		{
-			const res = await setupSceneDrone(scene, {
-				assetId: 'drone',
-				initialPosition: initialPosition,
-				initialRotation: new BABYLON.Vector3(
-					cfg.drone.initialRotation.x,
-					cfg.drone.initialRotation.y,
-					cfg.drone.initialRotation.z
-				),
-				mass: cfg.drone.mass,
-				restitution: cfg.drone.restitution,
-				friction: cfg.drone.friction,
-				enableDebug: cfg.debug.enableDroneDebug
-			});
-			drone = res.drone;
-			droneAggregate = res.droneAggregate;
-
-		
-
-			if (drone.material && drone.material instanceof BABYLON.StandardMaterial) {
-				const mat = drone.material as BABYLON.StandardMaterial;
-				mat.emissiveColor = new BABYLON.Color3(
-					cfg.drone.emissiveColor.r,
-					cfg.drone.emissiveColor.g,
-					cfg.drone.emissiveColor.b
-				);
-				mat.diffuseColor = new BABYLON.Color3(
-					cfg.drone.diffuseColor.r,
-					cfg.drone.diffuseColor.g,
-					cfg.drone.diffuseColor.b
-				);
-			}
-		}
-
-		// Ensure drone always starts at pathpoint 0
-		try {
-			updateProgress(0);
-			const startPos = getPositionOnPath(WormHoleScene2.pathPoints, cfg.drone.startPathPoint);
-			drone.position.copyFrom(startPos);
-			if (droneAggregate?.body) {
-				try {
-					droneAggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
-					droneAggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
-					if (typeof (droneAggregate.body as any).setPosition === 'function') {
-						(droneAggregate.body as any).setPosition({ x: startPos.x, y: startPos.y, z: startPos.z });
-					}
-				} catch (e) {
-					/* ignore transient physics positioning errors */
-				}
-			}
-		} catch (e) {
-			console.warn('Failed to enforce drone start at pathpoint 0:', e);
-		}
-
-		// Enable collision detection on drone
-		const cleanupCollision = setupDroneCollision(droneAggregate);
-		WormHoleScene2.registerCleanup(cleanupCollision);
-
-		// Publish lightweight references: register heavy objects elsewhere and store IDs
-		try {
-			const sceneId = registerScene(scene, drone, WormHoleScene2.pathPoints);
-			sceneRefStore.set({ sceneId, droneId: sceneId, pathPoints: WormHoleScene2.pathPoints });
-			WormHoleScene2.registerCleanup(() => {
-				try {
-					sceneRefStore.set({ sceneId: null, droneId: null, pathPoints: null });
-					unregisterScene(sceneId);
-				} catch (e) {}
-			});
-		} catch (e) {
-			console.warn('Failed to set sceneRefStore:', e);
-		}
-
-		// ====================================================================
-		// CAMERA SETTINGS & CONTROLS
-		// ====================================================================
-
-		followCamera.position = drone.position.add(new BABYLON.Vector3(
-			0,
-			cfg.camera.initialOffsetY,
-			cfg.camera.initialOffsetZ
-		));
-
-		const gimbal = {
-			followDistance: cfg.camera.followDistance,
-			followHeight: cfg.camera.followHeight,
-			positionSmooth: cfg.camera.positionSmooth,
-			rotationSmooth: cfg.camera.rotationSmooth,
-			lookAheadDistance: cfg.camera.lookAheadDistance
-		};
+		const initialPosition = getPositionOnPath(WormHoleScene2.pathPoints, cfg.drone.startPathPoint);
 
 		// OBSTACLES & MARKERS
 		// ====================================================================
 
 		const obstacles = new ObstacleManager(scene, pathPoints, WormHoleScene2.modelCache, WormHoleScene2.cleanupRegistry);
 
-		// Helper: compute nearest path point index for drone (defined early for keyboard handlers)
-		const getDronePathIndex = getDronePathIndexFactory(drone, pathPoints);
+		// Helper: compute nearest path point index for drone. Will be set after drone is created.
+		let getDronePathIndex: () => number = () => 0;
 
 		// Portal state management (support multiple portals)
 		let portals: any[] = [];
@@ -290,36 +198,7 @@ export class WormHoleScene2 {
 			} catch (e) { /* ignore */ }
 		};
 
-		// Install keyboard handlers
-		const keyboardHandlers = createKeyboardHandlers({
-			drone,
-			droneAggregate,
-			torusMaterial,
-			obstacles,
-			getDronePathIndex,
-			switchCamera,
-			onPortalTrigger,
-			setPortal,
-			pathPoints
-		});
 
-		const uninstallKeyboard = installKeyboardControls(keyboardHandlers);
-		WormHoleScene2.registerCleanup(() => uninstallKeyboard());
-		WormHoleScene2.registerCleanup(() => cleanupDroneControl(false));
-
-		// DRONE POSITION LOGGER
-		// ====================================================================
-		const _dronePosLogger = setInterval(() => {
-			try {
-				if (!drone || !pathPoints || pathPoints.length === 0) return;
-				const currentPointIndex = getDronePathIndex();
-				const p = drone.position;
-				// console.log('Drone @ point', currentPointIndex, '/', pathPoints.length, '| xyz:', { x: p.x.toFixed(2), y: p.y.toFixed(2), z: p.z.toFixed(2) });
-			} catch (e) {
-				console.warn('Drone position logger error:', e);
-			}
-		}, cfg.debug.droneLogIntervalMs);
-		WormHoleScene2.registerCleanup(() => clearInterval(_dronePosLogger));
 
 		// Cleanup on dispose
 		// ====================================================================
@@ -331,8 +210,8 @@ export class WormHoleScene2 {
 		// MODELS & OBSTACLES
 		// ====================================================================
 
-		// Place models using unified API (delayed)
-		setTimeout(async () => {
+		// Place models using unified API (awaited so we can create the drone afterwards)
+		await (async () => {
 			try {
 				// Place multiple models using a for-loop for easy configuration
 				try {
@@ -343,8 +222,8 @@ export class WormHoleScene2 {
 								modelNames: [randomFrom('jollibee', 'rabbit', 'mario','army','armycatbike','manikineko')],
 								count: 1,
 								index: mi,
-								offsetY: -10,
-								scaleRange: [2, 5],
+								offsetY: -1,
+								scaleRange: [5, 7],
 								physics: false
 							});
 							console.log('Placed model at index', mi);
@@ -433,36 +312,164 @@ export class WormHoleScene2 {
                 try {
                     console.log('Placed models');
                 } catch (e) { /* ignore logging errors */ }
-            } catch (e) {
-                console.warn('Delayed model/portal placement failed:', e);
-            }
-        }, 0);
+			} catch (e) {
+				console.warn('Delayed model/portal placement failed:', e);
+			}
+		})();
 
-	// ====================================================================
-	// RENDER LOOP
-	// ====================================================================
+		// ------------------------------------------------------------------
+		// Now that obstacles/models are placed, create the drone and related
+		// systems that depend on the drone existing (camera init, collision,
+		// keyboard handlers, render loop, realtime init)
+		// ------------------------------------------------------------------
+		try {
+			const res = await setupSceneDrone(scene, {
+				assetId: 'drone',
+				initialPosition: initialPosition,
+				initialRotation: new BABYLON.Vector3(
+					cfg.drone.initialRotation.x,
+					cfg.drone.initialRotation.y,
+					cfg.drone.initialRotation.z
+				),
+				mass: cfg.drone.mass,
+				restitution: cfg.drone.restitution,
+				friction: cfg.drone.friction,
+				enableDebug: cfg.debug.enableDroneDebug
+			});
+			drone = res.drone;
+			droneAggregate = res.droneAggregate;
 
-	const renderLoop = createRenderLoop({
-		engine,
-		scene,
-		drone,
-		droneAggregate,
-		followCamera,
-		pathPoints,
-		obstacles,
-		getPortal,
-		setPortal,
-		onPortalTrigger,
-		getDronePathIndex,
-		keysPressed: keyboardHandlers.keysPressed,
-		gimbal,
-		torusGeometry: { torusCenter, torusMainRadius, torusTubeRadius }
-	});
- 
-	scene.registerBeforeRender(renderLoop);
-	WormHoleScene2.registerCleanup(() => {
-		try { scene.unregisterBeforeRender(renderLoop); } catch {}
-	});
+			if (drone.material && drone.material instanceof BABYLON.StandardMaterial) {
+				const mat = drone.material as BABYLON.StandardMaterial;
+				mat.emissiveColor = new BABYLON.Color3(
+					cfg.drone.emissiveColor.r,
+					cfg.drone.emissiveColor.g,
+					cfg.drone.emissiveColor.b
+				);
+				mat.diffuseColor = new BABYLON.Color3(
+					cfg.drone.diffuseColor.r,
+					cfg.drone.diffuseColor.g,
+					cfg.drone.diffuseColor.b
+				);
+			}
+
+			// Ensure drone always starts at pathpoint 0
+			try {
+				updateProgress(0);
+				const startPos = getPositionOnPath(WormHoleScene2.pathPoints, cfg.drone.startPathPoint);
+				drone.position.copyFrom(startPos);
+				if (droneAggregate?.body) {
+					try {
+						droneAggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
+						droneAggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
+						if (typeof (droneAggregate.body as any).setPosition === 'function') {
+							(droneAggregate.body as any).setPosition({ x: startPos.x, y: startPos.y, z: startPos.z });
+						}
+					} catch (e) {
+						/* ignore transient physics positioning errors */
+					}
+				}
+			} catch (e) {
+				console.warn('Failed to enforce drone start at pathpoint 0:', e);
+			}
+
+			// Enable collision detection on drone
+			const cleanupCollision = setupDroneCollision(droneAggregate);
+			WormHoleScene2.registerCleanup(cleanupCollision);
+
+			// Publish lightweight references: register heavy objects elsewhere and store IDs
+			try {
+				const sceneId = registerScene(scene, drone, WormHoleScene2.pathPoints);
+				sceneRefStore.set({ sceneId, droneId: sceneId, pathPoints: WormHoleScene2.pathPoints });
+				WormHoleScene2.registerCleanup(() => {
+					try {
+						sceneRefStore.set({ sceneId: null, droneId: null, pathPoints: null });
+						unregisterScene(sceneId);
+					} catch (e) {}
+				});
+			} catch (e) {
+				console.warn('Failed to set sceneRefStore:', e);
+			}
+
+			// Now that drone exists, create the real getDronePathIndex function
+			getDronePathIndex = getDronePathIndexFactory(drone, pathPoints);
+
+			// CAMERA SETTINGS & CONTROLS
+			followCamera.position = drone.position.add(new BABYLON.Vector3(
+				0,
+				cfg.camera.initialOffsetY,
+				cfg.camera.initialOffsetZ
+			));
+
+			const gimbal = {
+				followDistance: cfg.camera.followDistance,
+				followHeight: cfg.camera.followHeight,
+				positionSmooth: cfg.camera.positionSmooth,
+				rotationSmooth: cfg.camera.rotationSmooth,
+				lookAheadDistance: cfg.camera.lookAheadDistance
+			};
+
+			// Install keyboard handlers (now that drone exists)
+			const keyboardHandlers = createKeyboardHandlers({
+				drone,
+				droneAggregate,
+				torusMaterial,
+				obstacles,
+				getDronePathIndex,
+				switchCamera,
+				onPortalTrigger,
+				setPortal,
+				pathPoints
+			});
+
+			const uninstallKeyboard = installKeyboardControls(keyboardHandlers);
+			WormHoleScene2.registerCleanup(() => uninstallKeyboard());
+			WormHoleScene2.registerCleanup(() => cleanupDroneControl(false));
+
+			// DRONE POSITION LOGGER
+			const _dronePosLogger = setInterval(() => {
+				try {
+					if (!drone || !pathPoints || pathPoints.length === 0) return;
+					const currentPointIndex = getDronePathIndex();
+					const p = drone.position;
+					// console.log('Drone @ point', currentPointIndex, '/', pathPoints.length, '| xyz:', { x: p.x.toFixed(2), y: p.y.toFixed(2), z: p.z.toFixed(2) });
+				} catch (e) {
+					console.warn('Drone position logger error:', e);
+				}
+			}, cfg.debug.droneLogIntervalMs);
+			WormHoleScene2.registerCleanup(() => clearInterval(_dronePosLogger));
+
+			// ====================================================================
+			// RENDER LOOP
+			// ====================================================================
+
+			const renderLoop = createRenderLoop({
+				engine,
+				scene,
+				drone,
+				droneAggregate,
+				followCamera,
+				pathPoints,
+				obstacles,
+				getPortal,
+				setPortal,
+				onPortalTrigger,
+				getDronePathIndex,
+				keysPressed: keyboardHandlers.keysPressed,
+				gimbal,
+				torusGeometry: { torusCenter, torusMainRadius, torusTubeRadius }
+			});
+    
+			scene.registerBeforeRender(renderLoop);
+			WormHoleScene2.registerCleanup(() => {
+				try { scene.unregisterBeforeRender(renderLoop); } catch {}
+			});
+
+		} catch (e) {
+			console.warn('Drone setup failed after obstacle placement:', e);
+		}
+
+
 
 	// Notify loading screen that scene and assets are ready
 	try {
