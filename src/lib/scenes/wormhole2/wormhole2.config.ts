@@ -15,17 +15,17 @@ export const WORMHOLE2_CONFIG = {
 		spiralTurns: 3,
 		segments: 128,
 		pointsPerCircle: 360,
-		emissiveIntensity: .000001  // 0.1 = very dark (orb lights visible), 0.5 = balanced, 1.0 = full bright
+		emissiveIntensity: .02  // 0.1 = very dark (orb lights visible), 0.5 = balanced, 1.0 = full bright
 		
 	},
 
 	/** Drone physics and starting state */
 
 	drone: {
-		mass: 25, 
+		mass: 2, 
 		restitution: 0.6,
 		friction: 0.001,
-		glowIntensity: 0.1,
+		glowIntensity: 0.5,
 		startPathPoint: 0,
 		initialRotation: { x: 0, y: 0, z: -Math.PI / 2 },
 		emissiveColor: { r: 0, g: .02, b: 0 }, // Blue

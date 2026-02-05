@@ -108,16 +108,7 @@ export class WormHoleScene2 {
 		const { followCamera, switchCamera } = setupCameras(scene, canvas, 'follow');
 		setupLighting(scene);
 
-		// Create a localized highlight layer to keep glow limited to specific meshes (drone/orbs).
-		// const highlightLayer = new (BABYLON as any).HighlightLayer('localGlow', scene);
-		// highlightLayer.blurKernel = 0;
-		// highlightLayer.innerGlow = false;
-		// highlightLayer.outerGlow = true;
-		// highlightLayer.intensity = 1.0;
-		// WormHoleScene2.registerCleanup(() => {
-		// 	try { highlightLayer.dispose(); } catch (e) { /* ignore */ }
-		// });
-
+	
 
 		
 		// ====================================================================
@@ -165,12 +156,7 @@ export class WormHoleScene2 {
 		WormHoleScene2.pathPoints = pathPoints;
 		console.log('PathPoints count:', pathPoints.length);
 		const torusMaterial = torus.material as BABYLON.StandardMaterial;
-		// Disable broad emissive glow on the torus so the whole scene doesn't appear to glow.
-		// try {
-		// 	if (torusMaterial) {
-		// 		torusMaterial.emissiveColor = new BABYLON.Color3(0, 0, 0);
-		// 	}
-		// } catch (e) { /* ignore */ }
+	
 
 		// ====================================================================
 		// PATH DEBUG VISUALIZATION
@@ -207,16 +193,7 @@ export class WormHoleScene2 {
 			drone = res.drone;
 			droneAggregate = res.droneAggregate;
 
-			// Add the drone to the localized highlight layer so only the drone glows
-			// try {
-			// 	if (drone && highlightLayer) {
-			// 		highlightLayer.addMesh(drone, new BABYLON.Color3(
-			// 			cfg.drone.emissiveColor.r,
-			// 			cfg.drone.emissiveColor.g,
-			// 			cfg.drone.emissiveColor.b
-			// 		));
-			// 	}
-			// } catch (e) { /* ignore */ }
+		
 
 			if (drone.material && drone.material instanceof BABYLON.StandardMaterial) {
 				const mat = drone.material as BABYLON.StandardMaterial;
@@ -349,51 +326,19 @@ export class WormHoleScene2 {
 				await obstacles.place('model', {
 					modelNames: [randomFrom('jollibee', 'rabbit', 'mario')],
 					count: 1,
-					index: 200,
+					index: 50,
 					offsetY: -1,
 					scaleRange: [4, 8],
 					physics: true
 				});
 
 			try {
-				const orb1 = await obstacles.place('orb', {
-					index: 50,
-					diameter: 1,
-					offsetY: -10,
-					areaLight: true,
-					areaLightSize: [20, 20],
-					areaLightIntensity: 50,
-					areaLightOffset: new BABYLON.Vector3(0, 2, 0),
-					glow: true,
-					glowIntensity: 10,
-					lightIntensity: 20,
-					lightRange: 50,
-					color: new BABYLON.Color3(0.2, 0.8, 1.0),
-					physics: false,
-				   
-				} as any);
-				console.log('Placed orb1 at index 30 ->', orb1);
 
-const orb2 = await obstacles.place('orb', {
-					index: 150,
-					diameter: 3,
-					offsetY: -10,
-					areaLight: true,
-					areaLightSize: [20, 20],
-					areaLightIntensity: 50,
-					areaLightOffset: new BABYLON.Vector3(0, 2, 0),
-					glow: true,
-					glowIntensity: 10,
-					lightIntensity: 20,
-					lightRange: 50,
-					color: new BABYLON.Color3(0.2, 0.8, 1.0),
-					physics: false,
-				   
-				} as any);
-				console.log('Placed orb2 at index 60 ->', orb2);
+
+
 
 const portal = await obstacles.place('portal', {
-					index: 250,
+					index: 200,
 					posterTextureId: randomFrom('portal1','portal2'),
 					width: WORMHOLE2_CONFIG.obstacles.portalWidth,
 					height: WORMHOLE2_CONFIG.obstacles.portalHeight,
@@ -406,7 +351,7 @@ const portal = await obstacles.place('portal', {
 				}) as any;
 				
 				setPortal(portal);
-				console.log('🌀 Portal placed at index', 250);
+				console.log('🌀 Portal placed at index', 200);
 
 
 			  
