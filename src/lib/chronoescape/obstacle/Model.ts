@@ -194,7 +194,7 @@ export class ModelPlacer {
 		instance: BABYLON.InstancedMesh,
 		physics: NonNullable<ModelPlacerConfig['physics']>
 	): void {
-		const shape = physics.shape ?? BABYLON.PhysicsShapeType.MESH;
+		const shape = physics.shape ?? BABYLON.PhysicsShapeType.BOX;
 		const mass = physics.mass ?? 0.05;
 		const restitution = physics.restitution ?? 0.3;
 		const friction = physics.friction ?? 0.05;

@@ -39,6 +39,8 @@ export interface DroneSetupOptions {
 	initialRotation?: BABYLON.Vector3;
 	/** Physics mass (default: 2) */
 	mass?: number;
+	/** Physics collision shape type (default: BOX) */
+	physicsShape?: BABYLON.PhysicsShapeType;
 	/** Physics restitution/bounciness (default: 1) */
 	restitution?: number;
 	/** Physics friction (default: 0.3) */
@@ -95,6 +97,7 @@ export async function setupSceneDrone(
 		initialPosition = BABYLON.Vector3.Zero(),
 		initialRotation = new BABYLON.Vector3(0, 0, -Math.PI / 2),
 			mass = 2,
+			physicsShape = BABYLON.PhysicsShapeType.BOX,
 			restitution = 1,
 			friction = 0.3,
 			enableDebug = false,
@@ -122,7 +125,7 @@ export async function setupSceneDrone(
 	// -------------------------------------------------------------------------
 	const droneAggregate = new BABYLON.PhysicsAggregate(
 		drone,
-		BABYLON.PhysicsShapeType.MESH,
+		physicsShape,
 		{ mass, restitution, friction },
 		scene
 	);
