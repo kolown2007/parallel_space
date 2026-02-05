@@ -6,6 +6,7 @@ export type FloatingCube = {
   agg: BABYLON.PhysicsAggregate;
   mass: number;
   home: BABYLON.Vector3;
+  areaLight?: any; // optional rectangular area light
 };
 
 export type FloatingCubesResult = {
@@ -31,6 +32,12 @@ export function createFloatingCubes(
     faceUVTextureUrl?: string;
     faceUVTextureId?: string;
     faceUVLayout?: 'vertical' | 'horizontal' | 'grid';
+    // new area light options
+    areaLight?: boolean;
+    areaLightIntensity?: number;
+    areaLightSize?: [number, number];
+    areaLightColor?: BABYLON.Color3;
+    areaLightOffset?: BABYLON.Vector3;
   } = {}
 ): FloatingCubesResult {
   const {
@@ -45,12 +52,19 @@ export function createFloatingCubes(
     textureUrls = [],
     faceUVTextureUrl,
     faceUVTextureId,
-    faceUVLayout = 'grid'
+    faceUVLayout = 'grid',
+    // area light defaults
+    areaLight = false,
+    areaLightIntensity = 2.0,
+    areaLightSize = [4, 2],
+    areaLightColor = new BABYLON.Color3(1, 1, 1),
+    areaLightOffset = new BABYLON.Vector3(0, 3, 0)
   } = options;
 
   const root = new BABYLON.TransformNode('floatingCubesRoot', scene);
   const items: FloatingCube[] = [];
   const materialPool: BABYLON.StandardMaterial[] = [];
+  const createdLights: any[] = [];
 
   // Resolve faceUV texture URL (direct URL takes priority over ID)
   let resolvedFaceUVUrl = faceUVTextureUrl;
@@ -163,6 +177,43 @@ export function createFloatingCubes(
     const randomMat = materialPool[Math.floor(Math.random() * materialPool.length)];
     box.material = randomMat;
 
+    // Create optional rectangular area light for each cube (best-effort, wrapped in try/catch)
+    let areaLightInstance: any = undefined;
+    if (areaLight) {
+      try {
+        // Try to construct a Rectangular/Area light if available in this build
+        const LightCtor = (BABYLON as any).RectangularLight || (BABYLON as any).RectLight || (BABYLON as any).AreaLight;
+        if (LightCtor) {
+          areaLightInstance = new LightCtor(`areaLight_${i}`, scene);
+          // Set size/intensity/color if properties exist
+          if (typeof areaLightInstance.width === 'number') areaLightInstance.width = areaLightSize[0];
+          if (typeof areaLightInstance.height === 'number') areaLightInstance.height = areaLightSize[1];
+          if (typeof areaLightInstance.intensity === 'number') areaLightInstance.intensity = areaLightIntensity;
+          if (typeof areaLightInstance.diffuse === 'object') areaLightInstance.diffuse = areaLightColor;
+          // position slightly above the box (can be overridden by areaLightOffset)
+          areaLightInstance.position = box.position.add(areaLightOffset);
+          // orient light toward the box
+          if (typeof areaLightInstance.setDirectionToTarget === 'function') {
+            areaLightInstance.setDirectionToTarget(box.position);
+          } else if (typeof (areaLightInstance as any).direction === 'object') {
+            // fallback: point roughly downwards toward the box
+            (areaLightInstance as any).direction = box.position.subtract(areaLightInstance.position).normalize();
+          }
+          // ensure light won't get garbage-collected; keep reference
+          createdLights.push(areaLightInstance);
+        } else {
+          // Fallback: create a PointLight to provide visible illumination
+          const pl = new BABYLON.PointLight(`areaLight_fallback_${i}`, box.position.add(areaLightOffset), scene);
+          pl.intensity = areaLightIntensity * 0.6;
+          pl.diffuse = areaLightColor;
+          createdLights.push(pl);
+          areaLightInstance = pl;
+        }
+      } catch (e) {
+        console.warn('Cubes.createFloatingCubes: failed creating area light for item', i, e);
+      }
+    }
+
     const mass = massRange[0] + Math.random() * (massRange[1] - massRange[0]);
     const agg = new BABYLON.PhysicsAggregate(box, BABYLON.PhysicsShapeType.BOX, {
       mass,
@@ -172,7 +223,7 @@ export function createFloatingCubes(
 
     agg.body.setLinearVelocity(new BABYLON.Vector3((Math.random() - 0.5) * 0.2, (Math.random() - 0.5) * 0.1, (Math.random() - 0.5) * 0.2));
 
-    items.push({ mesh: box, agg, mass, home: box.position.clone() });
+    items.push({ mesh: box, agg, mass, home: box.position.clone(), areaLight: areaLightInstance });
   }
 
   let isDisposed = false;
@@ -199,6 +250,16 @@ export function createFloatingCubes(
       // Apply damping
       const lv = it.agg.body.getLinearVelocity();
       if (lv) it.agg.body.setLinearVelocity(lv.scale(linearDamping));
+
+      // If an area light exists, keep it positioned relative to the cube
+      if (it.areaLight && typeof it.areaLight.position !== 'undefined') {
+        try {
+          it.areaLight.position = it.mesh.getAbsolutePosition().add(areaLightOffset);
+          if (typeof it.areaLight.setDirectionToTarget === 'function') {
+            it.areaLight.setDirectionToTarget(it.mesh.getAbsolutePosition());
+          }
+        } catch (e) { /* ignore per-frame light update errors */ }
+      }
     }
   }
 
@@ -210,6 +271,7 @@ export function createFloatingCubes(
     for (const it of items) {
       try { it.agg.dispose(); } catch (e) {}
       try { it.mesh.dispose(); } catch (e) {}
+      try { if (it.areaLight) it.areaLight.dispose?.(); } catch (e) {}
     }
     
     // Dispose materials from pool
@@ -217,6 +279,12 @@ export function createFloatingCubes(
       try { mat.dispose(); } catch (e) {}
     }
     materialPool.length = 0;
+    
+    // Dispose created fallback/area lights
+    for (const l of createdLights) {
+      try { l.dispose?.(); } catch (e) {}
+    }
+    createdLights.length = 0;
     
     try { root.dispose(); } catch (e) {}
     items.length = 0;

@@ -77,11 +77,24 @@ export interface FloatingCubeOptions extends BaseObstacleOptions {
 }
 
 export interface OrbOptions extends BaseObstacleOptions {
+	height?: number;
 	diameter?: number;
 	glowIntensity?: number;
 	lightIntensity?: number;
 	lightRange?: number;
 	color?: BABYLON.Color3;
+	/** Local point-light radius to limit illumination around the orb */
+	localRange?: number;
+	/** Enable glow/bloom around the orb */
+	glow?: boolean;
+	/** Use a rectangular area light when available (fallback to point light) */
+	areaLight?: boolean;
+	/** [width, height] for rectangular area light */
+	areaLightSize?: [number, number];
+	/** Intensity for rectangular area light (separate from point/area unified intensity) */
+	areaLightIntensity?: number;
+	/** Local offset applied to the light position relative to orb */
+	areaLightOffset?: BABYLON.Vector3;
 }
 
 export type ObstacleOptions = 
@@ -768,8 +781,13 @@ export class ObstacleManager {
 			indices,
 			scaleRange = [1.0, 1.0],
 			physics = true,
-			targetSize = 2.0
+			targetSize = 2.0,
+			offsetY
 		} = options;
+
+		// Allow callers to pass `index`, `indices`, `progress`, or `degree`.
+		const positionIndices = this.resolveIndices(options as any, count);
+		console.log(`🔍 ObstacleManager.placeModel: resolved positionIndices=${positionIndices}, pathPoints.length=${this.pathPoints?.length}, pathPoints[30]=`, this.pathPoints?.[30]);
 
 		// Normalize modelNames to array (allow passing a single id via randomFrom)
 		const namesArray = Array.isArray(modelNames) ? modelNames : [modelNames as string];
@@ -781,10 +799,11 @@ export class ObstacleManager {
 			{
 				countPerModel: count,
 				randomPositions,
-				positionIndices: indices,
+				positionIndices: typeof (options as any).indices !== 'undefined' ? (options as any).indices : positionIndices,
 				scaleRange,
 				physics: typeof physics === 'boolean' ? physics : true,
-				targetSize
+				targetSize,
+				offsetY
 			},
 			this.modelCache,
 			this.cleanupRegistry
@@ -931,13 +950,18 @@ export class ObstacleManager {
 	private placeOrb(options: OrbOptions): OrbResult | OrbResult[] {
 		const {
 			count = 1,
+			height = 5.0,
 			diameter = 1.5,
 			glowIntensity = 2,
 			lightIntensity = 5,
 			lightRange = 15,
 			color = new BABYLON.Color3(1, 0.9, 0.6),
 			physics = false,
-			offsetY = 0
+			offsetY = 0,
+			areaLight = false,
+			areaLightSize,
+			areaLightIntensity,
+			areaLightOffset
 		} = options;
 
 		console.log(`🔮 placeOrb called, pathPoints length: ${this.pathPoints?.length}, options:`, options);
@@ -958,14 +982,22 @@ export class ObstacleManager {
 			pos.y += offsetY;
 			
 			console.log(`🔮 Creating orb at index ${actualIndex}, pos: ${pos.x.toFixed(2)}, ${pos.y.toFixed(2)}, ${pos.z.toFixed(2)}`);
+			console.log(`🔍 ObstacleManager.placeOrb: pathPoints.length=${this.pathPoints?.length}, pathPoints[${actualIndex}]=`, this.pathPoints?.[actualIndex]);
 
 			const orbResult = createOrb(this.scene, pos, {
+				height,
 				diameter,
 				glowIntensity,
 				lightIntensity,
 				lightRange,
+				areaLight,
+				areaLightSize,
+				areaLightIntensity,
+				areaLightOffset,
 				color,
-				physics: typeof physics === 'boolean' ? physics : false
+				physics: typeof physics === 'boolean' ? physics : false,
+				localRange: (options as any).localRange,
+				glow: (options as any).glow
 			});
 
 			this.cleanupRegistry.push(() => orbResult.dispose());

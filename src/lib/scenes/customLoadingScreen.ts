@@ -1,4 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
+import { getTextureUrl, getLoadingImageUrl, randomFrom } from '../assetsConfig';
 
 export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
   public loadingUIBackgroundColor: string = '#BB464B';
@@ -9,16 +10,15 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
   private _textEl: HTMLDivElement | null = null;
   private _shownAt: number = 0;
   private _hideTimeout: number | null = null;
-  private _imageUrl: string;
+  private _bgRemoveTimeout: number | null = null;
   private _assetsReady: boolean = false;
   private _canHide: boolean = false;
 
-  constructor(loadingUIText: string, imageUrl: string = '/parallelspace.png') {
+  constructor(loadingUIText: string) {
     this.loadingUIText = loadingUIText;
-    this._imageUrl = imageUrl;
   }
 
-  public displayLoadingUI() {
+  public async displayLoadingUI() {
     if (typeof document === 'undefined') return;
     
     this._shownAt = Date.now();
@@ -30,12 +30,23 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
       this._hideTimeout = null;
     }
 
+    // clear any previous background-removal timer
+    if (this._bgRemoveTimeout) {
+      clearTimeout(this._bgRemoveTimeout);
+      this._bgRemoveTimeout = null;
+    }
+
     if (this._container) {
       this._container.style.display = 'block';
       return;
     }
 
-    // Create container with red background
+    // Load image URLs from assets config
+    const foregroundUrl = await getLoadingImageUrl();
+    const backgroundId = randomFrom('loading1', 'loading2');
+    const backgroundUrl = await getTextureUrl(backgroundId);
+
+    // Create container with random background image
     const container = document.createElement('div');
     container.style.cssText = `
       position: fixed;
@@ -43,15 +54,18 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
       width: 100vw;
       height: 100vh;
       display: block;
-      background: ${this.loadingUIBackgroundColor};
+      background-image: url('${backgroundUrl}');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
       z-index: 2147483647;
       pointer-events: auto;
     `;
     container.setAttribute('role', 'status');
 
-    // Create and add image
+    // Create and add foreground image
     const img = document.createElement('img');
-    img.src = this._imageUrl;
+    img.src = foregroundUrl;
     img.alt = 'Loading';
     img.style.cssText = `
       position: absolute;
@@ -76,6 +90,7 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
       font-size: 1.2rem;
       font-family: system-ui, sans-serif;
       text-align: center;
+      text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
     `;
     
     container.appendChild(img);
@@ -95,7 +110,21 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
 
   public hideLoadingUI() {
     this._assetsReady = true;
-    this._tryHide();
+    
+    // Remove background immediately on scene switch
+    if (this._container) {
+      this._container.style.backgroundImage = 'none';
+      this._container.style.backgroundColor = 'transparent';
+    }
+
+    // Delay hiding the foreground so it bleeds into the next scene
+    if (this._hideTimeout) {
+      clearTimeout(this._hideTimeout);
+    }
+    this._hideTimeout = window.setTimeout(() => {
+      this._hideTimeout = null;
+      this._tryHide();
+    }, 3000);
   }
 
   private _tryHide() {
@@ -110,6 +139,11 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
     if (this._hideTimeout) {
       clearTimeout(this._hideTimeout);
       this._hideTimeout = null;
+    }
+    
+    if (this._bgRemoveTimeout) {
+      clearTimeout(this._bgRemoveTimeout);
+      this._bgRemoveTimeout = null;
     }
   }
 

@@ -82,19 +82,19 @@
 			"filename": "malunggay.png",
 			"type": "texture"
 		},
-		"cubeface": {
-			"rootUrl": "https://kolown.net/storage/library/chronoescape/",
-			"filename": "cube1.png",
-			"type": "texture"
-		},
-		"cubecolor": {
-			"rootUrl": "https://kolown.net/storage/library/chronoescape/",
-			"filename": "cube2.png",
-			"type": "texture"
-		},
-		"cubecolor2": {
-			"rootUrl": "https://kolown.net/storage/library/chronoescape/",
+		"cube3": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/cubes/",
 			"filename": "cube3.png",
+			"type": "texture"
+		},
+		"cube4": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/cubes/",
+			"filename": "cube4.png",
+			"type": "texture"
+		},
+		"cube5": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/cubes/",
+			"filename": "cube5.png",
 			"type": "texture"
 		},
 		"portal1": {
@@ -105,6 +105,21 @@
     	"portal2": {
 			"rootUrl": "https://kolown.net/storage/library/chronoescape/portals/",
 			"filename": "portal2.png",
+			"type": "texture"
+		},
+    	"loading1": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/loading/",
+			"filename": "loading1.png",
+			"type": "texture"
+		},
+    	"loading2": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/loading/",
+			"filename": "loading2.png",
+			"type": "texture"
+			},
+    	"loading3": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/loading/",
+			"filename": "loading3.png",
 			"type": "texture"
 		}
 	},
