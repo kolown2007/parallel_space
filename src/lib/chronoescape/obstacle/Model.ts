@@ -33,6 +33,7 @@ export class ModelPlacer {
 	constructor(scene: BABYLON.Scene, pathPoints: BABYLON.Vector3[]) {
 		this.scene = scene;
 		this.pathPoints = pathPoints;
+		console.log(`🔍 ModelPlacer constructor: pathPoints.length=${this.pathPoints?.length}, pathPoints[30]=`, this.pathPoints?.[30]);
 	}
 
 	/**
@@ -156,12 +157,14 @@ export class ModelPlacer {
 		const offsetY = config.offsetY ?? 0;
 		const startIndex = config.startIndex ?? 0;
 
-		console.log(`  ↳ createInstances: count=${config.count}, step=${step}, scale=${scale}, startIndex=${startIndex}`);
+		console.log(`  ↳ createInstances: count=${config.count}, step=${step}, scale=${scale}, startIndex=${startIndex}, pathPoints.length=${this.pathPoints.length}`);
 
 		for (let i = 0; i < config.count; i++) {
 			const pathIndex = (startIndex + (i * step)) % this.pathPoints.length;
 			const pos = this.pathPoints[pathIndex]?.clone();
 			if (!pos) continue;
+
+			console.log(`  ↳ Instance ${i}: computed pathIndex=${pathIndex}, pos=${pos.x.toFixed(2)},${pos.y.toFixed(2)},${pos.z.toFixed(2)}`);
 
 			pos.y += offsetY;
 
@@ -268,6 +271,7 @@ export class ModelPlacer {
 			physics?: boolean;
 			positionIndices?: number | number[];
 			targetSize?: number;
+			offsetY?: number;
 		} = {},
 		modelCache: Map<string, BABYLON.AssetContainer>,
 		cleanupRegistry: Array<() => void>
@@ -282,10 +286,12 @@ export class ModelPlacer {
 				randomPositions = true,
 				scaleRange = [0.5, 2.0],
 				physics = true,
-				targetSize = 2.0
+				targetSize = 2.0,
+				offsetY: callerOffsetY
 			} = options;
 
-			console.log(`🎨 Placing models: ${modelNames.join(', ')}, normalized to ${targetSize}m`);
+		console.log(`🎨 Placing models: ${modelNames.join(', ')}, normalized to ${targetSize}m`);
+		console.log(`🔍 ModelPlacer.placeModels: received pathPoints.length=${pathPoints?.length}, pathPoints[30]=`, pathPoints?.[30]);
 
 			for (const modelId of modelNames) {
 				try {
@@ -362,25 +368,29 @@ export class ModelPlacer {
 						const userScale = scaleRange[0] + Math.random() * (scaleRange[1] - scaleRange[0]);
 						const finalScale = normalizeScale * userScale;
 						let pathIndex: number;
-						if (positionIndices !== undefined && positionIndices !== null) {
-							if (Array.isArray(positionIndices)) {
-								pathIndex = positionIndices[i % positionIndices.length];
-							} else {
-								pathIndex = positionIndices as number;
-							}
+					let requestedIndex: number | undefined;
+					if (positionIndices !== undefined && positionIndices !== null) {
+						if (Array.isArray(positionIndices)) {
+							requestedIndex = positionIndices[i % positionIndices.length];
+							pathIndex = requestedIndex;
 						} else {
-							pathIndex = randomPositions ? Math.floor(Math.random() * pathPoints.length) : Math.floor((i / instanceCount) * pathPoints.length);
+							requestedIndex = positionIndices as number;
+							pathIndex = requestedIndex;
 						}
-						// normalize index into range
-						pathIndex = ((pathIndex % pathPoints.length) + pathPoints.length) % pathPoints.length;
+					} else {
+						pathIndex = randomPositions ? Math.floor(Math.random() * pathPoints.length) : Math.floor((i / instanceCount) * pathPoints.length);
+					}
+					// normalize index into range
+					pathIndex = ((pathIndex % pathPoints.length) + pathPoints.length) % pathPoints.length;
+					console.log(`🎯 Model ${modelId} #${i + 1}: requestedIndex=${requestedIndex ?? 'auto'}, normalizedIndex=${pathIndex}, pathPoints.length=${pathPoints.length}`);
 
-						await placer.load({
-							container,
-							rootUrl: def.rootUrl,
-							filename: def.filename,
-							count: 1,
-							scale: finalScale,
-							offsetY: (def as any).offsetY ?? 0,
+					await placer.load({
+						container,
+						rootUrl: def.rootUrl,
+						filename: def.filename,
+						count: 1,
+						scale: finalScale,
+						offsetY: typeof callerOffsetY === 'number' ? callerOffsetY : ((def as any).offsetY ?? 0),
 							physics: physics && scene.getPhysicsEngine() ? {
 								mass: 0.05,
 								restitution: 0.3,
@@ -394,7 +404,9 @@ export class ModelPlacer {
 							try { placer.dispose(); } catch (e) { /* ignore */ }
 						});
 
-						console.log(`✓ Placed ${modelId} #${i + 1} at index ${pathIndex}, userScale: ${userScale.toFixed(2)}, finalScale: ${finalScale.toFixed(2)}`);
+					const placedPos = pathPoints[pathIndex] ? pathPoints[pathIndex].clone() : undefined;
+						if (placedPos) placedPos.y += (def as any).offsetY ?? 0;
+						console.log(`✓ Placed ${modelId} #${i + 1} at index ${pathIndex}` + (placedPos ? `, pos: ${placedPos.x.toFixed(2)},${placedPos.y.toFixed(2)},${placedPos.z.toFixed(2)}` : '') + `, userScale: ${userScale.toFixed(2)}, finalScale: ${finalScale.toFixed(2)}`);
 					}
 				} catch (e) {
 					console.warn(`Failed to place model ${modelId}:`, e);

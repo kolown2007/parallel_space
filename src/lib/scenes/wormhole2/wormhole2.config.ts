@@ -7,7 +7,7 @@ export const WORMHOLE2_CONFIG = {
 	/** Torus world geometry */
 	torus: {
 		diameter: 300,
-		thickness: 50,
+		thickness: 30,
 		tessellation: 100,
 		positionY: 1,
 		lineRadiusFactor: 0.0,
@@ -15,20 +15,21 @@ export const WORMHOLE2_CONFIG = {
 		spiralTurns: 3,
 		segments: 128,
 		pointsPerCircle: 360,
-		emissiveIntensity: 0.05
+		emissiveIntensity: .000001  // 0.1 = very dark (orb lights visible), 0.5 = balanced, 1.0 = full bright
 		
 	},
 
 	/** Drone physics and starting state */
+
 	drone: {
-		mass: 2,
+		mass: 25, 
 		restitution: 0.6,
-		friction: 0.1,
-		glowIntensity: 0,
+		friction: 0.001,
+		glowIntensity: 0.1,
 		startPathPoint: 0,
 		initialRotation: { x: 0, y: 0, z: -Math.PI / 2 },
-		emissiveColor: { r: 0, g: 0, b: 1 }, // Blue
-		diffuseColor: { r: 0.5, g: 0.5, b: 0.5 }
+		emissiveColor: { r: 0, g: .02, b: 0 }, // Blue
+		diffuseColor: { r: 0, g: 0.5, b: 0 }
 	},
 
 	/** Follow camera behavior */

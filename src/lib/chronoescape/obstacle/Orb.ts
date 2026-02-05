@@ -15,12 +15,26 @@ export interface OrbOptions {
 	color?: BABYLON.Color3;
 	/** Enable physics (static by default) */
 	physics?: boolean;
+	/** Local point-light radius to limit illumination around the orb */
+	localRange?: number;
+	/** Enable glow/bloom around the orb */
+	glow?: boolean;
+	/** Use a rectangular-like area light (approximated with multiple point lights). */
+	areaLight?: boolean;
+	/** Width/height for area light approximation */
+	areaLightSize?: [number, number];
+	/** Intensity for area light (overrides `lightIntensity` when provided) */
+	areaLightIntensity?: number;
+	/** Offset applied to the created light(s) relative to the orb position */
+	areaLightOffset?: BABYLON.Vector3;
 }
 
 export interface OrbResult {
 	mesh: BABYLON.Mesh;
-	light: BABYLON.PointLight;
+	light: BABYLON.Light | undefined;
+	areaLights?: BABYLON.Light[];
 	material: BABYLON.StandardMaterial;
+	glowLayer?: any;
 	dispose: () => void;
 }
 
@@ -37,81 +51,124 @@ export function createOrb(
 		diameter = 0.8,
 		glowIntensity = 2,
 		lightIntensity = 5,
-		lightRange = 15,
+		lightRange = undefined,
 		color = new BABYLON.Color3(1, 0.9, 0.6), // warm white-yellow
-		physics = false
+		physics = false,
+		localRange,
+		glow = true,
+		areaLight = false,
+		areaLightSize,
+		areaLightIntensity,
+		areaLightOffset
 	} = options;
 
-	// Create cylinder mesh (fluorescent lamp)
-	const orb = BABYLON.MeshBuilder.CreateCylinder(
+	// Create sphere mesh
+	const orb = BABYLON.MeshBuilder.CreateSphere(
 		`orb_${Date.now()}`,
 		{ 
-			height, 
-			diameter, 
-			tessellation: 16 
+			diameter,
+			segments: 16 
 		},
 		scene
 	);
 	orb.position = position.clone();
-	console.log(`✨ FLUORESCENT ORB CREATED!`);
+	console.log(`✨ SPHERE ORB CREATED!`);
 	console.log(`✨ Position: x=${position.x.toFixed(2)}, y=${position.y.toFixed(2)}, z=${position.z.toFixed(2)}`);
-	console.log(`✨ Options: height=${height}, diameter=${diameter}, glowIntensity=${glowIntensity}`);
+	console.log(`✨ Options: diameter=${diameter}`);
 	console.log(`✨ Color: r=${color.r.toFixed(2)}, g=${color.g.toFixed(2)}, b=${color.b.toFixed(2)}`);
 
-	// Create glowing material
+	// Create visible material with some brightness
 	const mat = new BABYLON.StandardMaterial(`orbMaterial_${Date.now()}`, scene);
-	mat.emissiveColor = color;
-	mat.diffuseColor = color.scale(0.3);
+	mat.diffuseColor = color;
+	mat.emissiveColor = color.scale(0.3); // Add some self-illumination for visibility
 	mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
 	mat.backFaceCulling = false; // Ensure visible from all angles
 	orb.material = mat;
 
-	// Add point light
-	const light = new BABYLON.PointLight(`orbLight_${Date.now()}`, position.clone(), scene);
-	light.diffuse = color;
-	light.specular = color.scale(0.3);
-	light.intensity = lightIntensity;
-	light.range = lightRange;
-	light.parent = orb;
+	// Determine an effective light range. Prefer an explicit `lightRange` if provided,
+	// otherwise fall back to `localRange`, then a heuristic based on diameter.
+	const effectiveLightRange = typeof lightRange === 'number' && lightRange > 0
+		? lightRange
+		: (typeof localRange === 'number' && localRange > 0 ? localRange : Math.max(diameter * 2.5, 2));
+
+	// Create lighting. If `areaLight` is requested, approximate an area light
+	// by placing several point lights over a small rectangle centered on the orb.
+	let light: BABYLON.Light | undefined;
+	let areaLights: BABYLON.Light[] | undefined;
+	try {
+		if (areaLight) {
+			const size = Array.isArray(areaLightSize) ? areaLightSize : [Math.max(0.5, diameter), Math.max(0.5, diameter) * 2];
+			const inten = typeof areaLightIntensity === 'number' ? areaLightIntensity : lightIntensity;
+			const w = Math.max(0.01, size[0]);
+			const h = Math.max(0.01, size[1]);
+			const offsets = [
+				new BABYLON.Vector3(-w / 2, 0, -h / 2),
+				new BABYLON.Vector3(w / 2, 0, -h / 2),
+				new BABYLON.Vector3(-w / 2, 0, h / 2),
+				new BABYLON.Vector3(w / 2, 0, h / 2)
+			];
+			areaLights = [];
+			for (let i = 0; i < offsets.length; i++) {
+				const pos = position.clone().add(offsets[i]).add(areaLightOffset || BABYLON.Vector3.Zero());
+				const pl = new BABYLON.PointLight(`orbAreaLight_${Date.now()}_${i}`, pos, scene);
+				pl.intensity = inten / offsets.length;
+				pl.range = effectiveLightRange;
+				pl.diffuse = color;
+				pl.parent = orb;
+				areaLights.push(pl);
+				if (i === 0) light = pl;
+			}
+		} else {
+			const pl = new BABYLON.PointLight(`orbLight_${Date.now()}`, position.clone(), scene);
+			pl.intensity = lightIntensity;
+			pl.range = effectiveLightRange;
+			pl.diffuse = color;
+			pl.parent = orb;
+			light = pl;
+		}
+	} catch (e) {
+		console.warn('Orb.create: failed creating light(s)', e);
+	}
 
 	// Optional physics (static obstacle)
 	let aggregate: BABYLON.PhysicsAggregate | undefined;
 	if (physics) {
 		aggregate = new BABYLON.PhysicsAggregate(
 			orb,
-			BABYLON.PhysicsShapeType.CYLINDER,
+			BABYLON.PhysicsShapeType.SPHERE,
 			{ mass: 0, restitution: 0.5 },
 			scene
 		);
 	}
 
-	// Add to glow layer if available (include both glow and standard rendering)
-	try {
-		const glowLayer = scene.getGlowLayerByName('defaultGlowLayer');
-		if (glowLayer) {
-			const layerLegacy = glowLayer as BABYLON.GlowLayer & Record<string, unknown>;
-			if (typeof layerLegacy.addIncludedMesh === 'function') {
-				(layerLegacy.addIncludedMesh as (mesh: BABYLON.Mesh) => void)(orb);
-				console.log('✅ Added orb to glow layer via addIncludedMesh');
-			} else if (typeof layerLegacy.addIncludedOnlyMesh === 'function') {
-				(layerLegacy.addIncludedOnlyMesh as (mesh: BABYLON.Mesh) => void)(orb);
-				console.log('✅ Added orb to glow layer via addIncludedOnlyMesh');
-			} else {
-				console.warn('⚠️ GlowLayer does not expose include helpers');
+	// No area-light support in public API anymore; use local point light only.
+
+	// Optional glow layer for bloom effect
+	let glowLayer: any | undefined;
+	if (glow) {
+		try {
+			glowLayer = new (BABYLON as any).GlowLayer ? new (BABYLON as any).GlowLayer(`orbGlow_${Date.now()}`, scene, { mainTextureFixedSize: 256, blurKernelSize: 64 }) : null;
+			if (glowLayer) {
+				glowLayer.intensity = glowIntensity;
+				try { glowLayer.addIncludedOnlyMesh?.(orb); } catch (_) { /* ignore if method missing */ }
 			}
-		} else {
-			console.warn('⚠️ GlowLayer not found in scene');
-		}
 	} catch (e) {
-		console.warn('GlowLayer error:', e);
+			console.warn('Orb.create: failed creating glow layer', e);
+			glowLayer = undefined;
+		}
 	}
+
+	// Add to glow layer if available (disabled - plain sphere)
+	// Glow layer code removed for plain appearance
 
 	const dispose = () => {
 		try { aggregate?.dispose(); } catch {}
-		try { light.dispose(); } catch {}
+		try { if (areaLights) { for (const l of areaLights) try { l.dispose(); } catch {} } } catch {}
+		try { if (light && !areaLights) light.dispose(); } catch {}
+		try { if (glowLayer && typeof glowLayer.dispose === 'function') glowLayer.dispose(); } catch {}
 		try { mat.dispose(); } catch {}
 		try { orb.dispose(); } catch {}
 	};
 
-	return { mesh: orb, light, material: mat, dispose };
+	return { mesh: orb, light, areaLights, material: mat, glowLayer: glowLayer, dispose };
 }

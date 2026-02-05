@@ -64,8 +64,12 @@ export async function createTorus(scene: BABYLON.Scene, opts: TorusOptions = {})
       console.warn('Failed to resolve materialTextureId', opts.materialTextureId, e);
     }
   }
-  const emissionLevel = typeof opts.emissiveIntensity === 'number' ? opts.emissiveIntensity : 1.0;
-  mat.emissiveColor = new BABYLON.Color3(emissionLevel, emissionLevel, emissionLevel);
+  // Emissive color makes the torus self-lit and can prevent scene lights
+  // (like orbs) from visibly affecting it. Default to a low emissive so
+  // point/area lights contribute visibly. Clamp to [0,1].
+  const emissionLevelRaw = typeof opts.emissiveIntensity === 'number' ? opts.emissiveIntensity : 0;
+  const emissionLevel = Math.max(0, Math.min(1, emissionLevelRaw));
+  // mat.emissiveColor = new BABYLON.Color3(255,0,0);
   torus.material = mat;
 
   // Recompute radii from the actual mesh bounding box so the path aligns

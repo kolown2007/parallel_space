@@ -134,6 +134,10 @@ export async function createDrone(
 		const drone = BABYLON.Mesh.MergeMeshes(meshes, true, true, undefined, false, true) || meshes[0];
 		drone.name = 'drone_merged';
 
+		// Mark this mesh as the drone so other systems (glow selector, debug helpers)
+		// can identify it reliably even when instanced or merged.
+		try { (ensureMetadata(drone) as any)._isDrone = true; } catch (e) { /* ignore */ }
+
 		return { drone, droneVisual: drone };
 	} catch (e) {
 		console.warn('Failed to load drone GLB, using fallback box:', e);
@@ -142,6 +146,7 @@ export async function createDrone(
 			height: 2,
 			depth: 1
 		}, scene);
+		try { (ensureMetadata(fallback) as any)._isDrone = true; } catch (e) { /* ignore */ }
 		return { drone: fallback, droneVisual: fallback };
 	}
 }
@@ -379,8 +384,10 @@ export function installDroneGlow(
 			return;
 		}
 
-		// Otherwise check if this is the drone mesh
-		if (mesh === droneVisual || mesh === drone) {
+		// Otherwise check metadata marker for drone identity. This is more robust
+		// than strict object identity (which can vary for instanced/merged meshes
+		// or during render updates) and prevents intermittent flicker.
+		if ((source as any).metadata?._isDrone) {
 			applyEmissiveColor(result, material);
 		} else {
 			result.set(0, 0, 0, 0);
