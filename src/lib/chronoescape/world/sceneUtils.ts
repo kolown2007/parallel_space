@@ -25,14 +25,14 @@ export function setupLighting(
 	} = {}
 ): BABYLON.HemisphericLight {
 	const light = new BABYLON.HemisphericLight('light1', new BABYLON.Vector3(0, 1, 0), scene);
-	light.intensity = options.intensity ?? 0.1;
+	light.intensity = options.intensity ?? 0.4;
 
 	// Enable subtle exponential fog by default
 	scene.fogMode = options.fogMode ?? BABYLON.Scene.FOGMODE_EXP;
-	scene.fogEnabled = true;
+	scene.fogEnabled = false;
 	scene.fogColor = options.fogColor ?? new BABYLON.Color3(0.9, 0.9, 0.85);
 	// Slightly increased default density for a light atmospheric haze
-	scene.fogDensity = options.fogDensity ?? 0.0000005;
+	// scene.fogDensity = options.fogDensity ?? 0.0000005;
 
 	return light;
 }
