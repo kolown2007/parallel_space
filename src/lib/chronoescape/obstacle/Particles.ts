@@ -5,12 +5,14 @@ export type SPSOptions = {
   particleSize?: number;
   particleSpeed?: number;
   maxDistance?: number; // distance from emitter before recycling
+  /** optional base color applied to all particles (if provided) */
+  baseColor?: BABYLON.Color3;
 };
 
 export function createSolidParticleSystem(scene: BABYLON.Scene, options: SPSOptions = {}) {
-  const particleNb = options.particleNb ?? 1000;
+  const particleNb = options.particleNb ?? 400;
   const nb = Math.floor(particleNb / 3);
-  const boxSize = options.particleSize ?? 4.0;
+  const boxSize = options.particleSize ?? 0.18;
 
   const SPS = new BABYLON.SolidParticleSystem('SPS', scene, { particleIntersection: true, boundingSphereOnly: true });
 
@@ -31,10 +33,11 @@ export function createSolidParticleSystem(scene: BABYLON.Scene, options: SPSOpti
   SPS.computeParticleTexture = false;
 
   // behavior params
-  const speed = options.particleSpeed ?? 0.02; // default slower speed
-  const cone = 0.5;
+  const speed = options.particleSpeed ?? 0.01; // slower
+  const cone = 0.4;
   const gravity = 0;
   const restitution = 0.97;
+  const baseColor = options.baseColor;
   const maxDistance = options.maxDistance ?? 400;
 
   // helper temp vectors
@@ -53,14 +56,17 @@ export function createSolidParticleSystem(scene: BABYLON.Scene, options: SPSOpti
     particle.rotation.y = Math.random() * Math.PI;
     particle.rotation.z = Math.random() * Math.PI;
 
-    particle.scaling.x = Math.random() + 0.1;
-    particle.scaling.y = Math.random() + 0.1;
-    particle.scaling.z = Math.random() + 0.1;
+    // smaller more subtle scaling
+    const s = Math.random() * 0.4 + 0.12; // ~0.12 - 0.52
+    particle.scaling.x = s;
+    particle.scaling.y = s;
+    particle.scaling.z = s;
 
-    if (particle.color) {
-      particle.color.r = Math.random() + 0.1;
-      particle.color.g = Math.random() + 0.1;
-      particle.color.b = Math.random() + 0.1;
+    // apply base color if provided (same color for all particles in this SPS)
+    if (particle.color && baseColor) {
+      particle.color.r = baseColor.r;
+      particle.color.g = baseColor.g;
+      particle.color.b = baseColor.b;
       particle.color.a = 1.0;
     }
     return particle;
@@ -95,7 +101,8 @@ export function createSolidParticleSystem(scene: BABYLON.Scene, options: SPSOpti
 
   SPS.initParticles();
   SPS.setParticles();
-  SPS.computeParticleColor = false;
+  // Enable computing particle color so assigned `particle.color` is used
+  SPS.computeParticleColor = true;
 
   let running = false;
   const beforeRender = () => {
@@ -145,10 +152,22 @@ export function createParticles(
   parent: BABYLON.Mesh,
   options: ParticleOptions = {}
 ): any {
+  // pick one random color per spawn from a small palette
+  const palette = [
+    new BABYLON.Color3(1, 0.2, 0.2),
+    new BABYLON.Color3(1, 0.6, 0.2),
+    new BABYLON.Color3(0.2, 0.6, 1),
+    new BABYLON.Color3(0.6, 0.2, 1),
+    new BABYLON.Color3(0.4, 1, 0.4),
+    new BABYLON.Color3(1, 1, 0.6)
+  ];
+  const chosen = palette[Math.floor(Math.random() * palette.length)];
+
   const spsFx = createSolidParticleSystem(scene, {
-    particleNb: options.count ?? 800,
-    particleSize: options.size ?? 1.0,
-    maxDistance: options.maxDistance ?? 220
+    particleNb: options.count ?? 400,
+    particleSize: options.size ?? 0.18,
+    maxDistance: options.maxDistance ?? 220,
+    baseColor: chosen
   });
 
   const pos = pathPoints[index]?.clone() || new BABYLON.Vector3(0, 0, 0);

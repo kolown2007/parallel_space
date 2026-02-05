@@ -61,6 +61,8 @@ export interface PortalOptions extends BaseObstacleOptions {
 
 export interface BillboardOptions extends BaseObstacleOptions {
 	textureUrl?: string;
+	/** Asset id or array of ids to resolve via getTextureUrl() */
+	textureId?: string | string[];
 	width?: number;
 	height?: number;
 }
@@ -540,7 +542,7 @@ export class ObstacleManager {
 			verticalOffset,
 			sizeRange,
 			massRange
-		});
+		}, cleanupRegistry);
 
 		cleanupRegistry.push(() => {
 			try { result.dispose(); } catch (e) {}
@@ -877,15 +879,15 @@ export class ObstacleManager {
 		const {
 			count = 8,
 			textureUrl,
-			width = 4,
-			height = 4
+			textureId,
+			width,
+			height
 		} = options;
 
-		const billboardManager = new BillboardManager(this.scene, {
-			count,
-			textureUrl,
-			size: { width, height }
-		});
+		const bmOptions: any = { count, textureUrl, textureId };
+		if (typeof width !== 'undefined' || typeof height !== 'undefined') bmOptions.size = { width, height };
+
+		const billboardManager = new BillboardManager(this.scene, bmOptions);
 
 		await billboardManager.createAlongPath(this.pathPoints);
 		return billboardManager;
@@ -913,7 +915,7 @@ export class ObstacleManager {
 			massRange,
 			antiGravityFactor,
 			linearDamping
-		});
+		}, this.cleanupRegistry);
 
 		this.cleanupRegistry.push(() => {
 			try { result.dispose(); } catch (e) { /* ignore */ }

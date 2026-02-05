@@ -274,10 +274,23 @@ export class WormHoleScene2 {
 		// Helper: compute nearest path point index for drone (defined early for keyboard handlers)
 		const getDronePathIndex = getDronePathIndexFactory(drone, pathPoints);
 
-		// Portal state management
-		let portal: any | undefined;
-		const getPortal = () => portal;
-		const setPortal = (p: any) => { portal = p; };
+		// Portal state management (support multiple portals)
+		let portals: any[] = [];
+		const getPortal = () => portals;
+		const setPortal = (p: any, remove = false) => {
+			try {
+				if (typeof remove === 'boolean' && remove && p) {
+					portals = portals.filter(x => x !== p);
+					return;
+				}
+				if (!p) {
+					portals = [];
+					return;
+				}
+				if (Array.isArray(p)) portals.push(...p);
+				else portals.push(p);
+			} catch (e) { /* ignore */ }
+		};
 
 		// Install keyboard handlers
 		const keyboardHandlers = createKeyboardHandlers({
@@ -323,35 +336,94 @@ export class WormHoleScene2 {
 		// Place models using unified API (delayed)
 		setTimeout(async () => {
 			try {
-				await obstacles.place('model', {
-					modelNames: [randomFrom('jollibee', 'rabbit', 'mario')],
-					count: 1,
-					index: 50,
-					offsetY: -1,
-					scaleRange: [4, 8],
-					physics: true
-				});
+				// Place multiple models using a for-loop for easy configuration
+				try {
+					const modelIndices = [ 0,80,100,150,];
+					for (const mi of modelIndices) {
+						try {
+							await obstacles.place('model', {
+								modelNames: [randomFrom('jollibee', 'rabbit', 'mario','army','armycatbike','manikineko')],
+								count: 1,
+								index: mi,
+								offsetY: -1,
+								scaleRange: [4, 8],
+								physics: true
+							});
+							console.log('Placed model at index', mi);
+						} catch (e) {
+							console.warn('Failed to place model at index', mi, e);
+						}
+					}
+				} catch (e) {
+					console.warn('Model placement loop failed:', e);
+				}
+
+				// Place billboards and move them to explicit path indices
+				try {
+					const indices = [10, 60, 110, 160, 210, 260];
+					const bbManager = await obstacles.place('billboard', {
+						count: indices.length,
+						height: 8,
+						// pass an array so each billboard can resolve a random texture independently
+						textureId: ['collage1','tribal','metal'],
+					}) as any;
+
+					// Reposition planes to requested path indices
+					for (let i = 0; i < indices.length; i++) {
+						try {
+							const idx = ((indices[i] % pathPoints.length) + pathPoints.length) % pathPoints.length;
+							const pos = pathPoints[idx].clone();
+							// match internal BillboardManager offset (creates at +1.5)
+							pos.y += 1.5;
+							if (bbManager && bbManager.planes && bbManager.planes[i]) {
+								bbManager.planes[i].position.copyFrom(pos);
+							}
+						} catch (e) {
+							console.warn('Failed to reposition billboard plane', i, e);
+						}
+					}
+					console.log('Placed billboards at indices', indices);
+				} catch (e) {
+					console.warn('Billboard placement failed:', e);
+				}
+
+				
+
+				
 
 			try {
 
 
 
 
-const portal = await obstacles.place('portal', {
-					index: 200,
-					posterTextureId: randomFrom('portal1','portal2'),
-					width: WORMHOLE2_CONFIG.obstacles.portalWidth,
-					height: WORMHOLE2_CONFIG.obstacles.portalHeight,
-					offsetY: 0,
-					onTrigger: () => {
-						try {
-							onPortalTrigger?.();
-						} catch (e) {}
+			try {
+				const portalIndices = [50, 200, 300];
+				let firstPortal: any = undefined;
+				for (const pi of portalIndices) {
+					try {
+						const p = await obstacles.place('portal', {
+							index: pi,
+							posterTextureId: randomFrom('portal1','portal2'),
+							width: WORMHOLE2_CONFIG.obstacles.portalWidth,
+							height: WORMHOLE2_CONFIG.obstacles.portalHeight,
+							offsetY: 0,
+							onTrigger: () => {
+								try { onPortalTrigger?.(); } catch (e) {}
+							}
+						}) as any;
+						if (!firstPortal) {
+							firstPortal = p;
+						}
+						// Register every placed portal so collision checks see them all
+						setPortal(p);
+						console.log('🌀 Portal placed at index', pi);
+					} catch (pErr) {
+						console.warn('Portal placement failed at index', pi, pErr);
 					}
-				}) as any;
-				
-				setPortal(portal);
-				console.log('🌀 Portal placed at index', 200);
+				}
+			} catch (e) {
+				console.warn('Portal placement loop failed:', e);
+			}
 
 
 			  
@@ -390,6 +462,9 @@ const portal = await obstacles.place('portal', {
 	});
  
 	scene.registerBeforeRender(renderLoop);
+	WormHoleScene2.registerCleanup(() => {
+		try { scene.unregisterBeforeRender(renderLoop); } catch {}
+	});
 
 	// Notify loading screen that scene and assets are ready
 	try {

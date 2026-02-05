@@ -464,7 +464,14 @@ export function createDebugHelper(
 			} catch { /* ignore */ }
 		};
 		updatePosition();
-		scene.onBeforeRenderObservable.add(updatePosition);
+		const observer = scene.onBeforeRenderObservable.add(updatePosition);
+
+		// Hook into mesh disposal to automatically cleanup observer
+		const originalDispose = helper.dispose.bind(helper);
+		helper.dispose = () => {
+			try { scene.onBeforeRenderObservable.remove(observer); } catch {}
+			originalDispose();
+		};
 
 		return helper;
 	} catch (e) {

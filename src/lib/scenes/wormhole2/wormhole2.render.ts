@@ -16,8 +16,8 @@ export interface RenderLoopDeps {
 	followCamera: any;
 	pathPoints: BABYLON.Vector3[];
 	obstacles: ObstacleManager;
-	getPortal: () => any;
-	setPortal: (portal: any) => void;
+	getPortal: () => any[];
+	setPortal: (portal: any, remove?: boolean) => void;
 	onPortalTrigger?: () => void;
 	getDronePathIndex: () => number;
 	keysPressed: any;
@@ -58,10 +58,10 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 	return () => {
 		const dt = engine.getDeltaTime() / 1000;
 		const control = get(droneControl);
-		const portal = getPortal();
+		const portals = getPortal();
 
-		// Portal collision check
-		if (portal && onPortalTrigger) {
+		// Portal collision check (support multiple portals)
+		if (portals && portals.length > 0 && onPortalTrigger) {
 			try {
 				const radius = WORMHOLE2_CONFIG.collision.droneAabbRadius;
 				const usbAabb = {
@@ -76,23 +76,26 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 						z: drone.position.z + radius
 					}
 				};
-				
-				if (portal.intersects(usbAabb)) {
-					try { console.debug('portal collision detected — calling playPortalSound'); } catch {}
-					try { playPortalSound(); } catch (e) { console.warn('playPortalSound failed', e); }
+
+				for (const p of [...portals]) {
 					try {
-						// also trigger a collision-style note (mirrors cube collision behaviour)
-						const state = get(droneControl);
-						const velocity = Math.min(state.speed / (MAX_SPEED || 1), 1.0);
-						try { playCollisionNoteSingle(velocity); } catch (e) {}
-					} catch (e) {}
-					console.log('✨ Drone entered portal');
-					enterPortal();
-					onPortalTrigger();
-					try {
-						portal.reset();
-					} catch {}
-					setPortal(undefined);
+						if (!p || typeof p.intersects !== 'function') continue;
+						if (p.intersects(usbAabb)) {
+							try { console.debug('portal collision detected — calling playPortalSound'); } catch {}
+							try { playPortalSound(); } catch (e) { console.warn('playPortalSound failed', e); }
+							try {
+								const state = get(droneControl);
+								const velocity = Math.min(state.speed / (MAX_SPEED || 1), 1.0);
+								try { playCollisionNoteSingle(velocity); } catch (e) {}
+							} catch (e) {}
+							console.log('✨ Drone entered portal');
+							enterPortal();
+							onPortalTrigger();
+							try { p.reset(); } catch {}
+							try { setPortal(p, true); } catch {}
+							break;
+						}
+					} catch (e) { /* ignore per-portal errors */ }
 				}
 			} catch (e) {
 				/* ignore transient errors */
