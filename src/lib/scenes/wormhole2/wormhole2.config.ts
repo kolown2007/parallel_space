@@ -70,6 +70,8 @@ export const WORMHOLE2_CONFIG = {
 
 	/** Particle effects */
 	particles: {
+		// Enable/disable revolution particle bursts (keeps sound regardless)
+		revolutionEnabled: false,
 		revolutionAheadOffset: 5,
 		revolutionSpawnOffset: 20,
 		revolutionCount: 700,
