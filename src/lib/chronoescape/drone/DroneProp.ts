@@ -254,18 +254,24 @@ export function attachDroneLight(
 	attachTo?: BABYLON.Mesh,
 	options: DroneLightOptions = {}
 ): BABYLON.Light {
-	const opts = Object.assign({ type: 'point', color: new BABYLON.Color3(0.1, 0.6, 1.0), intensity: 5.0, range: 10.0, width: 0.4, height: 0.18 }, options);
+	// If running on WebGPU the same intensity may appear brighter; reduce defaults slightly.
+	const engineAny = (scene.getEngine && (scene.getEngine() as any)) || {};
+	const isWebGPU = typeof engineAny?.constructor?.name === 'string' && engineAny.constructor.name.toLowerCase().includes('webgpu');
+	const defaultIntensity = isWebGPU ? 2.5 : 5.0;
+	const defaultSpotIntensity = isWebGPU ? 1.0 : 2.0;
+	const defaultSpotIntensity2 = isWebGPU ? 1.5 : 3.0;
+	const opts = Object.assign({ type: 'point', color: new BABYLON.Color3(0.1, 0.6, 1.0), intensity: defaultIntensity, range: 10.0, width: 0.4, height: 0.18 }, options);
 
-	if (opts.type === 'rect') {
-		// Create a short-range spot light to provide lighting
-		const spot = new BABYLON.SpotLight('droneRectLight', new BABYLON.Vector3(0, 0, 1), new BABYLON.Vector3(0, 0, 1), Math.PI / 3, 1, scene);
-		spot.diffuse = opts.color!;
-		spot.specular = new BABYLON.Color3(Math.min(opts.color!.r + 0.5, 1), Math.min(opts.color!.g + 0.5, 1), Math.min(opts.color!.b + 0.5, 1));
-		spot.intensity = opts.intensity ?? 2.0;
-		spot.range = opts.range ?? 3.0;
-		spot.parent = attachTo ?? drone;
-		spot.position = new BABYLON.Vector3(0.5, 0.35, 0.0);
-		spot.direction = new BABYLON.Vector3(0, 0, 1);
+		if (opts.type === 'rect') {
+			// Create a short-range spot light to provide lighting
+			const spot = new BABYLON.SpotLight('droneRectLight', new BABYLON.Vector3(0, 0, 1), new BABYLON.Vector3(0, 0, 1), Math.PI / 3, 1, scene);
+			spot.diffuse = opts.color!;
+			spot.specular = new BABYLON.Color3(Math.min(opts.color!.r + 0.5, 1), Math.min(opts.color!.g + 0.5, 1), Math.min(opts.color!.b + 0.5, 1));
+			spot.intensity = opts.intensity ?? defaultSpotIntensity;
+			spot.range = opts.range ?? 3.0;
+			spot.parent = attachTo ?? drone;
+			spot.position = new BABYLON.Vector3(0.5, 0.35, 0.0);
+			spot.direction = new BABYLON.Vector3(0, 0, 1);
 
 		// Visual rectangular emissive plane to simulate a rectangle light source
 		try {
@@ -288,22 +294,22 @@ export function attachDroneLight(
 	}
 
 	if (opts.type === 'spot') {
-		const spot = new BABYLON.SpotLight('droneSpotLight', new BABYLON.Vector3(0, 0, 1), new BABYLON.Vector3(0, 0, 1), Math.PI / 6, 2, scene);
-		spot.diffuse = opts.color!;
-		spot.specular = new BABYLON.Color3(Math.min(opts.color!.r + 0.5, 1), Math.min(opts.color!.g + 0.5, 1), Math.min(opts.color!.b + 0.5, 1));
-		spot.intensity = opts.intensity ?? 3.0;
-		spot.range = opts.range ?? 6.0;
-		spot.parent = attachTo ?? drone;
-		spot.position = new BABYLON.Vector3(0.5, 0.5, 0);
-		spot.direction = new BABYLON.Vector3(0, 0, 1);
-		return spot;
+			const spot = new BABYLON.SpotLight('droneSpotLight', new BABYLON.Vector3(0, 0, 1), new BABYLON.Vector3(0, 0, 1), Math.PI / 6, 2, scene);
+			spot.diffuse = opts.color!;
+			spot.specular = new BABYLON.Color3(Math.min(opts.color!.r + 0.5, 1), Math.min(opts.color!.g + 0.5, 1), Math.min(opts.color!.b + 0.5, 1));
+			spot.intensity = opts.intensity ?? defaultSpotIntensity2;
+			spot.range = opts.range ?? 6.0;
+			spot.parent = attachTo ?? drone;
+			spot.position = new BABYLON.Vector3(0.5, 0.5, 0);
+			spot.direction = new BABYLON.Vector3(0, 0, 1);
+			return spot;
 	}
 
 	// default: point light
 	const light = new BABYLON.PointLight('droneLight', BABYLON.Vector3.Zero(), scene);
 	light.diffuse = opts.color!;
 	light.specular = new BABYLON.Color3(Math.min(opts.color!.r + 0.5, 1), Math.min(opts.color!.g + 0.5, 1), Math.min(opts.color!.b + 0.5, 1));
-	light.intensity = opts.intensity ?? 5.0;
+	light.intensity = opts.intensity ?? defaultIntensity;
 	light.range = opts.range ?? 10.0;
 	light.parent = attachTo ?? drone;
 	light.position = new BABYLON.Vector3(0.5, 0.5, 0);

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import * as BABYLON from '@babylonjs/core';
+  // WebGPU engine may or may not be present in the bundled Babylon package.
+  // We'll look it up at runtime via `BABYLON.WebGPUEngine` to avoid Vite import errors.
   import { CustomLoadingScreen } from '$lib/scenes/customLoadingScreen';
   import mountVideoScene from '$lib/scenes/videoscene';
   import { WormHoleScene2 } from '$lib/scenes/wormhole2';
@@ -13,6 +15,7 @@
 
   onMount(() => {
     if (!canvas) return;
+    const canv = canvas as HTMLCanvasElement;
 
     engine = new BABYLON.Engine(canvas, true, { antialias: true, preserveDrawingBuffer: true, stencil: true });
     // Ensure canvas element has correct CSS sizing and notify engine of initial size
@@ -22,66 +25,102 @@
     } catch (e) {}
     try { engine.resize(); } catch (e) {}
 
-    const loadingScreen = new CustomLoadingScreen("Loading...");
-    engine.loadingScreen = loadingScreen;
-    try { engine.displayLoadingUI(); } catch {}
-
-    const handleResize = () => engine?.resize();
-    window.addEventListener('resize', handleResize);
-
-    // Auto-hide cursor after 6 seconds of inactivity
-    const resetCursorTimeout = () => {
-      document.body.style.cursor = 'default';
-      if (cursorTimeout) clearTimeout(cursorTimeout);
-      cursorTimeout = window.setTimeout(() => {
-        document.body.style.cursor = 'none';
-      }, 6000);
-    };
-    
-    const handleMouseMove = () => resetCursorTimeout();
-    window.addEventListener('mousemove', handleMouseMove);
-    resetCursorTimeout();
-
     (async () => {
+      // Try to create a WebGPU engine when available, otherwise fall back to WebGL
+      const createEngine = async () => {
+        try {
+          const RuntimeWebGPUEngine = (BABYLON as any).WebGPUEngine as any;
+          if ((navigator as any).gpu && RuntimeWebGPUEngine) {
+            try {
+              const webgpuEngine = new RuntimeWebGPUEngine(canv, { preserveDrawingBuffer: true, stencil: true, enableGPUDebugMarkers: false });
+              if (webgpuEngine.initAsync) {
+                await webgpuEngine.initAsync();
+              }
+              console.info('Using WebGPU engine');
+              return webgpuEngine;
+            } catch (e) {
+              console.warn('WebGPU engine initialization failed, falling back to WebGL', e);
+            }
+          }
+        } catch (e) {
+          console.warn('WebGPU check failed', e);
+        }
+        // fallback
+        return new BABYLON.Engine(canv, true, { preserveDrawingBuffer: true, stencil: true });
+      };
+
       try {
-        // Scene creation now awaits all asset loading
-        const scene2 = await WormHoleScene2.CreateScene(engine, canvas, () => {
-          sceneManager?.switchTo('scene1');
-        });
+        engine = await createEngine();
 
-        // Create scene manager
-        sceneManager = new SceneManager(
-          engine,
-          scene2,
-          () => mountVideoScene(undefined, undefined, () => sceneManager?.switchTo('scene2'))
-        );
+        // Ensure canvas element has correct CSS sizing and notify engine of initial size
+        try {
+          canv.style.width = canv.style.width || '100%';
+          canv.style.height = canv.style.height || '100vh';
+        } catch (e) {}
+        try { engine.resize(); } catch (e) {}
 
-        // Start with scene2
-        sceneManager.switchTo('scene2');
+        const loadingScreen = new CustomLoadingScreen("Loading...");
+        engine.loadingScreen = loadingScreen;
+        try { engine.displayLoadingUI(); } catch {}
 
-        // Hide loading UI only after everything is ready
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            setTimeout(() => { try { engine?.hideLoadingUI(); } catch {} }, 50);
+        handleResize = () => engine?.resize();
+        window.addEventListener('resize', handleResize);
+
+        // Auto-hide cursor after 6 seconds of inactivity
+        const resetCursorTimeout = () => {
+          document.body.style.cursor = 'default';
+          if (cursorTimeout) clearTimeout(cursorTimeout);
+          cursorTimeout = window.setTimeout(() => {
+            document.body.style.cursor = 'none';
+          }, 6000);
+        };
+        handleMouseMove = () => resetCursorTimeout();
+        window.addEventListener('mousemove', handleMouseMove);
+        resetCursorTimeout();
+
+        try {
+          // Scene creation now awaits all asset loading
+          const scene2 = await WormHoleScene2.CreateScene(engine, canv, () => {
+            sceneManager?.switchTo('scene1');
           });
-        });
-      } catch (error) {
-        console.error('Scene creation failed:', error);
-        try { engine?.hideLoadingUI(); } catch {}
+
+          // Create scene manager
+          sceneManager = new SceneManager(
+            engine,
+            scene2,
+            () => mountVideoScene(undefined, undefined, () => sceneManager?.switchTo('scene2'))
+          );
+
+          // Start with scene2
+          sceneManager.switchTo('scene2');
+
+          // Hide loading UI only after everything is ready
+          requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+              setTimeout(() => { try { engine?.hideLoadingUI(); } catch {} }, 50);
+            });
+          });
+        } catch (error) {
+          console.error('Scene creation failed:', error);
+          try { engine?.hideLoadingUI(); } catch {}
+        }
+
+        // Global input
+        handleKeyDown = (e: KeyboardEvent) => {
+          if (e.key === '1') sceneManager?.switchTo('scene1');
+          else if (e.key === '2') sceneManager?.switchTo('scene2');
+        };
+        window.addEventListener('keydown', handleKeyDown);
+
+      } catch (err) {
+        console.error('Engine initialization failed:', err);
       }
     })();
 
-    // Global input
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === '1') sceneManager?.switchTo('scene1');
-      else if (e.key === '2') sceneManager?.switchTo('scene2');
-    };
-    window.addEventListener('keydown', handleKeyDown);
-
     return () => {
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('mousemove', handleMouseMove);
+      try { if (handleResize) window.removeEventListener('resize', handleResize); } catch {}
+      try { if (handleKeyDown) window.removeEventListener('keydown', handleKeyDown); } catch {}
+      try { if (handleMouseMove) window.removeEventListener('mousemove', handleMouseMove); } catch {}
       if (cursorTimeout) clearTimeout(cursorTimeout);
       document.body.style.cursor = 'default';
       sceneManager?.dispose();
