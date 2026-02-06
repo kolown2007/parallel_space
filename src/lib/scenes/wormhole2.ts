@@ -256,7 +256,7 @@ export class WormHoleScene2 {
 					const indices = [10, 60, 110, 160, 210, 260];
 					const bbManager = await obstacles.place('billboard', {
 						count: indices.length,
-						height: 8,
+						height: 15,
 						// pass an array so each billboard can resolve a random texture independently
 						textureId: ['collage1','tribal','metal'],
 					}) as any;

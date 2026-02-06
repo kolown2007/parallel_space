@@ -19,6 +19,8 @@ export interface ModelPlacerConfig {
 		friction?: number;
 		shape?: BABYLON.PhysicsShapeType;
 	};
+	/** Optional rendering group to apply to the template (set on source mesh, not instances) */
+	renderingGroupId?: number;
 	// Optional: provide a preloaded AssetContainer instead of loading from URL
 	container?: BABYLON.AssetContainer;
 	// If container provided, ModelPlacer will NOT dispose it (owner is external)
@@ -104,6 +106,8 @@ export class ModelPlacer {
 			}
 
 			log(`  ↳ Using template mesh:`, this.template.name, `(isVisible: ${this.template.isVisible})`);
+			// Apply requested rendering group on the template (must be set on source mesh)
+			try { if (typeof config.renderingGroupId === 'number') this.template.renderingGroupId = config.renderingGroupId; } catch (e) { /* ignore */ }
 			try {
 				log('  ↳ Template scene:', !!this.template.getScene(), 'template parent:', this.template.parent?.name ?? null);
 				log('  ↳ Template position:', this.template.position?.toString?.() ?? this.template.position);
@@ -179,7 +183,7 @@ export class ModelPlacer {
 				continue;
 			}
 			instance.position.copyFrom(pos);
-			instance.renderingGroupId = 1;
+			// renderingGroupId should be set on the template, not the instanced mesh
 			instance.position.y += 0.02;
 			instance.scaling.setAll(scale);
 			instance.isVisible = true;
