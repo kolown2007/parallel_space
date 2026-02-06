@@ -216,94 +216,110 @@ export async function playPortalSound() {
     console.debug('[ambient] ensureAudioStarted ->', ok);
     if (!ok) return; // user gesture required or audio blocked
 
-    // Use existing reverb if available, otherwise destination
     const dest: any = reverb || Tone.Destination;
-    // Dungeon-like, bass-forward variant: master lowpass, big drone + sub, deep thump, softened metallics, low arp, subtle noise
-    const now = Tone.now()
-    const dur = 4.0
+    const now = Tone.now();
+    const dur = 3.0;
 
-    // Master lowpass filter to remove excessive highs and emphasize low-mid
-    const masterFilter = new Tone.Filter({ type: 'lowpass', frequency: 1200, Q: 0.8 }).connect(dest)
-    // gently move cutoff downward for darker result
-    masterFilter.frequency.setValueAtTime(1200, now)
-    masterFilter.frequency.exponentialRampToValueAtTime(600, now + dur * 0.6)
+    // gentle master filter to keep things warm
+    const masterFilter = new Tone.Filter({ type: 'lowpass', frequency: 1600, Q: 0.9 }).connect(dest);
+    masterFilter.frequency.setValueAtTime(1600, now);
+    masterFilter.frequency.exponentialRampToValueAtTime(700, now + dur * 0.85);
 
-    // Low sustaining drone (thickened by two detuned voices)
-    const droneA = new Tone.Synth({
-      oscillator: { type: 'sawtooth' },
-      envelope: { attack: 0.5, decay: 2.8, sustain: 0.8, release: 3.6 }
-    }).connect(masterFilter)
-    const droneB = new Tone.Synth({
-      oscillator: { type: 'sine' },
-      envelope: { attack: 0.6, decay: 2.8, sustain: 0.72, release: 3.6 }
-    }).connect(masterFilter)
-    droneA.volume.value = -8
-    droneB.volume.value = -10
-    droneA.triggerAttack('C1', now)
-    // slight detune for warmth
-    droneB.triggerAttack(Tone.Frequency('C1').transpose(-0.02), now)
+    // subtle shimmer for spatial richness
+    const shimmer = new Tone.Chorus({ frequency: 0.6, delayTime: 2.5, depth: 0.25, spread: 30 }).connect(masterFilter);
+    shimmer.start();
 
-    // Sub-bass fundamental for weight
-    const sub = new Tone.Synth({
-      oscillator: { type: 'sine' },
-      envelope: { attack: 0.02, decay: 1.8, sustain: 0.9, release: 2.8 }
-    }).connect(masterFilter)
-    sub.volume.value = -6
-    sub.triggerAttack('C0', now)
-
-    // Deeper, rounder thump
-    const thump = new Tone.MembraneSynth({
-      pitchDecay: 0.12,
-      octaves: 2,
-      envelope: { attack: 0.001, decay: 0.9, sustain: 0 }
-    }).connect(masterFilter)
-    thump.triggerAttackRelease('C1', 0.9, now + 0.02, 1.0)
-
-    // Soft metallic resonance reduced in level (adds texture but not sharpness)
-    const metal = new Tone.MetalSynth({
-      envelope: { attack: 0.004, decay: 1.2, release: 1.8 },
-      harmonicity: 3.5,
-      modulationIndex: 18,
-      resonance: 3000
-    }).connect(masterFilter)
-    metal.volume.value = -18
-    metal.triggerAttackRelease('C2', 1.2, now + 0.06)
-
-    // Lower-register arpeggiated cluster for unease (more bassy)
-    const arp = new Tone.PolySynth(Tone.Synth, ({
+    // Warm, slow-evolving pad (two layers for thickness)
+    const padA = new Tone.PolySynth(Tone.Synth, ({
       maxPolyphony: 4,
       voice: {
-        oscillator: { type: 'triangle' },
-        envelope: { attack: 0.02, decay: 1.2, sustain: 0.0, release: 2.0 }
+        oscillator: { type: 'sine' },
+        envelope: { attack: 0.8, decay: 1.8, sustain: 0.88, release: 2.8 }
       }
-    } as any)).connect(masterFilter)
-    arp.triggerAttackRelease(['C2', 'Db2', 'E2'], 1.6, now + 0.18, 0.36)
-    arp.triggerAttackRelease(['B1', 'C2', 'Eb2'], 1.6, now + 0.9, 0.28)
+    } as any)).connect(masterFilter);
+    padA.volume.value = -8;
+    padA.triggerAttackRelease(['C2', 'E2', 'G2'], dur, now, 0.56);
 
-    // Subtle, lower-level noise swell
-    const noise = new Tone.Noise('pink')
-    const ng = new Tone.Gain(0.06).connect(masterFilter)
-    noise.connect(ng)
-    noise.start(now)
-    ng.gain.setValueAtTime(0.06, now)
-    ng.gain.exponentialRampTo(0.0001, dur)
+    const padB = new Tone.PolySynth(Tone.Synth, ({
+      maxPolyphony: 3,
+      voice: {
+        oscillator: { type: 'triangle' },
+        envelope: { attack: 1.0, decay: 1.6, sustain: 0.82, release: 3.0 }
+      }
+    } as any)).connect(masterFilter);
+    padB.volume.value = -10;
+    padB.triggerAttackRelease([
+      Tone.Frequency('C2').transpose(0.5).toNote(),
+      Tone.Frequency('E2').transpose(0.5).toNote(),
+      Tone.Frequency('G2').transpose(0.5).toNote()
+    ], dur, now, 0.44);
 
-    // Schedule release and cleanup
+    // A calming, bell-like accent that isn't harsh
+    const bell = new Tone.FMSynth({
+      modulationIndex: 8,
+      harmonicity: 2.2,
+      envelope: { attack: 0.004, decay: 1.0, sustain: 0.0, release: 1.8 }
+    }).connect(masterFilter);
+    bell.volume.value = -6;
+    bell.triggerAttackRelease('E4', 0.9, now + 0.12, 0.9);
+
+    // Soft, rounded sub for tactile weight
+    const sub = new Tone.Synth({
+      oscillator: { type: 'sine' },
+      envelope: { attack: 0.02, decay: 0.9, sustain: 0.8, release: 1.8 }
+    }).connect(masterFilter);
+    sub.volume.value = -9;
+    sub.triggerAttackRelease('C1', dur, now, 0.7);
+
+    // Gentle noise riser for a smooth swell
+    const noise = new Tone.Noise('pink');
+    const noiseGain = new Tone.Gain(0.04).connect(masterFilter);
+    noise.connect(noiseGain);
+    noise.start(now);
+    noiseGain.gain.setValueAtTime(0.02, now);
+    noiseGain.gain.linearRampTo(0.08, now + dur * 0.25);
+    noiseGain.gain.exponentialRampTo(0.0001, now + dur);
+
+    // Small ping/reverb tail to add sparkle without harshness
+    const ping = new Tone.MetalSynth({
+      envelope: { attack: 0.004, decay: 1.0, release: 1.6 },
+      harmonicity: 4.5,
+      modulationIndex: 10,
+      resonance: 1500
+    }).connect(masterFilter);
+    ping.volume.value = -18;
+    ping.triggerAttackRelease('G4', 0.8, now + 0.28, 0.5);
+
+    // Melodic motif: gentle, short notes to add a clear melodic identity
+    const melody = new Tone.PolySynth(Tone.Synth, ({
+      maxPolyphony: 3,
+      voice: {
+        oscillator: { type: 'sine' },
+        envelope: { attack: 0.02, decay: 0.6, sustain: 0.0, release: 1.0 }
+      }
+    } as any)).connect(masterFilter);
+    melody.volume.value = -6;
+    const melodyNotes = ['E4', 'G4', 'B4', 'C5'];
+    melody.triggerAttackRelease(melodyNotes[0], 0.6, now + 0.18, 0.72);
+    melody.triggerAttackRelease(melodyNotes[1], 0.6, now + 0.46, 0.64);
+    melody.triggerAttackRelease(melodyNotes[2], 0.8, now + 0.86, 0.56);
+    melody.triggerAttackRelease(melodyNotes[3], 1.2, now + 1.36, 0.6);
+
+    // cleanup after sound finished
     setTimeout(() => {
-      try { droneA.triggerRelease(); } catch (e) {}
-      try { droneB.triggerRelease(); } catch (e) {}
-      try { sub.triggerRelease(); } catch (e) {}
-      try { noise.stop(); } catch (e) {}
-      try { droneA.dispose(); } catch (e) {}
-      try { droneB.dispose(); } catch (e) {}
+      try { padA.dispose(); } catch (e) {}
+      try { padB.dispose(); } catch (e) {}
+      try { bell.dispose(); } catch (e) {}
       try { sub.dispose(); } catch (e) {}
-      try { thump.dispose(); } catch (e) {}
-      try { metal.dispose(); } catch (e) {}
-      try { arp.dispose(); } catch (e) {}
-      try { ng.dispose(); } catch (e) {}
+      try { ping.dispose(); } catch (e) {}
+      try { melody.dispose(); } catch (e) {}
+      try { noise.stop(); } catch (e) {}
+      try { noise.dispose(); } catch (e) {}
+      try { noiseGain.dispose(); } catch (e) {}
+      try { shimmer.dispose(); } catch (e) {}
       try { masterFilter.dispose(); } catch (e) {}
-    }, Math.ceil(dur * 1000) + 400)
+    }, Math.ceil(dur * 1000) + 600);
   } catch (e) {
-    // swallow errors; this is non-critical
+    // swallow errors; non-critical
   }
 }
