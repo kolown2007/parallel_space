@@ -179,6 +179,8 @@ export class ModelPlacer {
 				continue;
 			}
 			instance.position.copyFrom(pos);
+			instance.renderingGroupId = 1;
+			instance.position.y += 0.02;
 			instance.scaling.setAll(scale);
 			instance.isVisible = true;
 				try {

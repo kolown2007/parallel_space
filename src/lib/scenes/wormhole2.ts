@@ -222,8 +222,8 @@ export class WormHoleScene2 {
 								modelNames: [randomFrom('jollibee', 'rabbit', 'mario','army','armycatbike','manikineko')],
 								count: 1,
 								index: mi,
-								offsetY: -1,
-								scaleRange: [5, 7],
+								offsetY: -20,
+								scaleRange: [10, 15],
 								physics: false
 							});
 							console.log('Placed model at index', mi);
