@@ -400,7 +400,7 @@ export class ModelPlacer {
 								mass: 0.05,
 								restitution: 0.3,
 								friction: 0.05,
-								shape: BABYLON.PhysicsShapeType.MESH
+								shape: BABYLON.PhysicsShapeType.BOX
 							} : undefined,
 							startIndex: pathIndex
 						});

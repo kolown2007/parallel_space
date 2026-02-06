@@ -185,7 +185,7 @@ export function createDroneInstance(
 		};
 		aggregate = new BABYLON.PhysicsAggregate(
 			instance as unknown as BABYLON.AbstractMesh,
-			options.physicsShape ?? BABYLON.PhysicsShapeType.MESH,
+			options.physicsShape ?? BABYLON.PhysicsShapeType.BOX,
 			physicsOpts,
 			scene
 		);
