@@ -8,12 +8,12 @@ export const WORMHOLE2_CONFIG = {
 	torus: {
 		diameter: 300,
 		thickness: 30,
-		tessellation: 100,
+		tessellation: 20,
 		positionY: 1,
 		lineRadiusFactor: 0.0,
 		turns: 1,
 		spiralTurns: 3,
-		segments: 128,
+		segments: 80,
 		pointsPerCircle: 360,
 		emissiveIntensity: .02  // 0.1 = very dark (orb lights visible), 0.5 = balanced, 1.0 = full bright
 		
