@@ -57,7 +57,8 @@ export function setupCameras(
 
 	const followCamera = new BABYLON.UniversalCamera('followCamera', new BABYLON.Vector3(), scene);
 	followCamera.fov = Math.PI / 2;
-	followCamera.minZ = 0.0001;
+	// Use a larger near plane to improve depth buffer precision and reduce z-fighting
+	followCamera.minZ = 0.1;
 	followCamera.maxZ = 10000;
 	followCamera.updateUpVectorFromRotation = true;
 	followCamera.rotationQuaternion = new BABYLON.Quaternion();

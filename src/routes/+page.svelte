@@ -14,7 +14,7 @@
   onMount(() => {
     if (!canvas) return;
 
-    engine = new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true });
+    engine = new BABYLON.Engine(canvas, true, { antialias: true, preserveDrawingBuffer: true, stencil: true });
     // Ensure canvas element has correct CSS sizing and notify engine of initial size
     try {
       canvas.style.width = canvas.style.width || '100%';

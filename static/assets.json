@@ -9,6 +9,11 @@
 			"rootUrl": "https://kolown.net/storage/library/chronoescape/",
 			"filename": "glb/usb.glb",
 			"type": "mesh"
+			},
+		"drone2": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/",
+			"filename": "glb/usb2.glb",
+			"type": "mesh"
 		},
 		"rabbit": {
 			"rootUrl": "https://kolown.net/storage/library/chronoescape/",
