@@ -17,10 +17,13 @@
     if (!canvas) return;
     const canv = canvas as HTMLCanvasElement;
 
-    // handlers declared here so the cleanup closure can access them even before assignment
-    let handleResize: (() => void) | undefined;
-    let handleMouseMove: (() => void) | undefined;
-    let handleKeyDown: ((e: KeyboardEvent) => void) | undefined;
+    engine = new BABYLON.Engine(canvas, true, { antialias: true, preserveDrawingBuffer: true, stencil: true });
+    // Ensure canvas element has correct CSS sizing and notify engine of initial size
+    try {
+      canvas.style.width = canvas.style.width || '100%';
+      canvas.style.height = canvas.style.height || '100vh';
+    } catch (e) {}
+    try { engine.resize(); } catch (e) {}
 
     (async () => {
       // Try to create a WebGPU engine when available, otherwise fall back to WebGL

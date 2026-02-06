@@ -340,7 +340,7 @@ export class WormHoleScene2 {
 		// ------------------------------------------------------------------
 		try {
 			const res = await setupSceneDrone(scene, {
-				assetId: 'usb',
+				assetId: 'drone2',
 				initialPosition: initialPosition,
 				initialRotation: new BABYLON.Vector3(
 					cfg.drone.initialRotation.x,
