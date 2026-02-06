@@ -18,6 +18,7 @@ export interface DroneInstanceOptions {
 	position?: BABYLON.Vector3;
 	scale?: number;
 	material?: BABYLON.Material;
+	renderingGroupId?: number;
 	physicsShape?: BABYLON.PhysicsShapeType;
 	physicsOptions?: { mass?: number; restitution?: number; friction?: number };
 	debug?: boolean;
@@ -165,6 +166,15 @@ export function createDroneInstance(
 	options: DroneInstanceOptions = {}
 ): { instance: BABYLON.InstancedMesh; aggregate: BABYLON.PhysicsAggregate | null } {
 	const id = options.id ?? `drone_instance_${Date.now()}`;
+
+	// Ensure renderingGroupId (and other per-template render state) is applied
+	// to the source/template mesh — setting it on an InstancedMesh has no effect.
+	try {
+		if (typeof options.renderingGroupId === 'number') {
+			template.renderingGroupId = options.renderingGroupId;
+		}
+	} catch (e) { /* ignore */ }
+
 	const instance = template.createInstance(id);
 
 	instance.isPickable = true;

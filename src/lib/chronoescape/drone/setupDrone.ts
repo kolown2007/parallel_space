@@ -49,6 +49,12 @@ export interface DroneSetupOptions {
 	scale?: number;
 	/** Target maximum dimension (meters) to normalize the model to (used when `scale` not provided) */
 	targetSize?: number;
+	/** Optional primary emissive color for the drone material */
+	primaryColor?: BABYLON.Color3;
+	/** Optional secondary emissive color for the second mesh/subMesh */
+	secondaryColor?: BABYLON.Color3;
+	/** Reduce CPU work during setup (skip bounding-box normalization and physics) */
+	lowCpuMode?: boolean;
 	/** (Glow removed) */
 	/** Enable debug physics visualization (default: false) */
 	enableDebug?: boolean;
@@ -119,8 +125,10 @@ export async function setupSceneDrone(
 	// -------------------------------------------------------------------------
 	// 2. LOAD DRONE MESH
 	// -------------------------------------------------------------------------
-	const { drone, droneVisual } = await createDrone(scene, resolvedGlbUrl);
-	
+	const droneResult = await createDrone(scene, resolvedGlbUrl) as any;
+	let drone: BABYLON.Mesh = droneResult.drone;
+	let droneVisual: BABYLON.Mesh | undefined = droneResult.droneVisual;
+
 	drone.position.copyFrom(initialPosition);
 	drone.rotation.copyFrom(initialRotation);
 
@@ -213,16 +221,33 @@ export async function setupSceneDrone(
 	}
 
 	// -------------------------------------------------------------------------
-	// 5. APPLY MATERIAL
+	// 5. APPLY MATERIAL (support per-subMesh coloring)
 	// -------------------------------------------------------------------------
-	const droneMaterial = createDroneMaterial(scene);
-	const targetMesh = droneVisual ?? drone;
-	// Apply material and enforce back-face culling to avoid interior showing through
-	targetMesh.material = droneMaterial;
-	try {
-		(droneMaterial as any).backFaceCulling = true;
-	} catch (e) {
-		/* ignore */
+	const primaryMat = createDroneMaterial(scene, options.primaryColor ?? new BABYLON.Color3(0.1, 0.6, 1.0));
+	const secondaryMat = createDroneMaterial(scene, options.secondaryColor ?? new BABYLON.Color3(0.66, 0.66, 0.68));
+
+	const merged = (droneVisual ?? drone) as BABYLON.Mesh;
+
+	try { (primaryMat as any).backFaceCulling = true; } catch {}
+	try { (secondaryMat as any).backFaceCulling = true; } catch {}
+
+	// If mesh already contains subMeshes (typical when MergeMeshes preserved them),
+	// create a MultiMaterial and map subMeshes to the two materials.
+	const subs = (merged as any).subMeshes as BABYLON.SubMesh[] | undefined;
+	if (subs && subs.length > 1) {
+		const MultiMat = (BABYLON as any).MultiMaterial as typeof BABYLON.MultiMaterial;
+		const multi = new MultiMat('drone_multi', scene) as BABYLON.MultiMaterial;
+		// assign subMaterials: index 0 => primary, index 1 => secondary, others => primary
+		multi.subMaterials = [primaryMat, secondaryMat];
+		merged.material = multi;
+		try {
+			for (let i = 0; i < subs.length; i++) {
+				subs[i].materialIndex = i === 1 ? 1 : 0;
+			}
+		} catch (e) { /* ignore */ }
+	} else {
+		// Single-material case: apply primary material
+		try { merged.material = primaryMat; } catch (e) { /* ignore */ }
 	}
 
 	// Diagnostic: log bounding box and camera position to detect camera-inside-mesh cases
@@ -269,7 +294,7 @@ export async function setupSceneDrone(
 		drone,
 		droneVisual,
 		droneAggregate,
-		droneMaterial,
+		droneMaterial: primaryMat,
 		droneLight
 	};
 }
