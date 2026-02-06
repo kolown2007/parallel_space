@@ -32,6 +32,7 @@ import { getDronePathIndexFactory } from './wormhole2/wormhole2.helpers';
 import { createKeyboardHandlers } from './wormhole2/wormhole2.keyboard';
 import { setupDroneCollision } from './wormhole2/wormhole2.collision';
 import { createRenderLoop } from './wormhole2/wormhole2.render';
+import { scale } from 'svelte/transition';
 
 // ============================================================================
 // SCENE CLASS
@@ -339,7 +340,7 @@ export class WormHoleScene2 {
 		// ------------------------------------------------------------------
 		try {
 			const res = await setupSceneDrone(scene, {
-				assetId: 'drone',
+				assetId: 'usb',
 				initialPosition: initialPosition,
 				initialRotation: new BABYLON.Vector3(
 					cfg.drone.initialRotation.x,
@@ -349,7 +350,8 @@ export class WormHoleScene2 {
 				mass: cfg.drone.mass,
 				restitution: cfg.drone.restitution,
 				friction: cfg.drone.friction,
-				enableDebug: cfg.debug.enableDroneDebug
+				enableDebug: cfg.debug.enableDroneDebug,
+				scale:1
 			});
 			drone = res.drone;
 			droneAggregate = res.droneAggregate;

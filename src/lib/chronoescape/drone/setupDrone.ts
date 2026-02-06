@@ -17,8 +17,8 @@ export interface DroneSetupResult {
 	drone: BABYLON.Mesh;
 	/** Visual mesh if different from physics mesh */
 	droneVisual?: BABYLON.Mesh;
-	/** Physics aggregate for collision/movement */
-	droneAggregate: BABYLON.PhysicsAggregate;
+	/** Physics aggregate for collision/movement (may be undefined if creation failed) */
+	droneAggregate?: BABYLON.PhysicsAggregate;
 	/** Material applied to the drone */
 	droneMaterial: BABYLON.StandardMaterial;
 	/** Point light attached to the drone */
@@ -45,6 +45,10 @@ export interface DroneSetupOptions {
 	restitution?: number;
 	/** Physics friction (default: 0.3) */
 	friction?: number;
+	/** Uniform scale to apply to the loaded model (overrides targetSize) */
+	scale?: number;
+	/** Target maximum dimension (meters) to normalize the model to (used when `scale` not provided) */
+	targetSize?: number;
 	/** (Glow removed) */
 	/** Enable debug physics visualization (default: false) */
 	enableDebug?: boolean;
@@ -121,14 +125,75 @@ export async function setupSceneDrone(
 	drone.rotation.copyFrom(initialRotation);
 
 	// -------------------------------------------------------------------------
-	// 3. CREATE PHYSICS
+	// 3. APPLY SCALING (optional) + CREATE PHYSICS AFTER SCALING
 	// -------------------------------------------------------------------------
-	const droneAggregate = new BABYLON.PhysicsAggregate(
-		drone,
-		physicsShape,
-		{ mass, restitution, friction },
-		scene
-	);
+	let droneAggregate: BABYLON.PhysicsAggregate | undefined;
+
+	// Determine scale factor: explicit `scale` wins, otherwise normalize to `targetSize` if provided
+	const scaleFactor = ((): number => {
+		if (typeof options.scale === 'number') return options.scale;
+		if (typeof options.targetSize !== 'number') return 1;
+
+		try {
+			const meshesToCheck: BABYLON.Mesh[] = [];
+			if (droneVisual) meshesToCheck.push(droneVisual);
+			else meshesToCheck.push(drone);
+
+			let minX = Infinity, minY = Infinity, minZ = Infinity;
+			let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+			for (const m of meshesToCheck) {
+				try {
+					m.computeWorldMatrix(true);
+					const bi = m.getBoundingInfo();
+					const min = bi.boundingBox.minimumWorld;
+					const max = bi.boundingBox.maximumWorld;
+					minX = Math.min(minX, min.x);
+					minY = Math.min(minY, min.y);
+					minZ = Math.min(minZ, min.z);
+					maxX = Math.max(maxX, max.x);
+					maxY = Math.max(maxY, max.y);
+					maxZ = Math.max(maxZ, max.z);
+				} catch (e) {
+					/* ignore per-mesh errors */
+				}
+			}
+
+			const sizeX = maxX - minX;
+			const sizeY = maxY - minY;
+			const sizeZ = maxZ - minZ;
+			const maxDimension = Math.max(sizeX, sizeY, sizeZ);
+			if (maxDimension > 0) {
+				return options.targetSize! / maxDimension;
+			}
+		} catch (e) {
+			console.warn('Failed to compute targetSize normalization for drone:', e);
+		}
+		return 1;
+	})();
+
+	if (scaleFactor !== 1) {
+		try {
+			drone.scaling.setAll(scaleFactor);
+			if (droneVisual) droneVisual.scaling.setAll(scaleFactor);
+			console.log(`↳ Applied drone scaleFactor=${scaleFactor.toFixed(3)}`);
+		} catch (e) {
+			console.warn('Failed to apply drone scale:', e);
+		}
+	}
+
+	// Now create physics aggregate so collision shape matches visual scale
+	try {
+		droneAggregate = new BABYLON.PhysicsAggregate(
+			drone,
+			physicsShape,
+			{ mass, restitution, friction },
+			scene
+		);
+	} catch (e) {
+		console.warn('Failed to create drone physics aggregate:', e);
+		droneAggregate = undefined;
+	}
 
 	// -------------------------------------------------------------------------
 	// 4. DEBUG VISUALIZATION (optional)
@@ -152,7 +217,33 @@ export async function setupSceneDrone(
 	// -------------------------------------------------------------------------
 	const droneMaterial = createDroneMaterial(scene);
 	const targetMesh = droneVisual ?? drone;
+	// Apply material and enforce back-face culling to avoid interior showing through
 	targetMesh.material = droneMaterial;
+	try {
+		(droneMaterial as any).backFaceCulling = true;
+	} catch (e) {
+		/* ignore */
+	}
+
+	// Diagnostic: log bounding box and camera position to detect camera-inside-mesh cases
+	try {
+		const bi = drone.getBoundingInfo?.();
+		const bbox = bi?.boundingBox;
+		if (bbox) {
+			console.debug('drone boundingBox world min/max:', bbox.minimumWorld?.toString?.(), bbox.maximumWorld?.toString?.());
+		}
+		const cam = scene.activeCamera;
+		if (cam && bbox) {
+			const p = cam.position;
+			const inside = p.x >= bbox.minimumWorld.x && p.x <= bbox.maximumWorld.x && p.y >= bbox.minimumWorld.y && p.y <= bbox.maximumWorld.y && p.z >= bbox.minimumWorld.z && p.z <= bbox.maximumWorld.z;
+			if (inside) {
+				console.warn('Camera appears to be inside the drone bounding box — this will show interior faces.');
+			}
+			console.debug('activeCamera position:', p.toString());
+		}
+	} catch (e) {
+		/* ignore diagnostics errors */
+	}
 
 	// (Glow layer removed) use material emissive and attached lights only
 
