@@ -12,18 +12,22 @@
   let engine: any = null;
   let sceneManager: SceneManager | null = null;
   let cursorTimeout: number | null = null;
+  // Event handler references (declared so they can be added/removed safely)
+  let handleResize: (() => void) | null = null;
+  let handleKeyDown: ((e: KeyboardEvent) => void) | null = null;
+  let handleMouseMove: (() => void) | null = null;
 
   onMount(() => {
     if (!canvas) return;
     const canv = canvas as HTMLCanvasElement;
 
-    engine = new BABYLON.Engine(canvas, true, { antialias: true, preserveDrawingBuffer: true, stencil: true });
-    // Ensure canvas element has correct CSS sizing and notify engine of initial size
+    // Defer creating the Engine until we've attempted WebGPU so we don't
+    // accidentally create a WebGL context first (which can make
+    // `canvas.getContext('webgpu')` return null).
     try {
       canvas.style.width = canvas.style.width || '100%';
       canvas.style.height = canvas.style.height || '100vh';
     } catch (e) {}
-    try { engine.resize(); } catch (e) {}
 
     (async () => {
       // Try to create a WebGPU engine when available, otherwise fall back to WebGL
@@ -32,15 +36,24 @@
           const RuntimeWebGPUEngine = (BABYLON as any).WebGPUEngine as any;
           if ((navigator as any).gpu && RuntimeWebGPUEngine) {
             try {
-              const webgpuEngine = new RuntimeWebGPUEngine(canv, { preserveDrawingBuffer: true, stencil: true, enableGPUDebugMarkers: false });
-              if (webgpuEngine.initAsync) {
-                await webgpuEngine.initAsync();
+                // Check whether the canvas can provide a WebGPU context before
+                // attempting to construct the Babylon WebGPUEngine. If the
+                // context is null, constructing the engine will fail when the
+                // internals try to call `context.configure(...)`.
+                const webgpuCtx = (canv as any)?.getContext ? (canv as any).getContext('webgpu') : null;
+                if (!webgpuCtx) {
+                  console.warn("Canvas.getContext('webgpu') returned null - skipping WebGPU engine");
+                } else {
+                  const webgpuEngine = new RuntimeWebGPUEngine(canv, { preserveDrawingBuffer: true, stencil: true, enableGPUDebugMarkers: false });
+                  if (webgpuEngine.initAsync) {
+                    await webgpuEngine.initAsync();
+                  }
+                  console.info('Using WebGPU engine');
+                  return webgpuEngine;
+                }
+              } catch (e) {
+                console.warn('WebGPU engine initialization failed, falling back to WebGL', e);
               }
-              console.info('Using WebGPU engine');
-              return webgpuEngine;
-            } catch (e) {
-              console.warn('WebGPU engine initialization failed, falling back to WebGL', e);
-            }
           }
         } catch (e) {
           console.warn('WebGPU check failed', e);
