@@ -47,9 +47,9 @@ export const WORMHOLE2_CONFIG = {
 	obstacles: {
 		cubeAheadOffset: 10,
 		portalAheadOffset: 10,
-		cubeSize: 2,
+		cubeSize: 5.5,
 		cubeAutoDispose: 60000, // ms
-		cubeThrustMs: 2000,
+		cubeThrustMs: 3000,
 		cubeThrustSpeed: -10,
 		portalWidth: 20,
 		portalHeight: 20
