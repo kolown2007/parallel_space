@@ -58,24 +58,43 @@ export function mountVideoScene(
         try { video.poster = poster; showPoster(poster); } catch {};
     }
 
-    // If caller didn't pass a src, try to load from centralized assets.json
+    // If caller didn't pass a src, or the src errors, try to load from centralized assets.json
+    // We'll attempt a few fallbacks (random videos) before giving up.
+    const tried = new Set<string>();
+    let attempts = 0;
+    const MAX_ATTEMPTS = 5;
+
+    const loadAndPlay = async (candidate?: string) => {
+        attempts++;
+        try {
+            let url = candidate || '';
+            if (!url) {
+                url = await randomVideoUrl();
+            }
+            if (!url) return false;
+            // avoid retrying the same URL
+            if (tried.has(url) && attempts <= MAX_ATTEMPTS) {
+                // try another random one
+                return loadAndPlay();
+            }
+            tried.add(url);
+            video.src = url;
+            // try to autoplay once src arrives
+            setTimeout(() => video.play().catch(() => {}), 100);
+            return true;
+        } catch (e) {
+            return false;
+        }
+    };
+
+    // initial attempt: prefer provided `src`, otherwise pick random
     if (src) {
+        // try provided source first; if it fails an 'error' handler will trigger fallback
         video.src = src;
     } else {
+        // no src provided, try to load a random video
         video.src = '';
-        const loadRandomVideo = async () => {
-            try {
-                const url = await randomVideoUrl();
-                if (url) {
-                    video.src = url;
-                    // try to autoplay once src arrives
-                    setTimeout(() => video.play().catch(() => {}), 100);
-                }
-            } catch (error) {
-                // ignore failures to keep the scene resilient
-            }
-        };
-        loadRandomVideo();
+        void loadAndPlay();
     }
     video.loop = false; // Play once, then call onEnd
     video.playsInline = true;
@@ -104,6 +123,22 @@ export function mountVideoScene(
     };
     video.addEventListener('playing', handlePlaying);
 
+    // If the video element reports an error, attempt fallbacks (random videos)
+    const handleError = async () => {
+        // If we've exhausted attempts, just call onEnd and stop
+        if (attempts >= MAX_ATTEMPTS) {
+            if (onEnd) onEnd();
+            return;
+        }
+
+        // Try to load another random video
+        const ok = await loadAndPlay();
+        if (!ok && attempts >= MAX_ATTEMPTS) {
+            if (onEnd) onEnd();
+        }
+    };
+    video.addEventListener('error', handleError);
+
     // Call onEnd callback when video finishes
     const handleEnded = () => {
         if (onEnd) {
@@ -129,6 +164,7 @@ export function mountVideoScene(
         document.removeEventListener('visibilitychange', handleVisibility);
         video.removeEventListener('ended', handleEnded);
         video.removeEventListener('playing', handlePlaying);
+        video.removeEventListener('error', handleError);
         video.pause();
         video.src = '';
         video.load(); // Release resources
