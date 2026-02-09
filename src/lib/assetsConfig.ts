@@ -260,3 +260,129 @@ export async function refreshAssetsCache(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Clear the in-memory cached assets config so next `loadAssetsConfig` will refetch.
+ */
+export function clearAssetsConfigCache() {
+  cachedConfig = null;
+}
+
+/**
+ * Force reload of the assets config and return the new config.
+ */
+export async function reloadAssetsConfig(): Promise<AssetsConfig> {
+  clearAssetsConfigCache();
+  const cfg = await loadAssetsConfig();
+  try {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('assets:updated', { detail: cfg }));
+    }
+  } catch (e) {}
+  return cfg;
+}
+
+// Listen for service worker messages that indicate the service worker refreshed assets.
+if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  try {
+    navigator.serviceWorker.addEventListener('message', (ev: any) => {
+      try {
+        const data = ev?.data || {};
+        if (data && data.type === 'refreshedAssets') {
+          // Only reload the in-memory manifest when new assets were actually cached.
+          // If added === 0, keep the existing cachedConfig to avoid unnecessary reloads.
+          if (data.ok) {
+            const added = typeof data.added === 'number' ? data.added : 0;
+            if (added > 0) {
+              reloadAssetsConfig().catch(() => {});
+            }
+          } else {
+            // If SW failed, clear cache so next load will fetch fresh manifest
+            clearAssetsConfigCache();
+          }
+        }
+      } catch (e) {}
+    });
+  } catch (e) {}
+}
+
+// --- Polling / automatic refresh utilities ---
+let _assetsPollingId: number | null = null;
+let _assetsPollingBoundFocus: (() => void) | null = null;
+let _assetsPollingBoundVisibility: (() => void) | null = null;
+let _lastManifestRaw: string | null = null;
+
+async function checkForAssetManifestChange(): Promise<boolean> {
+  try {
+    const cacheBuster = `?t=${Date.now()}`;
+    const res = await fetch(ASSETS_CONFIG_URL + cacheBuster, { cache: 'no-store' });
+    if (!res || !res.ok) return false;
+    const raw = await res.text();
+
+    // If we haven't initialized baseline, set it but don't trigger update
+    if (_lastManifestRaw === null) {
+      // prefer current in-memory cachedConfig as baseline when available
+      if (cachedConfig) _lastManifestRaw = JSON.stringify(cachedConfig);
+      else _lastManifestRaw = raw;
+      return false;
+    }
+
+    if (raw !== _lastManifestRaw) {
+      _lastManifestRaw = raw;
+      // reload in-memory config and ask SW to refresh cached assets
+      try {
+        await reloadAssetsConfig();
+      } catch (e) {}
+      try {
+        await refreshAssetsCache();
+      } catch (e) {}
+      return true;
+    }
+    return false;
+  } catch (e) {
+    return false;
+  }
+}
+
+/** Start periodic polling to detect changes to `/assets.json`. */
+export function startAssetsPolling(intervalMs = 300000) {
+  if (typeof window === 'undefined') return;
+  stopAssetsPolling();
+
+  // initialize baseline immediately
+  (async () => {
+    try { _lastManifestRaw = cachedConfig ? JSON.stringify(cachedConfig) : null; } catch (e) { _lastManifestRaw = null; }
+    await checkForAssetManifestChange();
+  })();
+
+  _assetsPollingId = window.setInterval(() => { checkForAssetManifestChange().catch(() => {}); }, intervalMs) as unknown as number;
+
+  // also trigger a quick check when page becomes visible or when window regains focus
+  _assetsPollingBoundFocus = () => { checkForAssetManifestChange().catch(() => {}); };
+  _assetsPollingBoundVisibility = () => { if (!document.hidden) checkForAssetManifestChange().catch(() => {}); };
+  window.addEventListener('focus', _assetsPollingBoundFocus);
+  document.addEventListener('visibilitychange', _assetsPollingBoundVisibility);
+}
+
+/** Stop the periodic polling. */
+export function stopAssetsPolling() {
+  if (typeof window === 'undefined') return;
+  if (_assetsPollingId !== null) {
+    clearInterval(_assetsPollingId as unknown as number);
+    _assetsPollingId = null;
+  }
+  if (_assetsPollingBoundFocus) {
+    window.removeEventListener('focus', _assetsPollingBoundFocus);
+    _assetsPollingBoundFocus = null;
+  }
+  if (_assetsPollingBoundVisibility) {
+    document.removeEventListener('visibilitychange', _assetsPollingBoundVisibility);
+    _assetsPollingBoundVisibility = null;
+  }
+}
+
+// Auto-start polling in the browser so production clients will detect new assets
+// without manual console interaction. Interval defaults to 5 minutes.
+if (typeof window !== 'undefined') {
+  try { startAssetsPolling(300000); } catch (e) {}
+}

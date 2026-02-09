@@ -30,7 +30,8 @@ export function mountVideoScene(
         background: 'black',
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'center'
+        justifyContent: 'center',
+        overflow: 'hidden'
     });
     parent.appendChild(root);
 
@@ -42,11 +43,10 @@ export function mountVideoScene(
         Object.assign(posterImg.style, {
             position: 'absolute',
             inset: '0',
-            margin: 'auto',
-            width: 'auto',
+            width: '100%',
             height: '100%',
-            objectFit: 'contain',
-            zIndex: '9998',
+            objectFit: 'cover',
+            zIndex: '10001',
             background: 'black'
         });
         root.appendChild(posterImg!);
@@ -85,9 +85,12 @@ export function mountVideoScene(
     video.crossOrigin = 'anonymous';
     
     Object.assign(video.style, {
+        position: 'absolute',
+        inset: '0',
         width: '100%',
         height: '100%',
-        objectFit: 'contain'
+        objectFit: 'cover',
+        zIndex: '10000'
     });
 
     root.appendChild(video);

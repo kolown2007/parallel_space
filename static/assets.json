@@ -143,6 +143,30 @@
 		},
 		"chrono3": {
 			"url": "https://kolown.net/storage/library/chronoescape/videos/chrono3.mp4"
+		},
+		"road": {
+			"url": "https://kolown.net/storage/library/chronoescape/videos/road.mp4"
+		},
+		"road2": {
+			"url": "https://kolown.net/storage/library/chronoescape/videos/road2.mp4"
+		},
+		"plantglitch": {
+			"url": "https://kolown.net/storage/library/chronoescape/videos/plantglitch.mp4"
+		},
+		"landscape": {
+			"url": "https://kolown.net/storage/library/chronoescape/videos/landscape.mp4"
+		},
+		"fortnite": {
+			"url": "https://kolown.net/storage/library/chronoescape/videos/fortnite.mp4"
+		},
+		"disney": {
+			"url": "https://kolown.net/storage/library/chronoescape/videos/disney.mp4"
+		},
+		"chronoglitch": {
+			"url": "https://kolown.net/storage/library/chronoescape/videos/chronoglitch.mp4"
+		},
+		"cocoglitch": {
+			"url": "https://kolown.net/storage/library/chronoescape/videos/cocoglitch.mp4"
 		}
 	},
 	"loading": {
