@@ -36,14 +36,24 @@ self.addEventListener('install', (event) => {
 				if (json.videos) for (const v of Object.values(json.videos)) add(v.url);
 				if (json.loading && json.loading.backgroundImage) add(json.loading.backgroundImage);
 				if (json.physics && json.physics.havokWasm) add(json.physics.havokWasm);
+				let added = 0;
 				for (const url of Array.from(urls)) {
 					try {
+						const existing = await cache.match(url);
+						if (existing) continue; // already cached
 						const r = await fetch(url, { mode: 'cors' });
-						if (r && r.ok) await cache.put(url, r);
+						if (r && r.ok) {
+							await cache.put(url, r.clone());
+							added += 1;
+						}
 					} catch (e) {
-						console.warn('SW: failed to cache asset', url, e);
+						console.warn('SW: failed to cache asset during refresh', url, e);
 					}
 				}
+
+				// notify clients that refresh succeeded and report how many were added
+				const clients = await self.clients.matchAll();
+				for (const c of clients) c.postMessage({ type: 'refreshedAssets', ok: true, added, total: urls.size });
 			}
 		} catch (e) {
 			console.warn('SW: failed to load /assets.json', e);
@@ -120,6 +130,57 @@ self.addEventListener('fetch', (event) => {
 	}
 
 	event.respondWith(respond());
+});
+
+// Listen for client messages to trigger asset refresh
+self.addEventListener('message', (event) => {
+	try {
+		const data = event.data || {};
+		if (data && data.type === 'refreshAssets') {
+			// Re-fetch assets.json and cache listed assets
+			(async () => {
+				try {
+					const cache = await caches.open(CACHE);
+					const cacheBuster = `?t=${Date.now()}`;
+					const res = await fetch('/assets.json' + cacheBuster, { cache: 'no-store' });
+					if (!res || !res.ok) {
+						// notify clients that refresh failed
+						const clients = await self.clients.matchAll();
+						for (const c of clients) c.postMessage({ type: 'refreshedAssets', ok: false });
+						return;
+					}
+					const json = await res.json();
+					const urls = new Set();
+					const add = (u) => { if (u) urls.add(u); };
+					if (json.models) for (const a of Object.values(json.models)) add((/^https?:\/\//i.test(a.rootUrl) ? a.rootUrl : '') + (a.filename || ''));
+					if (json.textures) for (const a of Object.values(json.textures)) add((/^https?:\/\//i.test(a.rootUrl) ? a.rootUrl : '') + (a.filename || ''));
+					if (json.shaders) for (const s of Object.values(json.shaders)) { if (s.vertex) add((/^https?:\/\//i.test(s.vertex) ? s.vertex : s.vertex)); if (s.fragment) add((/^https?:\/\//i.test(s.fragment) ? s.fragment : s.fragment)); }
+					if (json.videos) for (const v of Object.values(json.videos)) add(v.url);
+					if (json.loading && json.loading.backgroundImage) add(json.loading.backgroundImage);
+					if (json.physics && json.physics.havokWasm) add(json.physics.havokWasm);
+
+					for (const url of Array.from(urls)) {
+						try {
+							const r = await fetch(url, { mode: 'cors' });
+							if (r && r.ok) await cache.put(url, r.clone());
+						} catch (e) {
+							console.warn('SW: failed to cache asset during refresh', url, e);
+						}
+					}
+
+					// notify clients that refresh succeeded
+					const clients = await self.clients.matchAll();
+					for (const c of clients) c.postMessage({ type: 'refreshedAssets', ok: true });
+				} catch (e) {
+					console.warn('SW: refreshAssets failed', e);
+					const clients = await self.clients.matchAll();
+					for (const c of clients) c.postMessage({ type: 'refreshedAssets', ok: false });
+				}
+			})();
+		}
+	} catch (e) {
+		// ignore
+	}
 });
 
 
