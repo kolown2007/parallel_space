@@ -121,14 +121,14 @@ export function playCollisionNoteSingle(velocity: number = 1.0) {
   const scale = ['C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4']
   const note = scale[Math.floor(Math.random() * scale.length)]
   const duration = Math.min(0.25 + velocity * 0.75, 2) // shorter for single hits
-  // const vol = Math.min(0.15 + velocity * 0.6, 0.9)
-   const vol = 1.0
+  // increase base and sensitivity so cube hits are much more audible
+  const vol = Math.min(0.75 + velocity * 0.9, 1.0)
 
   // Respect polyphony budget
   const available = Math.max(0, MAX_POLYPHONY - activeVoices)
   if (available <= 0) {
-    // No free voices — play a very short, quiet note to reduce pressure
-    pad.triggerAttackRelease(note, 0.12, undefined, vol * 0.6)
+    // No free voices — play a very short, slightly quieter note to reduce pressure
+    pad.triggerAttackRelease(note, 0.12, undefined, vol * 0.95)
     return
   }
 

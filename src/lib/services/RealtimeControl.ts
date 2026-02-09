@@ -80,9 +80,9 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 
 							await obstacles.place('cube', {
 								index: targetIdx,
-								size: 3,
+								size: 5.5,
 								physics: true,
-								thrustMs: 2000,
+								thrustMs: 3000,
 								thrustSpeed: -30,
 								autoDisposeMs: 60000,
 								faceUVTextureId: randomFrom('metal', 'cube3', 'cube4', 'cube5','collage1'),
