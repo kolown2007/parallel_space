@@ -253,12 +253,12 @@ export class WormHoleScene2 {
 
 				// Place billboards and move them to explicit path indices
 				try {
-					const indices = [10, 60, 110, 160, 210, 260];
+					const indices = [10,20, 60,80, 110, 160, 210, 260,280,310];
 					const bbManager = await obstacles.place('billboard', {
 						count: indices.length,
 						height: 15,
 						// pass an array so each billboard can resolve a random texture independently
-						textureId: ['collage1','tribal','metal'],
+						textureId: ['tribal','billboard1','billboard2','billboard3','billboard4','billboard5','billboard6'],
 					}) as any;
 
 					// Reposition planes to requested path indices
