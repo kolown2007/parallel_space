@@ -126,6 +126,36 @@
 			"rootUrl": "https://kolown.net/storage/library/chronoescape/loading/",
 			"filename": "loading3.png",
 			"type": "texture"
+		},
+    	"billboard1": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/billboards/",
+			"filename": "billboard1.png",
+			"type": "texture"
+		},
+    	"billboard2": {
+			"rootUrl": "https://kolown.net/storage/library/ph_collagian/",
+			"filename": "1.png",
+			"type": "texture"
+	},
+    	"billboard3": {
+			"rootUrl": "https://kolown.net/storage/library/ph_collagian/",
+			"filename": "2.png",
+			"type": "texture"
+	},
+    	"billboard4": {
+			"rootUrl": "https://kolown.net/storage/library/ph_collagian/",
+			"filename": "3.png",
+			"type": "texture"
+	},
+    	"billboard5": {
+			"rootUrl": "https://kolown.net/storage/library/ph_collagian/",
+			"filename": "4.png",
+			"type": "texture"
+	},
+    	"billboard6": {
+			"rootUrl": "https://kolown.net/storage/library/ph_collagian/",
+			"filename": "5.png",
+			"type": "texture"
 		}
 	},
 	"shaders": {
