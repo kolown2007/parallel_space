@@ -109,6 +109,12 @@ export function triggerRevolutionComplete(loopCount: number) {
 
 // Call the API route when a revolution is completed
 export async function notifyRevolutionComplete(loopCount: number) {
+	// Skip API call in development mode
+	if (import.meta.env.DEV) {
+		console.log('[droneRevolution] Skipping API call (dev mode). loops=', loopCount);
+		return null;
+	}
+
 	try {
 		const response = await fetch('https://kolown.net/api/chrono-escapes/1/increment-revolution', {
 			method: 'POST',

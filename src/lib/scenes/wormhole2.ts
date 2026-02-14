@@ -17,11 +17,12 @@ import { ObstacleManager } from '../chronoescape/obstacle/ObstacleManager';
 // System
 import preloadContainers, { getDefaultAssetList } from '../chronoescape/assetContainers';
 import { installKeyboardControls } from '../input/keyboardControls';
-import { randomFrom } from '../assetsConfig';
+import { randomFrom, getTextureUrl } from '../assetsConfig';
 import { updateProgress, cleanupDroneControl } from '../stores/droneControl.svelte.js';
 import { sceneRefStore } from '../stores/sceneRefStore';
 import { registerScene, unregisterScene } from '../core/SceneRegistry';
 import { initRealtimeControl } from '../services/RealtimeControl';
+import { setOnRevolutionComplete } from '../stores/droneRevolution';
 
 // Scores
 import { startAmbient, resumeAudioOnGesture } from '$lib/scores/ambient';
@@ -146,6 +147,7 @@ export class WormHoleScene2 {
 			segments: cfg.torus.segments,
 			pointsPerCircle: cfg.torus.pointsPerCircle,
 			emissiveIntensity: cfg.torus.emissiveIntensity,
+			// materialTextureId: randomFrom('loading3','rag','mat')
 			materialTextureId: randomFrom('collage1')
 		});
 		const torus = torusResult.torus;
@@ -158,6 +160,48 @@ export class WormHoleScene2 {
 		console.log('PathPoints count:', pathPoints.length);
 		const torusMaterial = torus.material as BABYLON.StandardMaterial;
 	
+		// Preload texture pool for revolution texture changes (memory-efficient reuse)
+		const texturePool = new Map<string, BABYLON.Texture>();
+		const textureIds = ['loading3', 'rag', 'mat', 'cube3', 'collage1', 'wood'];
+		try {
+			await Promise.all(textureIds.map(async id => {
+				try {
+					const url = await getTextureUrl(id);
+					if (url) {
+						texturePool.set(id, new BABYLON.Texture(url, scene, false));
+					}
+				} catch (e) {
+					console.warn(`Failed to preload texture ${id}:`, e);
+				}
+			}));
+			console.log('✅ Preloaded', texturePool.size, 'torus textures');
+		} catch (e) {
+			console.warn('Texture pool preload failed:', e);
+		}
+
+		// Setup texture change on revolution complete (reuses preloaded textures)
+		setOnRevolutionComplete((loops) => {
+			try {
+				const newTextureId = randomFrom(...textureIds);
+				const newTexture = texturePool.get(newTextureId);
+				if (torusMaterial && newTexture) {
+					torusMaterial.diffuseTexture = newTexture; // just reassign, no dispose/reload
+					console.log('🎨 Torus texture changed to', newTextureId, 'on loop', loops);
+				}
+			} catch (e) {
+				console.warn('Revolution texture change error:', e);
+			}
+		});
+
+		// Cleanup texture pool on scene disposal
+		WormHoleScene2.registerCleanup(() => {
+			try {
+				texturePool.forEach(t => { try { t.dispose(); } catch {} });
+				texturePool.clear();
+			} catch (e) {
+				console.warn('Texture pool cleanup error:', e);
+			}
+		});
 
 		// ====================================================================
 		// PATH DEBUG VISUALIZATION
@@ -502,7 +546,9 @@ export class WormHoleScene2 {
 	try {
 		const realtimeConnection = await initRealtimeControl({
 			scene,
-			droneMesh: drone
+			droneMesh: drone,
+			onPortalTrigger,
+			setPortal
 		});
 		WormHoleScene2.registerCleanup(() => {
 			try {
