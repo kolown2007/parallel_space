@@ -15,6 +15,8 @@ export interface RealtimeControlConfig {
 	droneMesh: BABYLON.AbstractMesh;
 	authUrl?: string;
 	channelName?: string;
+	onPortalTrigger?: () => void;
+	setPortal?: (portal: any, remove?: boolean) => void;
 }
 
 export interface RealtimeConnection {
@@ -31,7 +33,9 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 		scene,
 		droneMesh,
 		authUrl = 'https://kolown.net/api/ghost_auth',
-		channelName = 'chronoescape'
+		channelName = 'chronoescape',
+		onPortalTrigger,
+		setPortal
 	} = config;
 
 	let client: Ably.Realtime | null = null;
@@ -92,6 +96,59 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 							console.log('📦 Placed obstacle via control');
 						} catch (e) {
 							console.warn('Failed to place obstacle via control:', e);
+						}
+					}
+					break;
+
+				case 'portal':
+					if (droneMesh && !scene.isDisposed) {
+						try {
+							const pathPoints = WormHoleScene2.pathPoints;
+							
+							if (!pathPoints || pathPoints.length === 0) {
+								console.warn('⚠️ No pathPoints available - portal placement requires path');
+								break;
+							}
+
+							const modelCache = new Map<string, any>();
+							const cleanupRegistry: Array<() => void> = [];
+							const obstacles = new ObstacleManager(scene, pathPoints, modelCache, cleanupRegistry);
+
+							// Find nearest path index to drone
+							let minDistSq = Number.POSITIVE_INFINITY;
+							let nearest = 0;
+							const dronePos = (droneMesh as any).position ?? droneMesh.getAbsolutePosition?.();
+							for (let i = 0; i < pathPoints.length; i++) {
+								const d = pathPoints[i].subtract(dronePos).lengthSquared();
+								if (d < minDistSq) { minDistSq = d; nearest = i; }
+							}
+							const pointsAhead = 10;
+							const targetIdx = ((nearest + pointsAhead) % pathPoints.length + pathPoints.length) % pathPoints.length;
+
+							const portal = await obstacles.place('portal', {
+								index: targetIdx,
+								posterTextureId: randomFrom('portal1', 'portal2'),
+								width: 20,
+								height: 20,
+								offsetY: 0,
+								onTrigger: () => {
+									console.log('🌀 Portal triggered via realtime control');
+									try {
+										onPortalTrigger?.();
+									} catch (e) {
+										console.warn('Portal trigger error:', e);
+									}
+								}
+							}) as any;
+
+							// Register portal for collision detection
+							if (setPortal && portal) {
+								setPortal(portal);
+							}
+
+							console.log('🌀 Placed portal via control at index', targetIdx);
+						} catch (e) {
+							console.warn('Failed to place portal via control:', e);
 						}
 					}
 					break;
