@@ -72,6 +72,11 @@
 			"filename": "paint1.png",
 			"type": "texture"
 		},
+		"wood": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/torus/",
+			"filename": "wood.png",
+			"type": "texture"
+		},
 		"tribal": {
 			"rootUrl": "https://kolown.net/storage/library/chronoescape/",
 			"filename": "tribal.png",
@@ -100,6 +105,11 @@
 		"cube5": {
 			"rootUrl": "https://kolown.net/storage/library/chronoescape/cubes/",
 			"filename": "cube5.png",
+			"type": "texture"
+		},
+		"cube6": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/cubes/",
+			"filename": "cube7.png",
 			"type": "texture"
 		},
 		"portal1": {
@@ -149,12 +159,12 @@
 	},
     	"billboard5": {
 			"rootUrl": "https://kolown.net/storage/library/ph_collagian/",
-			"filename": "4.png",
+			"filename": "eye1.png",
 			"type": "texture"
 	},
     	"billboard6": {
 			"rootUrl": "https://kolown.net/storage/library/ph_collagian/",
-			"filename": "5.png",
+			"filename": "eye4.png",
 			"type": "texture"
 		}
 	},
@@ -181,7 +191,7 @@
 			"url": "https://kolown.net/storage/library/chronoescape/videos/road2.mp4"
 		},
 		"plantglitch": {
-			"url": "https://kolown.net/storage/library/chronoescape/videos/plantglitch.mp4"
+			"url": "https://kolown.net/storage/library/chronoescape/videos/plant2glitch.mp4"
 		},
 		"landscape": {
 			"url": "https://kolown.net/storage/library/chronoescape/videos/landscape.mp4"
