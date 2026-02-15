@@ -89,7 +89,7 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 								thrustMs: 3000,
 								thrustSpeed: -30,
 								autoDisposeMs: 60000,
-								faceUVTextureId: randomFrom('metal', 'cube3', 'cube4', 'cube5','collage1'),
+								faceUVTextureId: randomFrom('metal', 'cube3', 'cube4', 'cube5','collage1','cube6'),
 								faceUVLayout: 'grid'
 							});
 
