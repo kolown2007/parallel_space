@@ -36,15 +36,15 @@
           const RuntimeWebGPUEngine = (BABYLON as any).WebGPUEngine as any;
           if ((navigator as any).gpu && RuntimeWebGPUEngine) {
             try {
-                // Check whether the canvas can provide a WebGPU context before
-                // attempting to construct the Babylon WebGPUEngine. If the
-                // context is null, constructing the engine will fail when the
-                // internals try to call `context.configure(...)`.
-                const webgpuCtx = (canv as any)?.getContext ? (canv as any).getContext('webgpu') : null;
-                if (!webgpuCtx) {
-                  console.warn("Canvas.getContext('webgpu') returned null - skipping WebGPU engine");
+                // Use requestAdapter() — the correct spec-compliant check for real
+                // WebGPU support. On Android Chrome, canvas.getContext('webgpu') can
+                // succeed even when the GPU device is unavailable, causing a crash
+                // inside initAsync(). A null adapter means WebGPU isn't usable here.
+                const adapter = await (navigator as any).gpu.requestAdapter();
+                if (!adapter) {
+                  console.warn('navigator.gpu.requestAdapter() returned null - skipping WebGPU engine');
                 } else {
-                  const webgpuEngine = new RuntimeWebGPUEngine(canv, { preserveDrawingBuffer: true, stencil: true, enableGPUDebugMarkers: false });
+                  const webgpuEngine = new RuntimeWebGPUEngine(canv, { preserveDrawingBuffer: true, stencil: true, enableGPUDebugMarkers: false, antialias: false });
                   if (webgpuEngine.initAsync) {
                     await webgpuEngine.initAsync();
                   }
