@@ -30,35 +30,45 @@
     } catch (e) {}
 
     (async () => {
-      // Try to create a WebGPU engine when available, otherwise fall back to WebGL
+      // Detect high-tier devices (desktop with enough memory/cores) to allow WebGPU.
+      // Mobile devices always use WebGL for compatibility.
+      const isHighTierDevice = (): boolean => {
+        const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        if (isMobile) return false;
+        const mem = (navigator as any).deviceMemory as number | undefined;
+        if (mem !== undefined && mem < 4) return false;
+        const cores = navigator.hardwareConcurrency;
+        if (cores !== undefined && cores < 4) return false;
+        return true;
+      };
+
+      // WebGL is the default. WebGPU is only attempted on high-tier desktop devices.
       const createEngine = async () => {
-        try {
-          const RuntimeWebGPUEngine = (BABYLON as any).WebGPUEngine as any;
-          if ((navigator as any).gpu && RuntimeWebGPUEngine) {
-            try {
-                // Use requestAdapter() — the correct spec-compliant check for real
-                // WebGPU support. On Android Chrome, canvas.getContext('webgpu') can
-                // succeed even when the GPU device is unavailable, causing a crash
-                // inside initAsync(). A null adapter means WebGPU isn't usable here.
-                const adapter = await (navigator as any).gpu.requestAdapter();
-                if (!adapter) {
-                  console.warn('navigator.gpu.requestAdapter() returned null - skipping WebGPU engine');
-                } else {
-                  const webgpuEngine = new RuntimeWebGPUEngine(canv, { preserveDrawingBuffer: true, stencil: true, enableGPUDebugMarkers: false, antialias: false });
-                  if (webgpuEngine.initAsync) {
-                    await webgpuEngine.initAsync();
-                  }
-                  console.info('Using WebGPU engine');
-                  return webgpuEngine;
+        if (isHighTierDevice()) {
+          try {
+            const RuntimeWebGPUEngine = (BABYLON as any).WebGPUEngine as any;
+            if ((navigator as any).gpu && RuntimeWebGPUEngine) {
+              // Use requestAdapter() — the correct spec-compliant check for real
+              // WebGPU support. A null adapter means WebGPU isn't usable here.
+              const adapter = await (navigator as any).gpu.requestAdapter();
+              if (adapter) {
+                const webgpuEngine = new RuntimeWebGPUEngine(canv, { preserveDrawingBuffer: true, stencil: true, enableGPUDebugMarkers: false, antialias: false });
+                if (webgpuEngine.initAsync) {
+                  await webgpuEngine.initAsync();
                 }
-              } catch (e) {
-                console.warn('WebGPU engine initialization failed, falling back to WebGL', e);
+                console.info('Using WebGPU engine (high-tier device)');
+                return webgpuEngine;
+              } else {
+                console.warn('navigator.gpu.requestAdapter() returned null - using WebGL');
               }
+            }
+          } catch (e) {
+            console.warn('WebGPU engine initialization failed, using WebGL', e);
           }
-        } catch (e) {
-          console.warn('WebGPU check failed', e);
+        } else {
+          console.info('Mobile or low-tier device detected - using WebGL');
         }
-        // fallback
+        // Default: WebGL
         return new BABYLON.Engine(canv, true, { preserveDrawingBuffer: true, stencil: true });
       };
 
