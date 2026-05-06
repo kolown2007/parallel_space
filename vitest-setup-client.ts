@@ -15,4 +15,7 @@ Object.defineProperty(window, 'matchMedia', {
 	}))
 });
 
+// Silence BabylonJS WebGL errors: jsdom has no real canvas context
+HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue(null);
+
 // add more mocks here if you need them
