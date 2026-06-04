@@ -2,10 +2,11 @@ import * as Tone from 'tone'
 
 let pad: Tone.PolySynth | null = null
 let texture: Tone.Noise | null = null
+let textureFilter: Tone.Filter | null = null
+let textureGain: Tone.Gain | null = null
 let filter: Tone.Filter | null = null
 let reverb: Tone.Reverb | null = null
 let lfo: Tone.LFO | null = null
-let loopId: number | null = null
 let activeVoices = 0
 const MAX_POLYPHONY = 8
 
@@ -34,8 +35,8 @@ export async function startAmbient() {
 
   // gentle evolving noise texture
   texture = new Tone.Noise('brown')
-  const textureFilter = new Tone.Filter(600, 'lowpass').connect(reverb)
-  const textureGain = new Tone.Gain(0.2).connect(textureFilter)
+  textureFilter = new Tone.Filter(600, 'lowpass').connect(reverb)
+  textureGain = new Tone.Gain(0.2).connect(textureFilter)
   texture.connect(textureGain)
 
   // very slow LFO to move the filter cutoff
@@ -164,6 +165,14 @@ export function stopAmbient() {
   if (lfo) {
     lfo.dispose()
     lfo = null
+  }
+  if (textureGain) {
+    textureGain.dispose()
+    textureGain = null
+  }
+  if (textureFilter) {
+    textureFilter.dispose()
+    textureFilter = null
   }
 }
 
