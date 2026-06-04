@@ -56,7 +56,7 @@ export function setupCameras(
 	arcCamera.attachControl(canvas, true);
 
 	const followCamera = new BABYLON.UniversalCamera('followCamera', new BABYLON.Vector3(), scene);
-	followCamera.fov = Math.PI / 2;
+	followCamera.fov = (75 * Math.PI) / 180; // 70° vertical FOV — reduced from 90° to fix side blur/distortion
 	// Use a larger near plane to improve depth buffer precision and reduce z-fighting
 	followCamera.minZ = 0.1;
 	followCamera.maxZ = 10000;

@@ -6,6 +6,7 @@
   import { CustomLoadingScreen } from '$lib/scenes/customLoadingScreen';
   import mountVideoScene from '$lib/scenes/videoscene';
   import { WormHoleScene2 } from '$lib/scenes/wormhole2';
+  import createOceanScene from '$lib/scenes/ocean';
   import { SceneManager } from '$lib/core/SceneManager';
 
   let canvas: HTMLCanvasElement | null = null;
@@ -30,45 +31,33 @@
     } catch (e) {}
 
     (async () => {
-      // Detect high-tier devices (desktop with enough memory/cores) to allow WebGPU.
-      // Mobile devices always use WebGL for compatibility.
-      const isHighTierDevice = (): boolean => {
-        const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-        if (isMobile) return false;
-        const mem = (navigator as any).deviceMemory as number | undefined;
-        if (mem !== undefined && mem < 4) return false;
-        const cores = navigator.hardwareConcurrency;
-        if (cores !== undefined && cores < 4) return false;
-        return true;
-      };
+      // Allow manual renderer override via URL query param: ?renderer=webgpu or ?renderer=webgl
+      // Default is WebGL. WebGPU can be opted into via ?renderer=webgpu.
+      const rendererOverride = new URLSearchParams(window.location.search).get('renderer')?.toLowerCase();
 
-      // WebGL is the default. WebGPU is only attempted on high-tier desktop devices.
       const createEngine = async () => {
-        if (isHighTierDevice()) {
+        if (rendererOverride === 'webgpu') {
           try {
             const RuntimeWebGPUEngine = (BABYLON as any).WebGPUEngine as any;
             if ((navigator as any).gpu && RuntimeWebGPUEngine) {
-              // Use requestAdapter() — the correct spec-compliant check for real
-              // WebGPU support. A null adapter means WebGPU isn't usable here.
               const adapter = await (navigator as any).gpu.requestAdapter();
               if (adapter) {
                 const webgpuEngine = new RuntimeWebGPUEngine(canv, { preserveDrawingBuffer: true, stencil: true, enableGPUDebugMarkers: false, antialias: false });
                 if (webgpuEngine.initAsync) {
                   await webgpuEngine.initAsync();
                 }
-                console.info('Using WebGPU engine (high-tier device)');
+                console.info('Using WebGPU engine (forced via ?renderer=webgpu)');
                 return webgpuEngine;
               } else {
-                console.warn('navigator.gpu.requestAdapter() returned null - using WebGL');
+                console.warn('navigator.gpu.requestAdapter() returned null - falling back to WebGL');
               }
             }
           } catch (e) {
-            console.warn('WebGPU engine initialization failed, using WebGL', e);
+            console.warn('WebGPU engine initialization failed, falling back to WebGL', e);
           }
-        } else {
-          console.info('Mobile or low-tier device detected - using WebGL');
         }
         // Default: WebGL
+        console.info('Using WebGL engine');
         return new BABYLON.Engine(canv, true, { preserveDrawingBuffer: true, stencil: true });
       };
 
@@ -106,11 +95,13 @@
           const scene2 = await WormHoleScene2.CreateScene(engine, canv, () => {
             sceneManager?.switchTo('scene1');
           });
+          const scene3 = await createOceanScene(engine, canv);
 
           // Create scene manager
           sceneManager = new SceneManager(
             engine,
             scene2,
+            scene3,
             () => mountVideoScene(undefined, undefined, () => sceneManager?.switchTo('scene2'))
           );
 
@@ -132,6 +123,7 @@
         handleKeyDown = (e: KeyboardEvent) => {
           if (e.key === '1') sceneManager?.switchTo('scene1');
           else if (e.key === '2') sceneManager?.switchTo('scene2');
+             else if (e.key === '3') sceneManager?.switchTo('scene3');
         };
         window.addEventListener('keydown', handleKeyDown);
 

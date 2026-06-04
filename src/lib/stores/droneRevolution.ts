@@ -109,29 +109,30 @@ export function triggerRevolutionComplete(loopCount: number) {
 
 // Call the API route when a revolution is completed
 export async function notifyRevolutionComplete(loopCount: number) {
-	// Skip API call in development mode
-	if (import.meta.env.DEV) {
-		console.log('[droneRevolution] Skipping API call (dev mode). loops=', loopCount);
-		return null;
-	}
+	// // Skip API call in development mode
+	// if (import.meta.env.DEV) {
+	// 	console.log('[droneRevolution] Skipping API call (dev mode). loops=', loopCount);
+	// 	return null;
+	// }
 
-	try {
-		const response = await fetch('https://kolown.net/api/chrono-escapes/1/increment-revolution', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
-			body: JSON.stringify({
-				loopCount,
-				timestamp: Date.now()
-			})
-		});
-		if (!response.ok) {
-			console.warn('Revolution API call failed:', response.status);
-		}
-		return response;
-	} catch (error) {
-		console.warn('Revolution API call error:', error);
-		return null;
-	}
+	// try {
+	// 	const response = await fetch('https://kolown.net/api/chrono-escapes/1/increment-revolution', {
+	// 		method: 'POST',
+	// 		headers: {
+	// 			'Content-Type': 'application/json'
+	// 		},
+	// 		body: JSON.stringify({
+	// 			loopCount,
+	// 			timestamp: Date.now()
+	// 		})
+	// 	});
+	// 	if (!response.ok) {
+	// 		console.warn('Revolution API call failed:', response.status);
+	// 	}
+	// 	return response;
+	// } catch (error) {
+	// 	console.warn('Revolution API call error:', error);
+	// 	return null;
+	// }
+	return null;
 }
