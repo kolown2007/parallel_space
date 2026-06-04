@@ -24,7 +24,7 @@ import { initRealtimeControl } from '../services/RealtimeControl';
 import { setOnRevolutionComplete } from '../stores/droneRevolution';
 
 // Scores
-import { startAmbient, resumeAudioOnGesture } from '$lib/scores/ambient';
+import { startAmbient, resumeAudioOnGesture, stopAmbient } from '$lib/scores/ambient';
 
 // Scene modules
 import { WORMHOLE2_CONFIG } from './wormhole2/wormhole2.config';
@@ -57,6 +57,8 @@ export class WormHoleScene2 {
 			try { container.dispose(); } catch (e) { console.warn('Model cache disposal error:', e); }
 		}
 		this.modelCache.clear();
+
+		try { stopAmbient(); } catch (e) { console.warn('stopAmbient error:', e); }
 	}
 
 	static async CreateScene(engine: any, canvas: HTMLCanvasElement, onPortalTrigger?: () => void): Promise<BABYLON.Scene> {

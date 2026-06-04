@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import * as BABYLON from '@babylonjs/core';
   // WebGPU engine may or may not be present in the bundled Babylon package.
   // We'll look it up at runtime via `BABYLON.WebGPUEngine` to avoid Vite import errors.
@@ -13,10 +13,7 @@
   let engine: any = null;
   let sceneManager: SceneManager | null = null;
   let cursorTimeout: number | null = null;
-  // Event handler references (declared so they can be added/removed safely)
-  let handleResize: (() => void) | null = null;
-  let handleKeyDown: ((e: KeyboardEvent) => void) | null = null;
-  let handleMouseMove: (() => void) | null = null;
+  let ac: AbortController | null = null;
 
   onMount(() => {
     if (!canvas) return;
@@ -25,11 +22,6 @@
     // Defer creating the Engine until we've attempted WebGPU so we don't
     // accidentally create a WebGL context first (which can make
     // `canvas.getContext('webgpu')` return null).
-    try {
-      canvas.style.width = canvas.style.width || '100%';
-      canvas.style.height = canvas.style.height || '100vh';
-    } catch (e) {}
-
     (async () => {
       // Allow manual renderer override via URL query param: ?renderer=webgpu or ?renderer=webgl
       // Default is WebGL. WebGPU can be opted into via ?renderer=webgpu.
@@ -64,13 +56,6 @@
       try {
         engine = await createEngine();
 
-        // Reduce render resolution on mobile/low-memory devices to prevent OOM crashes
-        const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-        const isLowMemory = (navigator as any).deviceMemory !== undefined && (navigator as any).deviceMemory <= 4;
-        if (isMobile || isLowMemory) {
-          engine.setHardwareScalingLevel(2);
-        }
-
         // Ensure canvas element has correct CSS sizing and notify engine of initial size
         try {
           canv.style.width = canv.style.width || '100%';
@@ -82,8 +67,10 @@
         engine.loadingScreen = loadingScreen;
         try { engine.displayLoadingUI(); } catch {}
 
-        handleResize = () => engine?.resize();
-        window.addEventListener('resize', handleResize);
+        ac = new AbortController();
+        const { signal } = ac;
+
+        window.addEventListener('resize', () => engine?.resize(), { signal });
 
         // Auto-hide cursor after 6 seconds of inactivity
         const resetCursorTimeout = () => {
@@ -93,8 +80,7 @@
             document.body.style.cursor = 'none';
           }, 6000);
         };
-        handleMouseMove = () => resetCursorTimeout();
-        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mousemove', resetCursorTimeout, { signal });
         resetCursorTimeout();
 
         try {
@@ -126,12 +112,11 @@
         }
 
         // Global input
-        handleKeyDown = (e: KeyboardEvent) => {
+        window.addEventListener('keydown', (e: KeyboardEvent) => {
           if (e.key === '1') sceneManager?.switchTo('scene1');
           else if (e.key === '2') sceneManager?.switchTo('scene2');
-             else if (e.key === '3') sceneManager?.switchTo('scene3');
-        };
-        window.addEventListener('keydown', handleKeyDown);
+          else if (e.key === '3') sceneManager?.switchTo('scene3');
+        }, { signal });
 
       } catch (err) {
         console.error('Engine initialization failed:', err);
@@ -139,9 +124,7 @@
     })();
 
     return () => {
-      try { if (handleResize) window.removeEventListener('resize', handleResize); } catch {}
-      try { if (handleKeyDown) window.removeEventListener('keydown', handleKeyDown); } catch {}
-      try { if (handleMouseMove) window.removeEventListener('mousemove', handleMouseMove); } catch {}
+      ac?.abort();
       if (cursorTimeout) clearTimeout(cursorTimeout);
       document.body.style.cursor = 'default';
       sceneManager?.dispose();
@@ -149,12 +132,7 @@
     };
   });
 
-  onDestroy(() => {
-    if (cursorTimeout) clearTimeout(cursorTimeout);
-    document.body.style.cursor = 'default';
-    sceneManager?.dispose();
-    engine?.dispose();
-  });
+
 </script>
 
 

@@ -66,6 +66,7 @@ export class SceneManager {
   dispose() {
     this.stopRender();
     this.cleanup();
+    try { this.scene2?.dispose(); } catch {}
     try { this.scene3?.dispose(); } catch {}
     this.scene3 = null;
   }
