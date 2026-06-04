@@ -1,9 +1,8 @@
 import * as BABYLON from '@babylonjs/core';
 import { createKeysPressed } from '../../chronoescape/drone/droneControllers';
-import { adjustDroneSpeed, burstAccelerate, SPEED_INCREMENT } from '../../stores/droneControl.svelte';
+import { adjustDroneSpeed, burstAccelerate, SPEED_INCREMENT, droneControl } from '../../stores/droneControl.svelte';
 import { revolutionStore } from '../../stores/droneRevolution';
 import { get } from 'svelte/store';
-import { droneControl } from '../../stores/droneControl.svelte';
 import { randomFrom } from '../../assetsConfig';
 import type { ObstacleManager } from '../../chronoescape/obstacle/ObstacleManager';
 import { WORMHOLE2_CONFIG } from './wormhole2.config';

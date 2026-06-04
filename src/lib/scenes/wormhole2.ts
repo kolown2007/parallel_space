@@ -2,19 +2,12 @@
 import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
 
-// Drone
 import { setupSceneDrone } from '../chronoescape/drone/setupDrone';
 import { getPositionOnPath } from '../chronoescape/world/PathUtils';
-
-// World & Utilities
 import { createTorus } from '../chronoescape/world/Torus';
 import { setupPhysics, setupLighting, setupCameras } from '../chronoescape/world/sceneUtils';
 import { visualizePathDebug } from '../chronoescape/world/debugPath';
-
-// Obstacles
 import { ObstacleManager } from '../chronoescape/obstacle/ObstacleManager';
-
-// System
 import { installKeyboardControls } from '../input/keyboardControls';
 import { randomFrom, getTextureUrl } from '../assetsConfig';
 import { updateProgress, cleanupDroneControl } from '../stores/droneControl.svelte.js';
@@ -22,20 +15,12 @@ import { sceneRefStore } from '../stores/sceneRefStore';
 import { registerScene, unregisterScene } from '../core/SceneRegistry';
 import { initRealtimeControl } from '../services/RealtimeControl';
 import { setOnRevolutionComplete } from '../stores/droneRevolution';
-
-// Scores
 import { startAmbient, resumeAudioOnGesture, stopAmbient } from '$lib/scores/ambient';
-
-// Scene modules
 import { WORMHOLE2_CONFIG } from './wormhole2/wormhole2.config';
 import { getDronePathIndexFactory } from './wormhole2/wormhole2.helpers';
 import { createKeyboardHandlers } from './wormhole2/wormhole2.keyboard';
 import { setupDroneCollision } from './wormhole2/wormhole2.collision';
 import { createRenderLoop } from './wormhole2/wormhole2.render';
-
-// ============================================================================
-// SCENE CLASS
-// ============================================================================
 
 export class WormHoleScene2 {
 	static pathPoints: BABYLON.Vector3[] = [];
@@ -51,385 +36,174 @@ export class WormHoleScene2 {
 			try { cleanup(); } catch (e) { console.warn('Cleanup error:', e); }
 		}
 		this.cleanupRegistry = [];
-		
-		// Dispose cached model containers
 		for (const container of this.modelCache.values()) {
 			try { container.dispose(); } catch (e) { console.warn('Model cache disposal error:', e); }
 		}
 		this.modelCache.clear();
-
 		try { stopAmbient(); } catch (e) { console.warn('stopAmbient error:', e); }
 	}
 
 	static async CreateScene(engine: any, canvas: HTMLCanvasElement, onPortalTrigger?: () => void): Promise<BABYLON.Scene> {
-		// ====================================================================
-		// SCENE INITIALIZATION
-		// ====================================================================
+		// Reset static state from any previous scene creation
+		WormHoleScene2.cleanupRegistry = [];
+		WormHoleScene2.modelCache.clear();
+		WormHoleScene2.pathPoints = [];
 
+		const cfg = WORMHOLE2_CONFIG;
 		const scene = new BABYLON.Scene(engine);
-		console.log('wormhole2 scene created');
 
 		await setupPhysics(scene);
-
-		// ====================================================================
-		// CAMERAS & LIGHTING
-		// ====================================================================
 
 		const { followCamera, switchCamera } = setupCameras(scene, canvas, 'follow');
 		setupLighting(scene);
 
-	
+		startAmbient().catch(() => {});
+		resumeAudioOnGesture(canvas);
 
-		
-		// ====================================================================
-		// SOUND
-		// ====================================================================
-
-		(async () => {
-			try {
-			
-				startAmbient().catch(() => {});
-				resumeAudioOnGesture(canvas);
-
-			} catch (e) {
-				console.warn('Audio initialization failed:', e);
-			}
-		})();
-
-
-
-
-		// ====================================================================
-		// WORLD: TORUS TRACK
-		// ====================================================================
-
-		const cfg = WORMHOLE2_CONFIG;
-		const torusResult = await createTorus(scene, {
-			diameter: cfg.torus.diameter,
-			thickness: cfg.torus.thickness,
-			tessellation: cfg.torus.tessellation,
-			positionY: cfg.torus.positionY,
-			lineRadiusFactor: cfg.torus.lineRadiusFactor,
-			turns: cfg.torus.turns,
-			spiralTurns: cfg.torus.spiralTurns,
-			segments: cfg.torus.segments,
-			pointsPerCircle: cfg.torus.pointsPerCircle,
-			emissiveIntensity: cfg.torus.emissiveIntensity,
-			// materialTextureId: randomFrom('loading3','rag','mat')
+		// Torus track
+		const { torus, torusMainRadius, torusTubeRadius, pathPoints } = await createTorus(scene, {
+			...cfg.torus,
 			materialTextureId: randomFrom('collage1')
 		});
-		const torus = torusResult.torus;
-		const torusAggregate = torusResult.torusAggregate;
-		const torusMainRadius = torusResult.torusMainRadius;
-		const torusTubeRadius = torusResult.torusTubeRadius;
-		const pathPoints = torusResult.pathPoints;
-		const torusCenter = torus.getAbsolutePosition();
 		WormHoleScene2.pathPoints = pathPoints;
-		console.log('PathPoints count:', pathPoints.length);
+		const torusCenter = torus.getAbsolutePosition();
 		const torusMaterial = torus.material as BABYLON.StandardMaterial;
-	
-		// Preload texture pool for revolution texture changes (memory-efficient reuse)
-		const texturePool = new Map<string, BABYLON.Texture>();
+
+		// Texture pool for revolution changes
 		const textureIds = ['loading3', 'rag', 'mat', 'cube3', 'collage1', 'wood'];
-		try {
-			await Promise.all(textureIds.map(async id => {
-				try {
-					const url = await getTextureUrl(id);
-					if (url) {
-						texturePool.set(id, new BABYLON.Texture(url, scene, false));
-					}
-				} catch (e) {
-					console.warn(`Failed to preload texture ${id}:`, e);
-				}
-			}));
-			console.log('✅ Preloaded', texturePool.size, 'torus textures');
-		} catch (e) {
-			console.warn('Texture pool preload failed:', e);
-		}
-
-		// Setup texture change on revolution complete (reuses preloaded textures)
-		setOnRevolutionComplete((loops) => {
+		const texturePool = new Map<string, BABYLON.Texture>();
+		await Promise.all(textureIds.map(async id => {
 			try {
-				const newTextureId = randomFrom(...textureIds);
-				const newTexture = texturePool.get(newTextureId);
-				if (torusMaterial && newTexture) {
-					torusMaterial.diffuseTexture = newTexture; // just reassign, no dispose/reload
-					console.log('🎨 Torus texture changed to', newTextureId, 'on loop', loops);
-				}
-			} catch (e) {
-				console.warn('Revolution texture change error:', e);
-			}
-		});
+				const url = await getTextureUrl(id);
+				if (url) texturePool.set(id, new BABYLON.Texture(url, scene, false));
+			} catch { /* skip failed textures */ }
+		}));
 
-		// Cleanup texture pool on scene disposal
+		setOnRevolutionComplete(() => {
+			const tex = texturePool.get(randomFrom(...textureIds));
+			if (torusMaterial && tex) torusMaterial.diffuseTexture = tex;
+		});
 		WormHoleScene2.registerCleanup(() => {
-			try {
-				texturePool.forEach(t => { try { t.dispose(); } catch {} });
-				texturePool.clear();
-			} catch (e) {
-				console.warn('Texture pool cleanup error:', e);
-			}
+			texturePool.forEach(t => { try { t.dispose(); } catch {} });
+			texturePool.clear();
 		});
 
-		// ====================================================================
-		// PATH DEBUG VISUALIZATION
-		// ====================================================================
 		visualizePathDebug(scene, pathPoints, {
 			...cfg.debug.pathVisualization,
-			torusCenter: torus.getAbsolutePosition(),
+			torusCenter,
 			torusMainRadius,
 			torusTubeRadius
 		});
 
-		// Drone will be created after obstacle placement to avoid being selected as template
-		let drone: any, droneAggregate: any;
-		const initialPosition = getPositionOnPath(WormHoleScene2.pathPoints, cfg.drone.startPathPoint);
+		scene.onDisposeObservable.add(() => WormHoleScene2.disposeAll());
 
-		// OBSTACLES & MARKERS
-		// ====================================================================
-
-		const obstacles = new ObstacleManager(scene, pathPoints, WormHoleScene2.modelCache, WormHoleScene2.cleanupRegistry);
-
-		// Helper: compute nearest path point index for drone. Will be set after drone is created.
-		let getDronePathIndex: () => number = () => 0;
-
-		// Portal state management (support multiple portals)
+		// Portal state
 		let portals: any[] = [];
 		const getPortal = () => portals;
 		const setPortal = (p: any, remove = false) => {
-			try {
-				if (typeof remove === 'boolean' && remove && p) {
-					portals = portals.filter(x => x !== p);
-					return;
-				}
-				if (!p) {
-					portals = [];
-					return;
-				}
-				if (Array.isArray(p)) portals.push(...p);
-				else portals.push(p);
-			} catch (e) { /* ignore */ }
+			if (remove && p) { portals = portals.filter(x => x !== p); return; }
+			if (!p) { portals = []; return; }
+			portals.push(...(Array.isArray(p) ? p : [p]));
 		};
 
+		// Obstacles (placed before drone to avoid being selected as template)
+		const obstacles = new ObstacleManager(scene, pathPoints, WormHoleScene2.modelCache, WormHoleScene2.cleanupRegistry);
+		let getDronePathIndex: () => number = () => 0;
 
-
-		// Cleanup on dispose
-		// ====================================================================
-		scene.onDisposeObservable.add(() => {
-			WormHoleScene2.disposeAll();
-		});
-
-		// ====================================================================
-		// MODELS & OBSTACLES
-		// ====================================================================
-
-		// Place models using unified API (awaited so we can create the drone afterwards)
-		await (async () => {
+		// Models
+		for (const index of [0, 80, 100, 150, 200]) {
 			try {
-				// Place multiple models using a for-loop for easy configuration
-				try {
-					const modelIndices = [ 0,80,100,150,200,];
-					for (const mi of modelIndices) {
-						try {
-							await obstacles.place('model', {
-								modelNames: [randomFrom('jollibee', 'rabbit', 'mario','army','armycatbike','manikineko')],
-								count: 1,
-								index: mi,
-								offsetY: -20,
-								scaleRange: [10, 15],
-								physics: false
-							});
-							console.log('Placed model at index', mi);
-						} catch (e) {
-							console.warn('Failed to place model at index', mi, e);
-						}
-					}
-				} catch (e) {
-					console.warn('Model placement loop failed:', e);
-				}
+				await obstacles.place('model', {
+					modelNames: [randomFrom('jollibee', 'rabbit', 'mario', 'army', 'armycatbike', 'manikineko')],
+					count: 1, index, offsetY: -20, scaleRange: [10, 15], physics: false
+				});
+			} catch (e) { console.warn('Failed to place model at index', index, e); }
+		}
+		try {
+			await obstacles.place('model', {
+				modelNames: ['jollibee'], count: 1, index: 25, offsetY: -1, scaleRange: [5, 7], physics: true
+			});
+		} catch (e) { console.warn('Failed to place physics Jollibee:', e); }
 
-				// Place a single physics-enabled Jollibee model separately
-				try {
-					await obstacles.place('model', {
-						modelNames: ['jollibee'],
-						count: 1,
-						index: 25,
-						offsetY: -1,
-						scaleRange: [5, 7],
-						physics: true
-					});
-					console.log('Placed physics-enabled Jollibee at index 25');
-				} catch (e) {
-					console.warn('Failed to place physics-enabled Jollibee:', e);
-				}
-
-				// Place billboards and move them to explicit path indices
-				try {
-					const indices = [10,20, 60,80, 110, 160, 210, 260,280,310];
-					const bbManager = await obstacles.place('billboard', {
-						count: indices.length,
-						height: 15,
-						// pass an array so each billboard can resolve a random texture independently
-						textureId: ['tribal','billboard1','billboard2','billboard3','billboard4','billboard5','billboard6'],
-					}) as any;
-
-					// Reposition planes to requested path indices
-					for (let i = 0; i < indices.length; i++) {
-						try {
-							const idx = ((indices[i] % pathPoints.length) + pathPoints.length) % pathPoints.length;
-							const pos = pathPoints[idx].clone();
-							// match internal BillboardManager offset (creates at +1.5)
-							pos.y += 1.5;
-							if (bbManager && bbManager.planes && bbManager.planes[i]) {
-								bbManager.planes[i].position.copyFrom(pos);
-							}
-						} catch (e) {
-							console.warn('Failed to reposition billboard plane', i, e);
-						}
-					}
-					console.log('Placed billboards at indices', indices);
-				} catch (e) {
-					console.warn('Billboard placement failed:', e);
-				}
-
-				
-
-				
-
-			try {
-
-
-
-
-			try {
-				const portalIndices = [50, 200, 300];
-				let firstPortal: any = undefined;
-				for (const pi of portalIndices) {
-					try {
-						const p = await obstacles.place('portal', {
-							index: pi,
-							posterTextureId: randomFrom('portal1','portal2'),
-							width: WORMHOLE2_CONFIG.obstacles.portalWidth,
-							height: WORMHOLE2_CONFIG.obstacles.portalHeight,
-							offsetY: 0,
-							onTrigger: () => {
-								try { onPortalTrigger?.(); } catch (e) {}
-							}
-						}) as any;
-						if (!firstPortal) {
-							firstPortal = p;
-						}
-						// Register every placed portal so collision checks see them all
-						setPortal(p);
-						console.log('🌀 Portal placed at index', pi);
-					} catch (pErr) {
-						console.warn('Portal placement failed at index', pi, pErr);
-					}
-				}
-			} catch (e) {
-				console.warn('Portal placement loop failed:', e);
+		// Billboards
+		try {
+			const bbIndices = [10, 20, 60, 80, 110, 160, 210, 260, 280, 310];
+			const bbManager = await obstacles.place('billboard', {
+				count: bbIndices.length,
+				height: 15,
+				textureId: ['tribal', 'billboard1', 'billboard2', 'billboard3', 'billboard4', 'billboard5', 'billboard6'],
+			}) as any;
+			for (let i = 0; i < bbIndices.length; i++) {
+				const idx = ((bbIndices[i] % pathPoints.length) + pathPoints.length) % pathPoints.length;
+				const pos = pathPoints[idx].clone();
+				pos.y += 1.5;
+				if (bbManager?.planes?.[i]) bbManager.planes[i].position.copyFrom(pos);
 			}
+		} catch (e) { console.warn('Billboard placement failed:', e); }
 
+		// Portals
+		// for (const index of [50, 200, 300]) {
+		// 	try {
+		// 		const p = await obstacles.place('portal', {
+		// 			index,
+		// 			posterTextureId: randomFrom('portal1', 'portal2'),
+		// 			width: cfg.obstacles.portalWidth,
+		// 			height: cfg.obstacles.portalHeight,
+		// 			offsetY: 0,
+		// 			onTrigger: () => { try { onPortalTrigger?.(); } catch {} }
+		// 		}) as any;
+		// 		setPortal(p);
+		// 	} catch (e) { console.warn('Portal placement failed at index', index, e); }
+		// }
 
-			  
-				
-			} catch (orbErr) {
-				console.warn('Orb placement failed:', orbErr);
-			}
+		// Drone (created after obstacles)
+		let drone: any, droneAggregate: any;
+		const droneStartPos = getPositionOnPath(WormHoleScene2.pathPoints, cfg.drone.startPathPoint);
 
-                try {
-                    console.log('Placed models');
-                } catch (e) { /* ignore logging errors */ }
-			} catch (e) {
-				console.warn('Delayed model/portal placement failed:', e);
-			}
-		})();
-
-		// ------------------------------------------------------------------
-		// Now that obstacles/models are placed, create the drone and related
-		// systems that depend on the drone existing (camera init, collision,
-		// keyboard handlers, render loop, realtime init)
-		// ------------------------------------------------------------------
 		try {
 			const res = await setupSceneDrone(scene, {
 				assetId: 'drone2',
-				initialPosition: initialPosition,
-				initialRotation: new BABYLON.Vector3(
-					cfg.drone.initialRotation.x,
-					cfg.drone.initialRotation.y,
-					cfg.drone.initialRotation.z
-				),
+				initialPosition: droneStartPos,
+				initialRotation: new BABYLON.Vector3(cfg.drone.initialRotation.x, cfg.drone.initialRotation.y, cfg.drone.initialRotation.z),
 				mass: cfg.drone.mass,
 				restitution: cfg.drone.restitution,
 				friction: cfg.drone.friction,
 				enableDebug: cfg.debug.enableDroneDebug,
-				scale:1
+				scale: 1
 			});
 			drone = res.drone;
 			droneAggregate = res.droneAggregate;
 
-			if (drone.material && drone.material instanceof BABYLON.StandardMaterial) {
+			if (drone.material instanceof BABYLON.StandardMaterial) {
 				const mat = drone.material as BABYLON.StandardMaterial;
-				mat.emissiveColor = new BABYLON.Color3(
-					cfg.drone.emissiveColor.r,
-					cfg.drone.emissiveColor.g,
-					cfg.drone.emissiveColor.b
-				);
-				mat.diffuseColor = new BABYLON.Color3(
-					cfg.drone.diffuseColor.r,
-					cfg.drone.diffuseColor.g,
-					cfg.drone.diffuseColor.b
-				);
+				mat.emissiveColor = new BABYLON.Color3(cfg.drone.emissiveColor.r, cfg.drone.emissiveColor.g, cfg.drone.emissiveColor.b);
+				mat.diffuseColor = new BABYLON.Color3(cfg.drone.diffuseColor.r, cfg.drone.diffuseColor.g, cfg.drone.diffuseColor.b);
 			}
 
-			// Ensure drone always starts at pathpoint 0
-			try {
-				updateProgress(0);
-				const startPos = getPositionOnPath(WormHoleScene2.pathPoints, cfg.drone.startPathPoint);
-				drone.position.copyFrom(startPos);
-				if (droneAggregate?.body) {
-					try {
-						droneAggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
-						droneAggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
-						if (typeof (droneAggregate.body as any).setPosition === 'function') {
-							(droneAggregate.body as any).setPosition({ x: startPos.x, y: startPos.y, z: startPos.z });
-						}
-					} catch (e) {
-						/* ignore transient physics positioning errors */
-					}
-				}
-			} catch (e) {
-				console.warn('Failed to enforce drone start at pathpoint 0:', e);
+			updateProgress(0);
+			drone.position.copyFrom(droneStartPos);
+			if (droneAggregate?.body) {
+				try {
+					droneAggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
+					droneAggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
+					(droneAggregate.body as any).setPosition?.({ x: droneStartPos.x, y: droneStartPos.y, z: droneStartPos.z });
+				} catch { /* ignore transient physics positioning errors */ }
 			}
 
-			// Enable collision detection on drone
-			const cleanupCollision = setupDroneCollision(droneAggregate);
-			WormHoleScene2.registerCleanup(cleanupCollision);
+			WormHoleScene2.registerCleanup(setupDroneCollision(droneAggregate));
 
-			// Publish lightweight references: register heavy objects elsewhere and store IDs
 			try {
 				const sceneId = registerScene(scene, drone, WormHoleScene2.pathPoints);
-				sceneRefStore.set({ sceneId, droneId: sceneId, pathPoints: WormHoleScene2.pathPoints });
+				sceneRefStore.set({ sceneId, droneId: sceneId });
 				WormHoleScene2.registerCleanup(() => {
-					try {
-						sceneRefStore.set({ sceneId: null, droneId: null, pathPoints: null });
-						unregisterScene(sceneId);
-					} catch (e) {}
+					sceneRefStore.set({ sceneId: null, droneId: null });
+					unregisterScene(sceneId);
 				});
-			} catch (e) {
-				console.warn('Failed to set sceneRefStore:', e);
-			}
+			} catch (e) { console.warn('Failed to set sceneRefStore:', e); }
 
-			// Now that drone exists, create the real getDronePathIndex function
 			getDronePathIndex = getDronePathIndexFactory(drone, pathPoints);
 
-			// CAMERA SETTINGS & CONTROLS
-			followCamera.position = drone.position.add(new BABYLON.Vector3(
-				0,
-				cfg.camera.initialOffsetY,
-				cfg.camera.initialOffsetZ
-			));
-
+			followCamera.position = drone.position.add(new BABYLON.Vector3(0, cfg.camera.initialOffsetY, cfg.camera.initialOffsetZ));
 			const gimbal = {
 				followDistance: cfg.camera.followDistance,
 				followHeight: cfg.camera.followHeight,
@@ -438,98 +212,50 @@ export class WormHoleScene2 {
 				lookAheadDistance: cfg.camera.lookAheadDistance
 			};
 
-			// Install keyboard handlers (now that drone exists)
 			const keyboardHandlers = createKeyboardHandlers({
-				drone,
-				droneAggregate,
-				torusMaterial,
-				obstacles,
-				getDronePathIndex,
-				switchCamera,
-				onPortalTrigger,
-				setPortal,
-				pathPoints
+				drone, droneAggregate, torusMaterial, obstacles,
+				getDronePathIndex, switchCamera, onPortalTrigger, setPortal, pathPoints
 			});
-
-			const uninstallKeyboard = installKeyboardControls(keyboardHandlers);
-			WormHoleScene2.registerCleanup(() => uninstallKeyboard());
+			WormHoleScene2.registerCleanup(installKeyboardControls(keyboardHandlers));
 			WormHoleScene2.registerCleanup(() => cleanupDroneControl(false));
 
-			// DRONE POSITION LOGGER
-			const _dronePosLogger = setInterval(() => {
-				try {
-					if (!drone || !pathPoints || pathPoints.length === 0) return;
-					const currentPointIndex = getDronePathIndex();
-					const p = drone.position;
-					// console.log('Drone @ point', currentPointIndex, '/', pathPoints.length, '| xyz:', { x: p.x.toFixed(2), y: p.y.toFixed(2), z: p.z.toFixed(2) });
-				} catch (e) {
-					console.warn('Drone position logger error:', e);
-				}
-			}, cfg.debug.droneLogIntervalMs);
-			WormHoleScene2.registerCleanup(() => clearInterval(_dronePosLogger));
+			// Touch: tap anywhere on canvas = burst (same as keyboard B)
+			const onTap = (e: TouchEvent) => {
+				e.preventDefault();
+				keyboardHandlers.onBurst?.();
+			};
+			canvas.addEventListener('touchstart', onTap, { passive: false });
+			WormHoleScene2.registerCleanup(() => canvas.removeEventListener('touchstart', onTap));
 
-			// ====================================================================
-			// RENDER LOOP
-			// ====================================================================
+			const dronePosLogger = setInterval(() => {
+				// getDronePathIndex(); // Uncomment to enable debug position logging
+			}, cfg.debug.droneLogIntervalMs);
+			WormHoleScene2.registerCleanup(() => clearInterval(dronePosLogger));
 
 			const renderLoop = createRenderLoop({
-				engine,
-				scene,
-				drone,
-				droneAggregate,
-				followCamera,
-				pathPoints,
-				obstacles,
-				getPortal,
-				setPortal,
-				onPortalTrigger,
-				getDronePathIndex,
-				keysPressed: keyboardHandlers.keysPressed,
-				gimbal,
+				engine, scene, drone, droneAggregate, followCamera, pathPoints,
+				obstacles, getPortal, setPortal, onPortalTrigger, getDronePathIndex,
+				keysPressed: keyboardHandlers.keysPressed, gimbal,
 				torusGeometry: { torusCenter, torusMainRadius, torusTubeRadius }
 			});
-    
 			scene.registerBeforeRender(renderLoop);
-			WormHoleScene2.registerCleanup(() => {
-				try { scene.unregisterBeforeRender(renderLoop); } catch {}
-			});
+			WormHoleScene2.registerCleanup(() => { try { scene.unregisterBeforeRender(renderLoop); } catch {} });
 
 		} catch (e) {
-			console.warn('Drone setup failed after obstacle placement:', e);
+			console.warn('Drone setup failed:', e);
 		}
 
+		try {
+			(engine as any)?.loadingScreen?.notifyAssetsReady?.();
+		} catch (e) { console.warn('Failed to notify loading screen:', e); }
 
+		try {
+			const realtimeConnection = await initRealtimeControl({ scene, droneMesh: drone, onPortalTrigger, setPortal });
+			WormHoleScene2.registerCleanup(() => {
+				try { realtimeConnection.disconnect(); } catch (e) { console.warn('Realtime disconnect error:', e); }
+			});
+		} catch (e) { console.warn('Failed to initialize realtime control:', e); }
 
-	// Notify loading screen that scene and assets are ready
-	try {
-		const loadingScreen = (engine as any)?.loadingScreen;
-		if (loadingScreen && typeof loadingScreen.notifyAssetsReady === 'function') {
-			loadingScreen.notifyAssetsReady();
-		}
-	} catch (e) {
-		console.warn('Failed to notify loading screen:', e);
-	}
-
-	// Initialize realtime control (websocket)
-	try {
-		const realtimeConnection = await initRealtimeControl({
-			scene,
-			droneMesh: drone,
-			onPortalTrigger,
-			setPortal
-		});
-		WormHoleScene2.registerCleanup(() => {
-			try {
-				realtimeConnection.disconnect();
-			} catch (e) {
-				console.warn('Realtime disconnect error:', e);
-			}
-		});
-		console.log('🌐 Realtime control enabled');
-	} catch (e) {
-		console.warn('Failed to initialize realtime control:', e);
-	}
-
-	return scene;
+		return scene;
 	}
 }

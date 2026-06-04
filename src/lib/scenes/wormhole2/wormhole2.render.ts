@@ -1,7 +1,7 @@
 import * as BABYLON from '@babylonjs/core';
 import { get } from 'svelte/store';
 import { droneControl, updateProgress, enterPortal, FPS, MAX_SPEED } from '../../stores/droneControl.svelte';
-import { revolutionStore, notifyRevolutionComplete, triggerRevolutionComplete } from '../../stores/droneRevolution';
+import { revolutionStore, triggerRevolutionComplete } from '../../stores/droneRevolution';
 import { playRevolutionComplete, playPortalSound, playCollisionNoteSingle } from '../../scores/ambient';
 import { updateDronePhysics, updateFollowCamera } from '../../chronoescape/drone/droneControllers';
 import { getPositionOnPath } from '../../chronoescape/world/PathUtils';
@@ -81,7 +81,7 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 					try {
 						if (!p || typeof p.intersects !== 'function') continue;
 						if (p.intersects(usbAabb)) {
-							try { console.debug('portal collision detected — calling playPortalSound'); } catch {}
+
 							try { playPortalSound(); } catch (e) { console.warn('playPortalSound failed', e); }
 							try {
 								const state = get(droneControl);
@@ -129,7 +129,6 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 				lastLoggedLoops = loops;
 				
 				playRevolutionComplete(loops);
-				notifyRevolutionComplete(loops);
 				triggerRevolutionComplete(loops);
 
 				// Spawn particle bursts on revolution complete (guarded by config)

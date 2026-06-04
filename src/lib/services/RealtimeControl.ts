@@ -4,7 +4,7 @@
  */
 
 import Ably from 'ably';
-import { burstAccelerate, adjustDroneSpeed } from '$lib/stores/droneControl.svelte';
+import { burstAccelerate, adjustDroneSpeed, SPEED_INCREMENT } from '$lib/stores/droneControl.svelte';
 import { ObstacleManager } from '$lib/chronoescape/obstacle/ObstacleManager';
 import { WormHoleScene2 } from '$lib/scenes/wormhole2';
 import type * as BABYLON from '@babylonjs/core';
@@ -42,125 +42,66 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 	let channel: any = null;
 	let connected = false;
 
+	// Shared obstacle manager — created once, reused for all commands
+	const realtimeModelCache = new Map<string, any>();
+	const realtimeCleanupRegistry: Array<() => void> = [];
+	const obstacles = new ObstacleManager(scene, WormHoleScene2.pathPoints, realtimeModelCache, realtimeCleanupRegistry);
+
+	function getNearestPathIndex(): number {
+		const pathPoints = WormHoleScene2.pathPoints;
+		if (!pathPoints?.length) return 0;
+		const dronePos = (droneMesh as any).position ?? droneMesh.getAbsolutePosition?.();
+		let minDistSq = Number.POSITIVE_INFINITY;
+		let nearest = 0;
+		for (let i = 0; i < pathPoints.length; i++) {
+			const d = pathPoints[i].subtract(dronePos).lengthSquared();
+			if (d < minDistSq) { minDistSq = d; nearest = i; }
+		}
+		return nearest;
+	}
+
 	// Safe command execution with scene validation
-	async function executeCommand(action: string, data?: any) {
+	async function executeCommand(action: string, _data?: any) {
+		if (scene.isDisposed) return;
 		try {
-			// Validate scene not disposed
-			if (scene.isDisposed) {
-				console.warn('Scene disposed, ignoring command:', action);
-				return;
-			}
+			const pathPoints = WormHoleScene2.pathPoints;
 
 			switch (action) {
 				case 'move':
 					burstAccelerate();
-					console.log('🚀 Burst acceleration via Ably');
 					break;
 
-				case 'obstruct':
-					if (droneMesh && !scene.isDisposed) {
-						try {
-							const pathPoints = WormHoleScene2.pathPoints;
-							
-							if (!pathPoints || pathPoints.length === 0) {
-								console.warn('⚠️ No pathPoints available - obstacle placement requires path');
-								break;
-							}
-
-							const modelCache = new Map<string, any>();
-							const cleanupRegistry: Array<() => void> = [];
-							const obstacles = new ObstacleManager(scene, pathPoints, modelCache, cleanupRegistry);
-
-							// Find nearest path index to drone
-							let minDistSq = Number.POSITIVE_INFINITY;
-							let nearest = 0;
-							const dronePos = (droneMesh as any).position ?? droneMesh.getAbsolutePosition?.();
-							for (let i = 0; i < pathPoints.length; i++) {
-								const d = pathPoints[i].subtract(dronePos).lengthSquared();
-								if (d < minDistSq) { minDistSq = d; nearest = i; }
-							}
-							const pointsAhead = 10;
-							const targetIdx = ((nearest + pointsAhead) % pathPoints.length + pathPoints.length) % pathPoints.length;
-
-							await obstacles.place('cube', {
-								index: targetIdx,
-								size: 5.5,
-								physics: true,
-								thrustMs: 3000,
-								thrustSpeed: -30,
-								autoDisposeMs: 60000,
-								faceUVTextureId: randomFrom('metal', 'cube3', 'cube4', 'cube5','collage1','cube6'),
-								faceUVLayout: 'grid'
-							});
-
-							console.log('📦 Placed obstacle via control');
-						} catch (e) {
-							console.warn('Failed to place obstacle via control:', e);
-						}
-					}
+				case 'obstruct': {
+					if (!pathPoints?.length) { console.warn('No pathPoints for obstruct'); break; }
+					const targetIdx = ((getNearestPathIndex() + 10) % pathPoints.length + pathPoints.length) % pathPoints.length;
+					await obstacles.place('cube', {
+						index: targetIdx,
+						size: 5.5, physics: true, thrustMs: 3000, thrustSpeed: -30, autoDisposeMs: 60000,
+						faceUVTextureId: randomFrom('metal', 'cube3', 'cube4', 'cube5', 'collage1', 'cube6'),
+						faceUVLayout: 'grid'
+					});
 					break;
+				}
 
-				case 'portal':
-					if (droneMesh && !scene.isDisposed) {
-						try {
-							const pathPoints = WormHoleScene2.pathPoints;
-							
-							if (!pathPoints || pathPoints.length === 0) {
-								console.warn('⚠️ No pathPoints available - portal placement requires path');
-								break;
-							}
-
-							const modelCache = new Map<string, any>();
-							const cleanupRegistry: Array<() => void> = [];
-							const obstacles = new ObstacleManager(scene, pathPoints, modelCache, cleanupRegistry);
-
-							// Find nearest path index to drone
-							let minDistSq = Number.POSITIVE_INFINITY;
-							let nearest = 0;
-							const dronePos = (droneMesh as any).position ?? droneMesh.getAbsolutePosition?.();
-							for (let i = 0; i < pathPoints.length; i++) {
-								const d = pathPoints[i].subtract(dronePos).lengthSquared();
-								if (d < minDistSq) { minDistSq = d; nearest = i; }
-							}
-							const pointsAhead = 10;
-							const targetIdx = ((nearest + pointsAhead) % pathPoints.length + pathPoints.length) % pathPoints.length;
-
-							const portal = await obstacles.place('portal', {
-								index: targetIdx,
-								posterTextureId: randomFrom('portal1', 'portal2'),
-								width: 20,
-								height: 20,
-								offsetY: 0,
-								onTrigger: () => {
-									console.log('🌀 Portal triggered via realtime control');
-									try {
-										onPortalTrigger?.();
-									} catch (e) {
-										console.warn('Portal trigger error:', e);
-									}
-								}
-							}) as any;
-
-							// Register portal for collision detection
-							if (setPortal && portal) {
-								setPortal(portal);
-							}
-
-							console.log('🌀 Placed portal via control at index', targetIdx);
-						} catch (e) {
-							console.warn('Failed to place portal via control:', e);
-						}
-					}
+				case 'portal': {
+					if (!pathPoints?.length) { console.warn('No pathPoints for portal'); break; }
+					const targetIdx = ((getNearestPathIndex() + 10) % pathPoints.length + pathPoints.length) % pathPoints.length;
+					const portal = await obstacles.place('portal', {
+						index: targetIdx,
+						posterTextureId: randomFrom('portal1', 'portal2'),
+						width: 20, height: 20, offsetY: 0,
+						onTrigger: () => { try { onPortalTrigger?.(); } catch {} }
+					}) as any;
+					if (setPortal && portal) setPortal(portal);
 					break;
+				}
 
 				case 'speedup':
-					adjustDroneSpeed(0.00002);
-					console.log('⬆️ Speed increased via Ably');
+					adjustDroneSpeed(SPEED_INCREMENT);
 					break;
 
 				case 'speeddown':
-					adjustDroneSpeed(-0.00002);
-					console.log('⬇️ Speed decreased via Ably');
+					adjustDroneSpeed(-SPEED_INCREMENT);
 					break;
 
 				default:
@@ -234,24 +175,10 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 	return {
 		isConnected: () => connected,
 		disconnect: () => {
-			if (channel) {
-				try {
-					channel.unsubscribe();
-					console.log('Unsubscribed from', channelName);
-				} catch (e) {
-					console.warn('Channel unsubscribe error:', e);
-				}
-			}
-
-			if (client) {
-				try {
-					client.close();
-					console.log('Ably client closed');
-				} catch (e) {
-					console.warn('Client close error:', e);
-				}
-			}
-
+			try { channel?.unsubscribe(); } catch (e) { console.warn('Channel unsubscribe error:', e); }
+			try { client?.close(); } catch (e) { console.warn('Client close error:', e); }
+			for (const fn of realtimeCleanupRegistry) { try { fn(); } catch {} }
+			realtimeCleanupRegistry.length = 0;
 			client = null;
 			channel = null;
 			connected = false;
