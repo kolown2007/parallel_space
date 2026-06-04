@@ -15,7 +15,6 @@ import { visualizePathDebug } from '../chronoescape/world/debugPath';
 import { ObstacleManager } from '../chronoescape/obstacle/ObstacleManager';
 
 // System
-import preloadContainers, { getDefaultAssetList } from '../chronoescape/assetContainers';
 import { installKeyboardControls } from '../input/keyboardControls';
 import { randomFrom, getTextureUrl } from '../assetsConfig';
 import { updateProgress, cleanupDroneControl } from '../stores/droneControl.svelte.js';
@@ -33,7 +32,6 @@ import { getDronePathIndexFactory } from './wormhole2/wormhole2.helpers';
 import { createKeyboardHandlers } from './wormhole2/wormhole2.keyboard';
 import { setupDroneCollision } from './wormhole2/wormhole2.collision';
 import { createRenderLoop } from './wormhole2/wormhole2.render';
-import { scale } from 'svelte/transition';
 
 // ============================================================================
 // SCENE CLASS
@@ -62,38 +60,6 @@ export class WormHoleScene2 {
 	}
 
 	static async CreateScene(engine: any, canvas: HTMLCanvasElement, onPortalTrigger?: () => void): Promise<BABYLON.Scene> {
-		// ====================================================================
-		// ASSET PRELOADING
-		// ====================================================================
-		try {
-			const preloadScene = new BABYLON.Scene(engine);
-			try {
-				const assetList = await getDefaultAssetList();
-				// Load ALL assets (including models) before scene starts
-				await preloadContainers(
-					preloadScene,
-					assetList || [],
-					(loaded: number, total: number, last?: string) => {
-						try {
-							(engine as any)?.loadingScreen?.setLoadingText?.(
-								`Loading assets ${loaded}/${total}${last ? ': ' + last : ''}`
-							);
-						} catch {}
-					}
-				);
-			} catch (e) {
-				console.warn('preloadContainers threw', e);
-			} finally {
-				try {
-					preloadScene.dispose();
-				} catch (e) {
-					/* ignore */
-				}
-			}
-		} catch (e) {
-			console.warn('Preload failed or was skipped', e);
-		}
-
 		// ====================================================================
 		// SCENE INITIALIZATION
 		// ====================================================================

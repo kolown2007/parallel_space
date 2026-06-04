@@ -72,10 +72,6 @@ export function createOrb(
 		scene
 	);
 	orb.position = position.clone();
-	console.log(`✨ SPHERE ORB CREATED!`);
-	console.log(`✨ Position: x=${position.x.toFixed(2)}, y=${position.y.toFixed(2)}, z=${position.z.toFixed(2)}`);
-	console.log(`✨ Options: diameter=${diameter}`);
-	console.log(`✨ Color: r=${color.r.toFixed(2)}, g=${color.g.toFixed(2)}, b=${color.b.toFixed(2)}`);
 
 	// Create visible material with some brightness
 	const mat = new BABYLON.StandardMaterial(`orbMaterial_${Date.now()}`, scene);
