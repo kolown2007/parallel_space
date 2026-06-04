@@ -64,6 +64,13 @@
       try {
         engine = await createEngine();
 
+        // Reduce render resolution on mobile/low-memory devices to prevent OOM crashes
+        const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+        const isLowMemory = (navigator as any).deviceMemory !== undefined && (navigator as any).deviceMemory <= 4;
+        if (isMobile || isLowMemory) {
+          engine.setHardwareScalingLevel(2);
+        }
+
         // Ensure canvas element has correct CSS sizing and notify engine of initial size
         try {
           canv.style.width = canv.style.width || '100%';
@@ -95,13 +102,12 @@
           const scene2 = await WormHoleScene2.CreateScene(engine, canv, () => {
             sceneManager?.switchTo('scene1');
           });
-          const scene3 = await createOceanScene(engine, canv);
 
-          // Create scene manager
+          // Create scene manager with lazy scene3 factory
           sceneManager = new SceneManager(
             engine,
             scene2,
-            scene3,
+            () => createOceanScene(engine, canv),
             () => mountVideoScene(undefined, undefined, () => sceneManager?.switchTo('scene2'))
           );
 
