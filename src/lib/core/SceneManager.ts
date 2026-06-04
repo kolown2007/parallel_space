@@ -1,4 +1,4 @@
-export type SceneMode = 'scene1' | 'scene2';
+export type SceneMode = 'scene1' | 'scene2' | 'scene3'; 
 
 export class SceneManager {
   mode: SceneMode = 'scene2';
@@ -8,6 +8,7 @@ export class SceneManager {
   constructor(
     private engine: any,
     private scene2: any,
+      private scene3: any,
     private mountVideo: () => any
   ) {}
 
@@ -29,6 +30,7 @@ export class SceneManager {
     this.renderActive = true;
     this.engine.runRenderLoop(() => {
       if (this.mode === 'scene2') this.scene2?.render();
+      else if (this.mode === 'scene3') this.scene3?.render();
     });
   }
 
