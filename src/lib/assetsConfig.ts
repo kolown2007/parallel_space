@@ -122,7 +122,10 @@ export async function getVideoUrl(id: string): Promise<string> {
   return config.videos?.[id]?.url || '';
 }
 
+let cachedWasmUrl: string | null = null;
+
 export async function getPhysicsWasmUrl(): Promise<string> {
+  if (cachedWasmUrl) return cachedWasmUrl;
   const config = await loadAssetsConfig();
   const wasmUrl = config.physics?.havokWasm || '/HavokPhysics.wasm';
 
@@ -131,19 +134,19 @@ export async function getPhysicsWasmUrl(): Promise<string> {
   // with the proper MIME so `WebAssembly.compileStreaming` succeeds.
   try {
     const resp = await fetch(wasmUrl, { cache: 'no-cache' });
-    if (!resp.ok) return wasmUrl;
+    if (!resp.ok) { cachedWasmUrl = wasmUrl; return wasmUrl; }
     const ctype = resp.headers.get('content-type') || '';
     if (ctype.includes('application/wasm')) {
-      return wasmUrl;
+      cachedWasmUrl = wasmUrl;
+      return cachedWasmUrl;
     }
 
     // Server didn't provide correct content-type — create blob URL
     const ab = await resp.arrayBuffer();
     const blob = new Blob([ab], { type: 'application/wasm' });
-    const objUrl = URL.createObjectURL(blob);
-    return objUrl;
+    cachedWasmUrl = URL.createObjectURL(blob);
+    return cachedWasmUrl;
   } catch (e) {
-    // If fetch fails for any reason, fall back to returning original URL
     return wasmUrl;
   }
 }

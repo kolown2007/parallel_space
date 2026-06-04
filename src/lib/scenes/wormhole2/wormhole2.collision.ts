@@ -3,21 +3,19 @@ import { hitCollision, droneControl, MAX_SPEED } from '../../stores/droneControl
 import { playCollisionNote, playCollisionNoteSingle } from '../../scores/ambient';
 import { WORMHOLE2_CONFIG } from './wormhole2.config';
 
-const obstacleLastHit = new Map<any, number>();
-
-// Periodically clear old collision entries to prevent memory leak
-setInterval(() => {
-	const now = Date.now();
-	for (const [key, time] of obstacleLastHit.entries()) {
-		if (now - time > 60000) obstacleLastHit.delete(key);
-	}
-}, 30000);
-
 export function setupDroneCollision(droneAggregate: any): () => void {
 	if (!droneAggregate?.body) {
 		console.warn('No physics body for collision setup');
 		return () => {};
 	}
+
+	const obstacleLastHit = new Map<any, number>();
+	const cleanupInterval = setInterval(() => {
+		const now = Date.now();
+		for (const [key, time] of obstacleLastHit.entries()) {
+			if (now - time > 60000) obstacleLastHit.delete(key);
+		}
+	}, 30000);
 
 	try {
 		droneAggregate.body.setCollisionCallbackEnabled(true);
@@ -73,9 +71,12 @@ export function setupDroneCollision(droneAggregate: any): () => void {
 		
 		return () => {
 			collisionObservable.remove(collisionObserver);
+			clearInterval(cleanupInterval);
+			obstacleLastHit.clear();
 		};
 	} catch (e) {
 		console.warn('Failed to setup drone collision callback:', e);
+		clearInterval(cleanupInterval);
 		return () => {};
 	}
 }

@@ -37,10 +37,6 @@ export function getDronePathIndexFactory(
 /**
  * Calculate target path index with wrapping
  */
-export function getTargetPathIndex(
-	currentIndex: number,
-	offset: number,
-	pathLength: number
-): number {
-	return (currentIndex + offset) % pathLength;
+export function getTargetPathIndex(currentIndex: number, offset: number, pathLength: number): number {
+	return ((currentIndex + offset) % pathLength + pathLength) % pathLength;
 }
