@@ -1,7 +1,10 @@
 // Sound engine: superdough  (Tone.js version archived as ambient.tone.ts)
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore – superdough ships no TypeScript declarations
-import { superdough, getAudioContext, initAudio, registerSynthSounds } from 'superdough'
+import { superdough,samples, getAudioContext, initAudio, registerSynthSounds, initAudioOnFirstClick } from 'superdough'
+
+
+const samplesPromise = samples('github:tidalcycles/dirt-samples');
 
 // ── typed wrappers ────────────────────────────────────────────────────────
 type DoughValue = Record<string, unknown>
@@ -52,7 +55,7 @@ function triggerPadChord(deadline: number) {
   }
   // brown-noise texture underneath each chord
   dough({
-    s: 'brown',
+    s: 'white',
     gain: 0.025,
     attack: 1,
     sustain: 0.6,
@@ -63,15 +66,27 @@ function triggerPadChord(deadline: number) {
 }
 
 // ── audio init ────────────────────────────────────────────────────────────
+
+
 async function ensureContext(): Promise<boolean> {
   try {
-    registerSynthSounds()
-    await (initAudio as () => Promise<void>)()
-    const ctx = getAudioContext() as AudioContext
-    if (ctx.state === 'suspended') await ctx.resume()
-    return ctx.state === 'running'
-  } catch {
-    return false
+    // Registers the synthesizer sounds (sawtooth, etc.)
+    registerSynthSounds();
+    
+    // Wakes up the main audio driver
+    await (initAudio as () => Promise<void>)();
+    
+    // CRITICAL: Makes sure the background sample downloads are 100% finished
+    await samplesPromise; 
+    
+    // Double-checks that the browser actually let the audio start
+    const ctx = getAudioContext() as AudioContext;
+    if (ctx.state === 'suspended') await ctx.resume();
+    
+    return ctx.state === 'running';
+  } catch (error) {
+    console.error("Audio initialization failed:", error);
+    return false;
   }
 }
 
@@ -161,6 +176,45 @@ export function playCollisionNote(velocity: number = 1.0) {
 }
 
 // Play a single random note for simple collisions (e.g. boxes)
+// export function playCollisionNoteSingle(velocity: number = 1.0) {
+//   if (!isRunning) return
+
+//   const ctx = getAudioContext() as AudioContext
+//   if (ctx.state !== 'running') return
+
+//   const scale = ['C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4']
+//   const note = scale[Math.floor(Math.random() * scale.length)]
+//   const duration = Math.min(0.25 + velocity * 0.75, 2)
+//   const vol = Math.min(0.75 + velocity * 0.9, 1.0)
+//   const now = ctx.currentTime
+
+//   const available = Math.max(0, MAX_POLYPHONY - activeVoices)
+//   if (available <= 0) {
+//     dough({
+//       s: 'triangle',
+//       note,
+//       gain: vol * 0.6,
+//       attack: 0.01,
+//       sustain: 0.0,
+//       release: 0.12,
+//     }, now, 0.12)
+//     return
+//   }
+
+//   dough({
+//     s: 'triangle',
+//     note,
+//     gain: vol,
+//     attack: 0.02,
+//     sustain: 0.3,
+//     release: 0.5,
+//     cutoff: 1200,
+//   }, now, duration)
+//   activeVoices++
+//   const ms = Math.ceil((duration + 0.5) * 1000) + 80
+//   setTimeout(() => { activeVoices = Math.max(0, activeVoices - 1) }, ms)
+// }
+
 export function playCollisionNoteSingle(velocity: number = 1.0) {
   if (!isRunning) return
 
@@ -173,32 +227,15 @@ export function playCollisionNoteSingle(velocity: number = 1.0) {
   const vol = Math.min(0.75 + velocity * 0.9, 1.0)
   const now = ctx.currentTime
 
-  const available = Math.max(0, MAX_POLYPHONY - activeVoices)
-  if (available <= 0) {
-    dough({
-      s: 'triangle',
-      note,
-      gain: vol * 0.6,
-      attack: 0.01,
-      sustain: 0.0,
-      release: 0.12,
-    }, now, 0.12)
-    return
-  }
-
-  dough({
-    s: 'triangle',
-    note,
-    gain: vol,
-    attack: 0.02,
-    sustain: 0.3,
-    release: 0.5,
-    cutoff: 1200,
-  }, now, duration)
-  activeVoices++
-  const ms = Math.ceil((duration + 0.5) * 1000) + 80
-  setTimeout(() => { activeVoices = Math.max(0, activeVoices - 1) }, ms)
+  dough({s:'bd'}, now, duration),
+   dough({s:'sd'}, now, duration)
+ 
 }
+
+
+
+
+
 
 export function stopAmbient() {
   if (!isRunning) return
