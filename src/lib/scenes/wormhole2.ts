@@ -24,6 +24,7 @@ import { setupDroneCollision } from './wormhole2/wormhole2.collision';
 import { createRenderLoop } from './wormhole2/wormhole2.render';
 
 
+
 export class WormHoleScene2 {
 	static pathPoints: BABYLON.Vector3[] = [];
 	private static cleanupRegistry: Array<() => void> = [];
@@ -99,78 +100,7 @@ export class WormHoleScene2 {
 
 		scene.onDisposeObservable.add(() => WormHoleScene2.disposeAll());
 
-		//GUI
-
-      const advancedTexture = GUI.AdvancedDynamicTexture.CreateFullscreenUI("myUI");
-
-	  var header = new GUI.TextBlock();
-		// header.text = "Tap the screen to burst!";
-		header.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_TOP;
-	    header.fontFamily="Lucida Console, Courier, monospace";
-		header.height = "40px";
-		header.top = "10px";
-		header.fontSize = 20;
-		header.color = "lightgreen";
-
-
-		const alertText = new GUI.TextBlock();
-		alertText.text = "COLLISION! -20% SPEED";
-		alertText.fontFamily = "Lucida Console, Courier, monospace";
-		alertText.fontSize = 50;
-		alertText.color = "orangeRed";
-		alertText.fontWeight = "bold";
-		alertText.verticalAlignment = GUI.Control.VERTICAL_ALIGNMENT_CENTER; // Center of screen
-		alertText.isVisible = false; // Start hidden
-		advancedTexture.addControl(alertText);
-
-		let currentDisplaySpeed = 0;
-		let currentProgress = 0;
-
-
-let alertTimeout: any = null;
-
-const unsubEvents = droneEvents.subscribe(event => {
-  if (!event) return;
-
-  if (event.type === 'collision') {
-    // Clear any active timer if you hit something else quickly
-    if (alertTimeout) clearTimeout(alertTimeout);
-
-    // Make the red text visible
-    alertText.isVisible = true;
-
-    // Optional: Dynamic text showing exactly how much speed you lost
-    const reductionPercent = (event.data.reduction * 100).toFixed(0);
-    // alertText.text = `WARNING\nCOLLISION!\n-${reductionPercent}% SPEED`;
-	alertText.text = `WARNING\nCOLLISION!\nSPEED DECREASED `;
-
-
-    // Hide it automatically after 1.5 seconds
-    alertTimeout = setTimeout(() => {
-      alertText.isVisible = false;
-    }, 1500);
-  }
-});
-
-function updateHeaderText() {
-  const progressPercent = Math.floor(currentProgress * 100);
-  header.text = `Speed: ${currentDisplaySpeed}  | Progress: ${progressPercent}%`;
-}
-
-// Subscribe to displaySpeed (Derived store converting internal decimals to whole numbers)
-const unsubSpeed = displaySpeed.subscribe(value => {
-  currentDisplaySpeed = value;
-  updateHeaderText();
-});
-
-// Subscribe to the main droneControl for the progress decimal [0, 1)
-const unsubControl = droneControl.subscribe(state => {
-  currentProgress = state.progress;
-  updateHeaderText();
-});
-
-advancedTexture.addControl(header);
-
+		
 
 
 		// Portal state
