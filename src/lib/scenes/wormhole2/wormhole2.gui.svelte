@@ -50,9 +50,17 @@
       </div>
     </div>
 
+    <div class="tophud">
+     
+      <div class="objective">Objective: Navigate through the wormhole and reach the next station</div>
+    </div>
+
     <div class="tracker-container">
+ 
       <div class="boundary-line top-bracket"></div>
       <div class="boundary-line bottom-bracket"></div>
+        
+      <div class="station-name">Destination<br/>Station<br/>Alpha</div>
       <div class="percent-label">{Math.floor($droneControl.progress * 100)}%</div>
       <div class="indicator-triangle" style="bottom: {$droneControl.progress * 100}%"></div>
     </div>
@@ -129,6 +137,16 @@
   .top-bracket { top: 0; }
   .bottom-bracket { bottom: 0; }
 
+  .station-name {
+    position: absolute;
+    top: -80px;
+    left: 50%;
+    font-size: 12px;
+    transform: translateX(-50%);
+    color: green;
+    text-align: center;
+  }
+
   .percent-label {
     position: absolute;
     top: -25px;
@@ -148,6 +166,15 @@
     left: 50%;
     transform: translateX(-50%) translateY(50%);
     transition: bottom 0.1s ease-out;
+  }
+
+  .tophud {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    color: lightgreen;
   }
 
   .center-alert {
