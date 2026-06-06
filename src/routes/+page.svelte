@@ -9,22 +9,33 @@
   import createOceanScene from '$lib/scenes/ocean';
   import { SceneManager } from '$lib/core/SceneManager';
 
+
+  import DroneHUD from '$lib/scenes/wormhole2/wormhole2.gui.svelte';
+
   let canvas: HTMLCanvasElement | null = null;
   let engine: any = null;
   let sceneManager: SceneManager | null = null;
   let cursorTimeout: number | null = null;
   let ac: AbortController | null = null;
 
+  // Track the active scene reactively via Svelte runes
+  let activeScene = $state('scene2');
+
+  // =========================================================================
+  // MASTER SYNC FUNCTION: Updates both Babylon AND Svelte UI at the same time
+  // =========================================================================
+  const changeScene = (sceneName: string) => {
+    if (!sceneManager) return;
+    sceneManager.switchTo(sceneName as any);
+    activeScene = sceneName; // Triggers Svelte conditional DOM mounting instantly
+  };
+
   onMount(() => {
     if (!canvas) return;
     const canv = canvas as HTMLCanvasElement;
 
-    // Defer creating the Engine until we've attempted WebGPU so we don't
-    // accidentally create a WebGL context first (which can make
-    // `canvas.getContext('webgpu')` return null).
     (async () => {
       // Allow manual renderer override via URL query param: ?renderer=webgpu or ?renderer=webgl
-      // Default is WebGL. WebGPU can be opted into via ?renderer=webgpu.
       const rendererOverride = new URLSearchParams(window.location.search).get('renderer')?.toLowerCase();
 
       const createEngine = async () => {
@@ -48,7 +59,6 @@
             console.warn('WebGPU engine initialization failed, falling back to WebGL', e);
           }
         }
-        // Default: WebGL
         console.info('Using WebGL engine');
         return new BABYLON.Engine(canv, true, { preserveDrawingBuffer: true, stencil: true });
       };
@@ -56,7 +66,6 @@
       try {
         engine = await createEngine();
 
-        // Ensure canvas element has correct CSS sizing and notify engine of initial size
         try {
           canv.style.width = canv.style.width || '100%';
           canv.style.height = canv.style.height || '100vh';
@@ -72,7 +81,6 @@
 
         window.addEventListener('resize', () => engine?.resize(), { signal });
 
-        // Auto-hide cursor after 6 seconds of inactivity
         const resetCursorTimeout = () => {
           document.body.style.cursor = 'default';
           if (cursorTimeout) clearTimeout(cursorTimeout);
@@ -84,23 +92,22 @@
         resetCursorTimeout();
 
         try {
-          // Scene creation now awaits all asset loading
+          // A. CHANGED: Sync UI state when WormHole transitions internally
           const scene2 = await WormHoleScene2.CreateScene(engine, canv, () => {
-            sceneManager?.switchTo('scene1');
+            changeScene('scene1');
           });
 
-          // Create scene manager with lazy scene3 factory
+          // B. CHANGED: Sync UI state when VideoScene finishes playback loops
           sceneManager = new SceneManager(
             engine,
             scene2,
             () => createOceanScene(engine, canv),
-            () => mountVideoScene(undefined, undefined, () => sceneManager?.switchTo('scene2'))
+            () => mountVideoScene(undefined, undefined, () => changeScene('scene2'))
           );
 
-          // Start with scene2
-          sceneManager.switchTo('scene2');
+          // C. CHANGED: Boot up into scene2 safely utilizing the sync function
+          changeScene('scene2');
 
-          // Hide loading UI only after everything is ready
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
               setTimeout(() => { try { engine?.hideLoadingUI(); } catch {} }, 50);
@@ -111,11 +118,11 @@
           try { engine?.hideLoadingUI(); } catch {}
         }
 
-        // Global input
+        // D. CHANGED: Use sync utility for your debug keyboard listener keys
         window.addEventListener('keydown', (e: KeyboardEvent) => {
-          if (e.key === '1') sceneManager?.switchTo('scene1');
-          else if (e.key === '2') sceneManager?.switchTo('scene2');
-          else if (e.key === '3') sceneManager?.switchTo('scene3');
+          if (e.key === '1') changeScene('scene1');
+          else if (e.key === '2') changeScene('scene2');
+          else if (e.key === '3') changeScene('scene3');
         }, { signal });
 
       } catch (err) {
@@ -131,10 +138,28 @@
       engine?.dispose();
     };
   });
-
-
 </script>
 
+<div class="view-wrapper">
+  <canvas bind:this={canvas} class="babylon-canvas"></canvas>
 
+  {#if activeScene === 'scene2'}
+    <DroneHUD />
+  {/if}
 
-<canvas bind:this={canvas} class="babylon-canvas"></canvas>
+  
+</div>
+
+<style>
+  .view-wrapper {
+    position: relative; 
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+  .babylon-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+</style>
