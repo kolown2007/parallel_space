@@ -84,7 +84,7 @@ export function createKeyboardHandlers(deps: KeyboardHandlerDeps) {
 				
 				obstacles.place('cube', {
 					index: targetIdx,
-					size: WORMHOLE2_CONFIG.obstacles.cubeSize,
+					// size omitted to use the ObstacleManager's random fallback
 					physics: true,
 					thrustMs: WORMHOLE2_CONFIG.obstacles.cubeThrustMs,
 					thrustSpeed: WORMHOLE2_CONFIG.obstacles.cubeThrustSpeed,

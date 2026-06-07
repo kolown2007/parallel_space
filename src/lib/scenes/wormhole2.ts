@@ -1,7 +1,7 @@
 
 import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
-import * as GUI from '@babylonjs/gui'
+
 
 import { setupSceneDrone } from '../chronoescape/drone/setupDrone';
 import { getPositionOnPath } from '../chronoescape/world/PathUtils';
@@ -127,7 +127,7 @@ export class WormHoleScene2 {
 		}
 		try {
 			await obstacles.place('model', {
-				modelNames: ['jollibee'], count: 1, index: 25, offsetY: -1, scaleRange: [5, 7], physics: true
+				modelNames: ['jollibee,'], count: 1, index: 25, offsetY: -1, scaleRange: [5, 7], physics: true
 			});
 		} catch (e) { console.warn('Failed to place physics Jollibee:', e); }
 
@@ -224,6 +224,12 @@ export class WormHoleScene2 {
 			});
 			WormHoleScene2.registerCleanup(installKeyboardControls(keyboardHandlers));
 			WormHoleScene2.registerCleanup(() => cleanupDroneControl(false));
+
+			// Auto-place cubes every 3 seconds
+			const autoCubeInterval = setInterval(() => {
+				keyboardHandlers.onPlaceCube?.();
+			}, 3000);
+			WormHoleScene2.registerCleanup(() => clearInterval(autoCubeInterval));
 
 			// Touch: tap anywhere on canvas = burst (same as keyboard B)
 			const onTap = (e: TouchEvent) => {

@@ -582,7 +582,7 @@ export class ObstacleManager {
 	 */
 	private placeCube(options: CubeOptions): BABYLON.Mesh {
 		const {
-			size = 2,
+			size = Math.random() * 5 + 0.05, // Fallback: random size between 0.05 and 5.05
 			color = new BABYLON.Color3(1, 0.5, 0),
 			physics = true,
 			offsetY = 0,
