@@ -46,36 +46,33 @@
     tutorialStep = tutorialStep < 4 ? tutorialStep + 1 : 0;
   }
 
+  function startCountdown() {
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = setInterval(() => {
+      if (countdown > 0 && !isGameOver && !isWin) {
+        countdown--;
+        if (countdown === 0) {
+          handleGameOver();
+        }
+      }
+    }, 1000);
+  }
+
   onMount(() => {
     fetchRevolutionData();
     const apiInterval = setInterval(fetchRevolutionData, 5000);
 
-    // 2. Start the 8-second initialization countdown when the scene mounts
     const mountDelayTimeout = setTimeout(() => {
       showUI = true;
-      tutorialStep = 1; // Start tutorial when UI shows
-      
-      // Start countdown when UI initializes
-      countdownInterval = setInterval(() => {
-        if (countdown > 0 && !isGameOver) {
-          countdown--;
-          if (countdown === 0) {
-            handleGameOver();
-          }
-        }
-      }, 1000);
-    }, 8000); // 8000 milliseconds = 8 seconds
+      tutorialStep = 1;
+      startCountdown();
+    }, 8000);
 
-    
-
-    // Keep your event stream listener alive in the background
     const unsubscribe = droneEvents.subscribe(event => {
       if (event?.type === 'collision') {
         if (alertTimeout) clearTimeout(alertTimeout);
-        
         currentReduction = Math.floor(event.data.reduction * 100);
         isColliding = true;
-
         alertTimeout = setTimeout(() => {
           isColliding = false;
         }, 1500);
@@ -92,15 +89,23 @@
     };
   });
 
+  function restart() {
+    // Soft reset of local state
+    isGameOver = false;
+    isWin = false;
+    countdown = 60;
+    
+    // Reset the store values
+    updateProgress(0);
+    adjustDroneSpeed(0); // Assuming 0 or a positive value resets the drone's velocity
+    
+    startCountdown();
+  }
+
   function handleGameOver() {
     isGameOver = true;
     adjustDroneSpeed(-100); // Stop the drone
     if (countdownInterval) clearInterval(countdownInterval);
-
-    // Optional: Auto-reset after 3 seconds
-    setTimeout(() => {
-      window.location.reload(); // Simplest way to reset the whole state
-    }, 4000);
   }
 
   function handleWin() {
@@ -108,11 +113,6 @@
     adjustDroneSpeed(-100); // Stop the drone
     updateProgress(1.0);    // Snap visual to 100%
     if (countdownInterval) clearInterval(countdownInterval);
-
-    // Auto-reset after celebration
-    setTimeout(() => {
-      window.location.reload();
-    }, 6000);
   }
 </script>
 
@@ -152,9 +152,15 @@
     </div>
 
     {#if isWin}
-      <div class="center-alert success">CONGRATULATIONS!<br>MISSION COMPLETE</div>
+      <div class="center-alert success">
+        CONGRATULATIONS!<br>MISSION COMPLETE
+        <button class="retry-btn" onclick={restart}>CONTINUE</button>
+      </div>
     {:else if isGameOver}
-      <div class="center-alert failure">MISSION FAILED<br>TEMPORAL DESYNC</div>
+      <div class="center-alert failure">
+        MISSION FAILED<br>TEMPORAL DESYNC
+        <button class="retry-btn" onclick={restart}>TRY AGAIN</button>
+      </div>
     {:else if isColliding}
       <div class="center-alert danger">WARNING<br>-{currentReduction}% SPEED</div>
     {/if}
@@ -330,6 +336,7 @@
     font-size: 32px;
     font-weight: bold;
     text-align: center;
+    pointer-events: auto;
   }
   .success { color: white; }
   .danger { color: red; }
@@ -413,5 +420,21 @@
     border-radius: 6px;
     padding: 5px 10px;
     cursor: pointer;
+  }
+
+  .retry-btn {
+    display: block;
+    margin: 20px auto 0;
+    background: none;
+    border: 2px solid currentColor;
+    color: inherit;
+    padding: 10px 30px;
+    font-family: inherit;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .retry-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
   }
 </style>
