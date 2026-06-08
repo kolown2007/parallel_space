@@ -16,9 +16,8 @@
   let countdown = $state(60);
   let countdownInterval: ReturnType<typeof setInterval> | null = null;
   let apiValue = $state(0);
-
-  	let { totalUnits = 888, markerUnit = 300 }: { totalUnits?: number; markerUnit?: number } =
-		$props();
+  
+  let { totalUnits = 888, markerUnit = 300 }: { totalUnits?: number; markerUnit?: number } = $props();
   	const apiRevUrl = 'https://kolown.net/api/chrono-escapes/1/revolution';
 
   let apiProgress = $derived(Math.min(100, Math.max(0, (apiValue / totalUnits) * 100)));
@@ -117,324 +116,100 @@
 </script>
 
 {#if showUI}
-  <div class="hud-container" transition:fade={{ duration: 1000 }}   >
-    <div class="speed-dashboard">
-      <div class="header-speed">Speed: {$displaySpeed} units</div>
-      <div class="gauge-ring">
-        <div class="needle" style="transform: rotate({-100 + ($displaySpeed * 10)}deg)"></div>
+  <div class="absolute top-0 left-0 w-full h-full pointer-events-none font-mono z-10" transition:fade={{ duration: 1000 }}>
+    <!-- Speed Dashboard -->
+    <div class="pointer-events-auto absolute bottom-5 left-1/2 -translate-x-1/2 text-center text-[#90ee90]">
+      <div>Speed: {$displaySpeed} units</div>
+      <div class="w-25 h-25 border-[3px] border-dashed border-[#90ee90]/60 rounded-full relative mx-auto my-1.25 bg-black/40">
+        <div 
+          class="w-0.75 h-11.25 bg-[#90ee90] absolute bottom-1/2 left-[calc(50%-1.5px)] origin-bottom transition-transform duration-100 ease-out" 
+          style="transform: rotate({-100 + ($displaySpeed * 10)}deg)"
+        ></div>
       </div>
     </div>
 
     {#if !isWin && !isGameOver}
-      <div class="tophud">
-        <div class="objective">reach the next station</div>
-        <div class="countdown-timer">{countdown}s</div>
+      <div class="absolute top-5 left-1/2 -translate-x-1/2 text-center text-[#90ee90]">
+        <div class="uppercase tracking-widest">reach the next station</div>
+        <div class="text-[18px] mt-2.5 text-[#ff3e00] [text-shadow:0_0_10px_rgba(255,62,0,0.5)] font-bold">{countdown}s</div>
       </div>
     {/if}
 
-    <div class="tracker-container left-tracker">
-      <div class="boundary-line top-bracket"></div>
-      <div class="boundary-line bottom-bracket"></div>
+    <!-- Global Timeline Tracker (Left) -->
+    <div class="absolute left-10 top-1/2 -translate-y-1/2 h-75 w-6">
+      <div class="absolute left-0 w-full h-0.5 bg-[#90ee90]/60 top-0"></div>
+      <div class="absolute left-0 w-full h-0.5 bg-[#90ee90]/60 bottom-0"></div>
         
-      <div class="year-label top">2026</div>
-      <div class="year-label bottom">2050</div>
-      <div class="indicator-triangle" style="bottom: {apiProgress}%"></div>
+      <div class="absolute left-1/2 -translate-x-1/2 text-[12px] text-[#90ee90] text-center -top-7.5">2026</div>
+      <div class="absolute left-1/2 -translate-x-1/2 text-[12px] text-[#90ee90] text-center -bottom-7.5">2050</div>
+      <div 
+        class="absolute w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-b-12 border-b-[#90ee90] left-1/2 -translate-x-1/2 translate-y-1/2 transition-[bottom] duration-100 ease-out" 
+        style="bottom: {apiProgress}%"
+      ></div>
     </div>
 
-    <div class="tracker-container">
- 
-      <div class="boundary-line top-bracket"></div>
-      <div class="boundary-line bottom-bracket"></div>
+    <!-- Station Proximity Tracker (Right) -->
+    <div class="absolute right-10 top-1/2 -translate-y-1/2 h-75 w-6">
+      <div class="absolute left-0 w-full h-0.5 bg-[#90ee90]/60 top-0"></div>
+      <div class="absolute left-0 w-full h-0.5 bg-[#90ee90]/60 bottom-0"></div>
         
-      <div class="station-name">Destination<br/>Station<br/>Alpha</div>
-      <div class="percent-label">{Math.floor($droneControl.progress * 100)}%</div>
-      <div class="indicator-triangle" style="bottom: {$droneControl.progress * 100}%"></div>
+      <div class="absolute -top-20 left-1/2 -translate-x-1/2 text-[12px] text-green-700 text-center">Destination<br/>Station<br/>Alpha</div>
+      <div class="absolute -top-6.25 left-1/2 -translate-x-1/2 text-[#90ee90] whitespace-nowrap">{Math.floor($droneControl.progress * 100)}%</div>
+      <div 
+        class="absolute w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-b-12 border-b-[#90ee90] left-1/2 -translate-x-1/2 translate-y-1/2 transition-[bottom] duration-100 ease-out" 
+        style="bottom: {$droneControl.progress * 100}%"
+      ></div>
     </div>
 
+    <!-- Central Alerts -->
     {#if isWin}
-      <div class="center-alert success">
+      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[32px] font-bold text-center pointer-events-auto text-white">
         CONGRATULATIONS!<br>MISSION COMPLETE
-        <button class="retry-btn" onclick={restart}>CONTINUE</button>
+        <button class="block mx-auto mt-5 bg-none border-2 border-current px-7.5 py-2.5 font-bold cursor-pointer hover:bg-white/10 transition-colors" onclick={restart}>CONTINUE</button>
       </div>
     {:else if isGameOver}
-      <div class="center-alert failure">
+      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[32px] font-bold text-center pointer-events-auto text-[#ff3e00] [text-shadow:0_0_20px_rgba(255,62,0,0.8)]">
         MISSION FAILED<br>TEMPORAL DESYNC
-        <button class="retry-btn" onclick={restart}>TRY AGAIN</button>
+        <button class="block mx-auto mt-5 bg-none border-2 border-current px-7.5 py-2.5 font-bold cursor-pointer hover:bg-white/10 transition-colors" onclick={restart}>TRY AGAIN</button>
       </div>
     {:else if isColliding}
-      <div class="center-alert danger">WARNING<br>-{currentReduction}% SPEED</div>
+      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-[32px] font-bold text-center pointer-events-auto text-red-600">WARNING<br>-{currentReduction}% SPEED</div>
     {/if}
 
+    <!-- Tutorial Layers -->
     {#if tutorialStep > 0}
-      <div class="tutorial-overlay">
+      <div class="absolute inset-0 bg-black/20 pointer-events-auto z-100">
         {#if tutorialStep === 1}
-          <div class="tutorial-bubble bubble-top">
-            <div class="bubble-title">MISSION OBJECTIVE </div>
-            <p>Your primary task is to navigate the wormhole safely and reach the next temporal station.</p>
+          <div class="absolute top-25 left-1/2 -translate-x-1/2 bg-[#001400]/20 border-2 border-[#90ee90] rounded-xl p-5 w-62.5 shadow-[0_0_15px_rgba(144,238,144,0.4)] text-[#90ee90]">
+            <div class="font-bold border-b border-[#90ee90] mb-2.5 pb-1.25">MISSION OBJECTIVE</div>
+            <p class="text-[13px] leading-[1.4] mb-3.75">MISSION OBJECTIVE </p>
+            <p class="text-[13px] leading-[1.4] mb-3.75">Your primary task is to navigate the wormhole safely and reach the next temporal station.</p>
             <button onclick={nextTutorialStep}>NEXT</button>
           </div>
         {:else if tutorialStep === 2}
-          <div class="tutorial-bubble bubble-left">
-            <div class="bubble-title">GLOBAL TIMELINE</div>
-            <p>This tracks global progress across the wormhole from 2026 to 2050.</p>
+          <div class="absolute left-20 top-1/2 -translate-y-1/2 bg-[#001400]/20 border-2 border-[#90ee90] rounded-xl p-5 w-62.5 shadow-[0_0_15px_rgba(144,238,144,0.4)] text-[#90ee90]">
+            <div class="font-bold border-b border-[#90ee90] mb-2.5 pb-1.25">GLOBAL TIMELINE</div>
+            <p class="text-[13px] leading-[1.4] mb-3.75">This tracks global progress across the wormhole from 2026 to 2050.</p>
             <button onclick={nextTutorialStep}>NEXT</button>
           </div>
         {:else if tutorialStep === 3}
-          <div class="tutorial-bubble bubble-right">
-            <div class="bubble-title">STATION PROXIMITY</div>
-            <p>Monitor your distance to Station Alpha. Reach 100% to complete the jump.</p>
+          <div class="absolute right-20 top-1/2 -translate-y-1/2 bg-[#001400]/20 border-2 border-[#90ee90] rounded-xl p-5 w-62.5 shadow-[0_0_15px_rgba(144,238,144,0.4)] text-[#90ee90]">
+            <div class="font-bold border-b border-[#90ee90] mb-2.5 pb-1.25">STATION PROXIMITY</div>
+            <p class="text-[13px] leading-[1.4] mb-3.75">Monitor your distance to Station Alpha. Reach 100% to complete the jump.</p>
             <button onclick={nextTutorialStep}>NEXT</button>
           </div>
         {:else if tutorialStep === 4}
-          <div class="tutorial-bubble bubble-bottom">
-            <div class="bubble-title">FLIGHT SYSTEMS</div>
-            <p>Watch your velocity. Collisions will result in temporary speed reduction.</p>
-              <p>Tap screen to add velocity</p>
+          <div class="absolute bottom-37.5 left-1/2 -translate-x-1/2 bg-[#001400]/20 border-2 border-[#90ee90] rounded-xl p-5 w-62.5 shadow-[0_0_15px_rgba(144,238,144,0.4)] text-[#90ee90]">
+            <div class="font-bold border-b border-[#90ee90] mb-2.5 pb-1.25">FLIGHT SYSTEMS</div>
+            <p class="text-[13px] leading-[1.4] mb-3.75">Watch your velocity. Collisions will result in temporary speed reduction.</p>
+              <p class="text-[13px] leading-[1.4] mb-3.75">Tap screen to add velocity</p>
             <button onclick={nextTutorialStep}>INITIALIZE FLIGHT</button>
           </div>
         {/if}
         
-        <button class="skip-btn" onclick={() => tutorialStep = 0}>SKIP TUTORIAL</button>
+        <button class="absolute top-5 right-5 bg-none border border-[#90ee90]/50 text-[#90ee90]/50 rounded-md px-2.5 py-1.25 cursor-pointer" onclick={() => tutorialStep = 0}>SKIP TUTORIAL</button>
       </div>
     {/if}
   </div>
 {/if}
 
-<style>
-  /* All your beautiful HUD CSS remains completely untouched */
-  .hud-container {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    font-family: 'Lucida Console', Courier, monospace;
-    z-index: 10;
-  }
-
-  .speed-dashboard {
-    pointer-events: auto; 
-    position: absolute;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    text-align: center;
-    color: lightgreen;
-  }
-
-  .gauge-ring {
-    width: 100px;
-    height: 100px;
-    border: 3px dashed rgba(144, 238, 144, 0.6);
-    border-radius: 50%;
-    position: relative;
-    margin: 5px auto;
-    background: rgba(0, 0, 0, 0.4);
-  }
-
-  .needle {
-    width: 3px;
-    height: 45px;
-    background: lightgreen;
-    position: absolute;
-    bottom: 50%;
-    left: calc(50% - 1.5px);
-    transform-origin: bottom center;
-    transition: transform 0.1s ease-out;
-  }
-
-  .tracker-container {
-    position: absolute;
-    right: 40px;
-    top: 50%;
-    transform: translateY(-50%);
-    height: 300px;
-    width: 24px;
-  }
-
-  .boundary-line {
-    position: absolute;
-    left: 0;
-    width: 100%;
-    height: 2px;
-    background: rgba(144, 238, 144, 0.6);
-  }
-
-  .left-tracker {
-    right: auto;
-    left: 40px;
-  }
-
-  .year-label {
-    position: absolute;
-    left: 50%;
-    font-size: 12px;
-    transform: translateX(-50%);
-    color: lightgreen;
-    text-align: center;
-  }
-  .year-label.top { top: -30px; }
-  .year-label.bottom { bottom: -30px; }
-
-  .top-bracket { top: 0; }
-  .bottom-bracket { bottom: 0; }
-
-  .station-name {
-    position: absolute;
-    top: -80px;
-    left: 50%;
-    font-size: 12px;
-    transform: translateX(-50%);
-    color: green;
-    text-align: center;
-  }
-
-  .percent-label {
-    position: absolute;
-    top: -25px;
-    left: 50%;
-    transform: translateX(-50%);
-    color: lightgreen;
-    white-space: nowrap;
-  }
-
-  .indicator-triangle {
-    position: absolute;
-    width: 0;
-    height: 0;
-    border-left: 8px solid transparent;  
-    border-right: 8px solid transparent; 
-    border-bottom: 12px solid lightgreen; 
-    left: 50%;
-    transform: translateX(-50%) translateY(50%);
-    transition: bottom 0.1s ease-out;
-  }
-
-  .tophud {
-    position: absolute;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    text-align: center;
-    color: lightgreen;
-  }
-
-  .countdown-timer {
-    font-size: 18px;
-    margin-top: 10px;
-    color: #ff3e00; /* High-contrast orange/red for urgency */
-    text-shadow: 0 0 10px rgba(255, 62, 0, 0.5);
-    font-weight: bold;
-  }
-
-  .center-alert {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 32px;
-    font-weight: bold;
-    text-align: center;
-    pointer-events: auto;
-  }
-  .success { color: white; }
-  .danger { color: red; }
-  .failure { color: #ff3e00; text-shadow: 0 0 20px rgba(255, 62, 0, 0.8); }
-
-  /* Tutorial Styles */
-  .tutorial-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.2);
-    pointer-events: auto;
-    z-index: 100;
-  }
-
-  .tutorial-bubble {
-    position: absolute;
-    background: rgba(0, 20, 0, 0.2);
-    border: 2px solid lightgreen;
-    border-radius: 12px;
-    padding: 20px;
-    width: 250px;
-    box-shadow: 0 0 15px rgba(144, 238, 144, 0.4);
-    color: lightgreen;
-  }
-
-  .bubble-title {
-    font-weight: bold;
-    border-bottom: 1px solid lightgreen;
-    margin-bottom: 10px;
-    padding-bottom: 5px;
-  }
-
-  .tutorial-bubble p {
-    font-size: 13px;
-    line-height: 1.4;
-    margin-bottom: 15px;
-  }
-
-  .tutorial-bubble button {
-    background: lightgreen;
-    color: black;
-    border: none;
-    border-radius: 6px;
-    padding: 5px 15px;
-    font-family: inherit;
-    font-weight: bold;
-    cursor: pointer;
-  }
-
-  .bubble-top {
-    top: 100px;
-    left: 50%;
-    transform: translateX(-50%);
-  }
-
-  .bubble-left {
-    left: 80px;
-    top: 50%;
-    transform: translateY(-50%);
-  }
-
-  .bubble-right {
-    right: 80px;
-    top: 50%;
-    transform: translateY(-50%);
-  }
-
-  .bubble-bottom {
-    bottom: 150px;
-    left: 50%;
-    transform: translateX(-50%);
-  }
-
-  .skip-btn {
-    position: absolute;
-    top: 20px;
-    right: 20px;
-    background: none;
-    border: 1px solid rgba(144, 238, 144, 0.5);
-    color: rgba(144, 238, 144, 0.5);
-    border-radius: 6px;
-    padding: 5px 10px;
-    cursor: pointer;
-  }
-
-  .retry-btn {
-    display: block;
-    margin: 20px auto 0;
-    background: none;
-    border: 2px solid currentColor;
-    color: inherit;
-    padding: 10px 30px;
-    font-family: inherit;
-    font-weight: bold;
-    cursor: pointer;
-    transition: background 0.2s;
-  }
-  .retry-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-  }
-</style>
