@@ -1,6 +1,8 @@
 <script lang="ts">
-// Layout is now minimal - realtime control is handled at the scene level
-import '../app.css';
+	import './layout.css';
+
+	// Layout is now minimal - realtime control is handled at the scene level
+	import '../app.css';
 </script>
 
-<slot />
+<slot></slot>
