@@ -15,7 +15,49 @@
   let countdown = $state(60);
   let countdownInterval: ReturnType<typeof setInterval> | null = null;
   let apiValue = $state(0);
+  const letterOptions = '0123456789%$#@!&*+-=~<>[]{}()';
+  let matrixStream = $state(Array.from({ length: 100 }, (_, i) => ({
+    id: `${Date.now()}-${i}`,
+    char: letterOptions[Math.floor(Math.random() * letterOptions.length)],
+  })));
+  let matrixInterval: ReturnType<typeof setInterval> | null = null;
+  let shapeInterval: ReturnType<typeof setInterval> | null = null;
+  type Point = { x: number; y: number };
+  let shapePoints = $state<Point[]>([
+    { x: 8, y: 64 },
+    { x: 20, y: 36 },
+    { x: 36, y: 44 },
+    { x: 52, y: 20 },
+    { x: 68, y: 58 },
+    { x: 84, y: 32 },
+    { x: 100, y: 48 },
+    { x: 112, y: 18 },
+    { x: 116, y: 26 },
+    { x: 104, y: 54 },
+    { x: 88, y: 40 },
+    { x: 72, y: 72 },
+    { x: 56, y: 50 },
+    { x: 40, y: 66 },
+    { x: 24, y: 42 },
+  ]);
   
+  function clamp(value: number, min: number, max: number) {
+    return Math.min(Math.max(value, min), max);
+  }
+
+  function getShapePath(points: Point[]) {
+    return points
+      .map((point, idx) => `${idx === 0 ? 'M' : 'L'}${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
+      .join(' ') + ' Z';
+  }
+
+  function jitterShapePoints(points: Point[]) {
+    return points.map(point => ({
+      x: clamp(point.x + (Math.random() - 0.5) * 2.5, 4, 116),
+      y: clamp(point.y + (Math.random() - 0.5) * 2.5, 4, 76),
+    }));
+  }
+
   let { totalUnits = 888, markerUnit = 300 }: { totalUnits?: number; markerUnit?: number } = $props();
   	const apiRevUrl = 'https://kolown.net/api/chrono-escapes/1/revolution';
 
@@ -72,6 +114,19 @@
       }
     });
 
+    matrixInterval = setInterval(() => {
+      matrixStream = matrixStream.map(item => ({
+        ...item,
+        char: Math.random() < 0.25
+          ? letterOptions[Math.floor(Math.random() * letterOptions.length)]
+          : item.char,
+      }));
+    }, 200);
+
+    shapeInterval = setInterval(() => {
+      shapePoints = jitterShapePoints(shapePoints);
+    }, 150);
+
     // 3. Clean up ALL active timers when switching away from scene2
     return () => {
       unsubscribe();
@@ -79,6 +134,8 @@
       clearInterval(apiInterval);
       if (countdownInterval) clearInterval(countdownInterval);
       if (alertTimeout) clearTimeout(alertTimeout);
+      if (matrixInterval) clearInterval(matrixInterval);
+      if (shapeInterval) clearInterval(shapeInterval);
     };
   });
 
@@ -114,19 +171,36 @@
     <div class="grid gap-4 grid-cols-1 sm:grid-cols-[auto_2fr_auto] px-2 py-2 h-full ">
     
       <!-- main div 1: left tracker column -->
-      <div class="hidden sm:flex relative flex-col items-center justify-center gap-6  border border-green-900 border-dashed rounded-3xl p-4">
-        <div class="relative h-75 w-6">
-          <!-- <div class="absolute left-0 w-full h-0.5 bg-[#90ee90]/60 top-0"></div>
-          <div class="absolute left-0 w-full h-0.5 bg-[#90ee90]/60 bottom-0"></div> -->
-        </div>
+      <div class="hidden sm:flex relative flex-col items-center justify-between gap-4 border border-green-900 border-dashed rounded-3xl p-4 h-full min-w-50 max-w-55">
+        <div class="flex flex-col items-center justify-between gap-6 w-full h-full">
 
-        <div class="pointer-events-auto  max-w-xs h-36 min-h-36 text-center text-[#90ee90]  rounded-3xl p-0.5">
-          <div>Speed: <br/> {$displaySpeed} units</div>
-          <div class="w-25 h-25 border-[3px] border-dashed border-[#90ee90]/60 rounded-full relative mx-auto my-1.25">
-            <div
-              class="w-0.75 h-11.25 bg-[#90ee90] absolute bottom-1/2 left-[calc(50%-1.5px)] origin-bottom transition-transform duration-100 ease-out"
-              style="transform: rotate({-100 + ($displaySpeed * 10)}deg)"
-            ></div>
+          <!-- div 1a -->
+          <div class="flex flex-col items-center justify-start self-center max-w-xs w-full gap-2 h-80">
+            <div class="matrix-stream grid grid-cols-8 gap-1 w-full h-full text-center text-[#90ee90] opacity-90 overflow-hidden">
+              {#each matrixStream as item}
+                <span class="text-[10px] leading-none">{item.char}</span>
+              {/each}
+            </div>
+            
+          </div>
+
+          <!-- div 1b -->
+          <div class="pointer-events-auto max-w-xs h-36 min-h-36 text-center text-[#90ee90] rounded-3xl p-0.5 self-center ">
+            <div>Speed: <br/> {$displaySpeed} units</div>
+            <div class="w-25 h-25 border-[3px] border-dashed border-[#90ee90]/60 rounded-full relative mx-auto my-1.25">
+              <div
+                class="w-0.75 h-11.25 bg-[#90ee90] absolute bottom-1/2 left-[calc(50%-1.5px)] origin-bottom transition-transform duration-100 ease-out"
+                style="transform: rotate({-100 + ($displaySpeed * 10)}deg)"
+              ></div>
+            </div>
+          </div>
+
+          <!-- div 1c -->
+          <div class="flex items-center justify-center w-full h-24">
+            <svg viewBox="0 0 120 80" class="w-full h-full">
+              <path d={getShapePath(shapePoints)} fill="none" stroke="#90ee90" stroke-width="2" vector-effect="non-scaling-stroke" />
+              <path d="M16 32 L28 18 L42 30" fill="none" stroke="#90ee90" stroke-width="1.2" />
+            </svg>
           </div>
         </div>
       </div>
@@ -134,8 +208,8 @@
       <!-- main div 2: middle control panel column -->
       <div class="relative flex flex-col items-center justify-between h-full  gap-6 border border-green-900 border-dashed rounded-3xl p-4 pb-8">
         <div class="pointer-events-auto  max-w-xs h-28 min-h-28 text-center text-[#90ee90]  rounded-3xl p-1">
-          <div class="uppercase tracking-widest">timer</div>
-          <div class="text-[18px] mt-2.5 text-[#ff3e00] [text-shadow:0_0_10px_rgba(255,62,0,0.5)] font-bold">{countdown}s</div>
+          <!-- <div class="uppercase tracking-widest">timer</div> -->
+          <div class="text-[30px] mt-2.5 text-[#ff3e00] [text-shadow:0_0_10px_rgba(255,62,0,0.5)] font-bold">{countdown}</div>
         </div>
 
         <!-- div 2: middle status block -->
@@ -188,4 +262,6 @@
 
   </div>
 {/if}
+
+
 
