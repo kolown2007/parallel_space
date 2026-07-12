@@ -13,9 +13,14 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
   private _bgRemoveTimeout: number | null = null;
   private _assetsReady: boolean = false;
   private _canHide: boolean = false;
+  private _resolveHidden: (() => void) | null = null;
+  public hidden: Promise<void>;
 
   constructor(loadingUIText: string) {
     this.loadingUIText = loadingUIText;
+    this.hidden = new Promise((resolve) => {
+      this._resolveHidden = resolve;
+    });
   }
 
   public async displayLoadingUI() {
@@ -38,6 +43,9 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
 
     if (this._container) {
       this._container.style.display = 'block';
+      this.hidden = new Promise((resolve) => {
+        this._resolveHidden = resolve;
+      });
       return;
     }
 
@@ -144,6 +152,11 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
     if (this._bgRemoveTimeout) {
       clearTimeout(this._bgRemoveTimeout);
       this._bgRemoveTimeout = null;
+    }
+
+    if (this._resolveHidden) {
+      this._resolveHidden();
+      this._resolveHidden = null;
     }
   }
 
