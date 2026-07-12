@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { displaySpeed, droneControl, droneEvents, adjustDroneSpeed, updateProgress } from '../../stores/droneControl.svelte.js';
   import { fade } from 'svelte/transition';
-
+  import { displaySpeed, droneControl, droneEvents, adjustDroneSpeed, updateProgress } from '../../stores/droneControl.svelte.js';
+  import { missionRetry } from '../../stores/missionState';
   // 1. New visibility flag controlled by our startup timer
   let showUI = $state(false);
 
@@ -21,42 +21,8 @@
     char: letterOptions[Math.floor(Math.random() * letterOptions.length)],
   })));
   let matrixInterval: ReturnType<typeof setInterval> | null = null;
-  let shapeInterval: ReturnType<typeof setInterval> | null = null;
-  type Point = { x: number; y: number };
-  let shapePoints = $state<Point[]>([
-    { x: 8, y: 64 },
-    { x: 20, y: 36 },
-    { x: 36, y: 44 },
-    { x: 52, y: 20 },
-    { x: 68, y: 58 },
-    { x: 84, y: 32 },
-    { x: 100, y: 48 },
-    { x: 112, y: 18 },
-    { x: 116, y: 26 },
-    { x: 104, y: 54 },
-    { x: 88, y: 40 },
-    { x: 72, y: 72 },
-    { x: 56, y: 50 },
-    { x: 40, y: 66 },
-    { x: 24, y: 42 },
-  ]);
   
-  function clamp(value: number, min: number, max: number) {
-    return Math.min(Math.max(value, min), max);
-  }
-
-  function getShapePath(points: Point[]) {
-    return points
-      .map((point, idx) => `${idx === 0 ? 'M' : 'L'}${point.x.toFixed(2)} ${point.y.toFixed(2)}`)
-      .join(' ') + ' Z';
-  }
-
-  function jitterShapePoints(points: Point[]) {
-    return points.map(point => ({
-      x: clamp(point.x + (Math.random() - 0.5) * 2.5, 4, 116),
-      y: clamp(point.y + (Math.random() - 0.5) * 2.5, 4, 76),
-    }));
-  }
+ 
 
   let { totalUnits = 888, markerUnit = 300 }: { totalUnits?: number; markerUnit?: number } = $props();
   	const apiRevUrl = 'https://kolown.net/api/chrono-escapes/1/revolution';
@@ -123,10 +89,6 @@
       }));
     }, 200);
 
-    shapeInterval = setInterval(() => {
-      shapePoints = jitterShapePoints(shapePoints);
-    }, 150);
-
     // 3. Clean up ALL active timers when switching away from scene2
     return () => {
       unsubscribe();
@@ -135,7 +97,7 @@
       if (countdownInterval) clearInterval(countdownInterval);
       if (alertTimeout) clearTimeout(alertTimeout);
       if (matrixInterval) clearInterval(matrixInterval);
-      if (shapeInterval) clearInterval(shapeInterval);
+
     };
   });
 
@@ -196,12 +158,6 @@
           </div>
 
           <!-- div 1c -->
-          <div class="flex items-center justify-center w-full h-24">
-            <svg viewBox="0 0 120 80" class="w-full h-full">
-              <path d={getShapePath(shapePoints)} fill="none" stroke="#90ee90" stroke-width="2" vector-effect="non-scaling-stroke" />
-              <path d="M16 32 L28 18 L42 30" fill="none" stroke="#90ee90" stroke-width="1.2" />
-            </svg>
-          </div>
         </div>
       </div>
 
@@ -215,14 +171,13 @@
         <!-- div 2: middle status block -->
         <div class="pointer-events-auto w-72 min-w-0  text-center text-[#90ee90] rounded-3xl p-1 overflow-hidden">
           <div class="h-full w-full overflow-auto  whitespace-normal wrap-break-words text-sm">
-            {#if isWin}
-              <div class="text-[20px] font-bold text-white">CONGRATULATIONS!</div>
-              <div class="mt-2 text-[#90ee90]">MISSION COMPLETE</div>
-              <button class="mt-4 inline-flex w-full justify-center bg-none border-2 border-current px-7.5 py-2.5 font-bold cursor-pointer hover:bg-white/10 transition-colors" onclick={restart}>CONTINUE</button>
-            {:else if isGameOver}
+            {#if isGameOver}
               <div class="text-[20px] font-bold text-[#ff3e00]">MISSION FAILED</div>
               <div class="mt-2 text-[#ff3e00]/80">REGRESS STATION</div>
               <button class="mt-4 inline-flex w-full justify-center bg-none border-2 border-current px-7.5 py-2.5 font-bold cursor-pointer hover:bg-white/10 transition-colors" onclick={restart}>TRY AGAIN</button>
+            {:else if isColliding}
+              <div class="text-[20px] font-bold text-red-600">COLLISION!</div>
+              <div class="mt-2 text-red-400">-{currentReduction}% SPEED</div>
             {:else if isColliding}
               <div class="text-[20px] font-bold text-red-600">COLLISION!</div>
               <div class="mt-2 text-red-400">-{currentReduction}% SPEED</div>

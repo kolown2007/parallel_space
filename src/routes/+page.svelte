@@ -11,23 +11,52 @@
 
 
   import DroneHUD from '$lib/scenes/wormhole2/wormhole2.gui.svelte';
-
+  import IntroScene from '$lib/scenes/IntroScene.svelte';
+  import { missionRetry } from '$lib/stores/missionState';
   let canvas: HTMLCanvasElement | null = null;
   let engine: any = null;
   let sceneManager: SceneManager | null = null;
   let cursorTimeout: number | null = null;
   let ac: AbortController | null = null;
+  let loadingScreen: CustomLoadingScreen | null = null;
 
   // Track the active scene reactively via Svelte runes
-  let activeScene = $state('scene2');
+  type AppScene = 'loading' | 'intro' | 'scene2' | 'scene1' | 'scene3';
+  let activeScene: AppScene = $state('loading');
+  const isGameplayActive = () => activeScene === 'scene2';
 
   // =========================================================================
   // MASTER SYNC FUNCTION: Updates both Babylon AND Svelte UI at the same time
   // =========================================================================
-  const changeScene = (sceneName: string) => {
-    if (!sceneManager) return;
-    sceneManager.switchTo(sceneName as any);
+  const changeScene = (sceneName: AppScene) => {
+    console.log(`+page: changeScene requested -> ${sceneName}`, { sceneManagerAvailable: !!sceneManager });
+    if (sceneManager && sceneName !== 'loading' && sceneName !== 'intro') {
+      try {
+        console.log(`+page: calling sceneManager.switchTo(${sceneName})`);
+        sceneManager.switchTo(sceneName as any);
+        console.log('+page: sceneManager.switchTo returned');
+      } catch (e) {
+        console.warn('+page: sceneManager.switchTo threw', e);
+      }
+    } else {
+      console.log('+page: no sceneManager switch required for', sceneName);
+    }
     activeScene = sceneName; // Triggers Svelte conditional DOM mounting instantly
+    console.log('+page: activeScene set to', activeScene);
+  };
+
+  const startWormhole = () => {
+    missionRetry.set(false);
+    if (sceneManager) {
+      changeScene('scene2');
+    }
+  };
+
+  const retryMission = () => {
+    missionRetry.set(true);
+    if (sceneManager) {
+      changeScene('scene2');
+    }
   };
 
   onMount(() => {
@@ -72,9 +101,9 @@
         } catch (e) {}
         try { engine.resize(); } catch (e) {}
 
-        const loadingScreen = new CustomLoadingScreen("Loading...");
+        loadingScreen = new CustomLoadingScreen("Loading...");
         engine.loadingScreen = loadingScreen;
-        try { engine.displayLoadingUI(); } catch {}
+        try { loadingScreen.displayLoadingUI(); } catch {}
 
         ac = new AbortController();
         const { signal } = ac;
@@ -105,9 +134,6 @@
             () => mountVideoScene(undefined, undefined, () => changeScene('scene2'))
           );
 
-          // C. CHANGED: Boot up into scene2 safely utilizing the sync function
-          changeScene('scene2');
-
           requestAnimationFrame(() => {
             requestAnimationFrame(() => {
               setTimeout(() => { try { engine?.hideLoadingUI(); } catch {} }, 50);
@@ -118,7 +144,14 @@
           try { engine?.hideLoadingUI(); } catch {}
         }
 
-        // D. CHANGED: Use sync utility for your debug keyboard listener keys
+        if (loadingScreen) {
+          loadingScreen.hideLoadingUI();
+          await loadingScreen.hidden;
+        }
+
+        missionRetry.set(false);
+        activeScene = 'intro';
+
         window.addEventListener('keydown', (e: KeyboardEvent) => {
           if (e.key === '1') changeScene('scene1');
           else if (e.key === '2') changeScene('scene2');
@@ -141,13 +174,20 @@
 </script>
 
 <div class="view-wrapper">
-  <canvas bind:this={canvas} class="babylon-canvas"></canvas>
+  <canvas
+    bind:this={canvas}
+    class="babylon-canvas"
+    style="pointer-events: {isGameplayActive() ? 'auto' : 'none'}"
+  ></canvas>
 
-  {#if activeScene === 'scene2'}
+  {#if activeScene === 'intro'}
+    <IntroScene initialCountdown={60} onStart={startWormhole} />
+  {/if}
+
+  {#if isGameplayActive()}
     <DroneHUD />
   {/if}
 
-  
 </div>
 
 <style>
@@ -161,5 +201,6 @@
     width: 100%;
     height: 100%;
     display: block;
+    pointer-events: none;
   }
 </style>
