@@ -17,6 +17,7 @@ let lfoPhase = 0
 
 let activeVoices = 0
 const MAX_POLYPHONY = 8
+let audioInitPromise: Promise<boolean> | null = null
 
 // Ambient scheduling constants
 const PAD_INTERVAL_S = 7       // seconds between chord onsets
@@ -68,32 +69,46 @@ function triggerPadChord(deadline: number) {
 // ── audio init ────────────────────────────────────────────────────────────
 
 
-async function ensureContext(): Promise<boolean> {
-  try {
-    // Registers the synthesizer sounds (sawtooth, etc.)
-    registerSynthSounds();
-    
-    // Wakes up the main audio driver
-    await (initAudio as () => Promise<void>)();
-    
-    // CRITICAL: Makes sure the background sample downloads are 100% finished
-    await samplesPromise; 
-    
-    // Double-checks that the browser actually let the audio start
-    const ctx = getAudioContext() as AudioContext;
-    if (ctx.state === 'suspended') await ctx.resume();
-    
-    return ctx.state === 'running';
-  } catch (error) {
-    console.error("Audio initialization failed:", error);
-    return false;
-  }
+async function initAudioInternal(): Promise<boolean> {
+  if (audioInitPromise) return audioInitPromise
+
+  audioInitPromise = (async () => {
+    try {
+      registerSynthSounds();
+      await (initAudio as () => Promise<void>)();
+    } catch (error: unknown) {
+      console.warn("Audio init failed:", error);
+    }
+
+    samplesPromise.catch((error: unknown) => {
+      console.warn("Audio samples load failed:", error);
+    });
+
+    const ctx = getAudioContext() as AudioContext | null;
+    if (!ctx) return false;
+
+    if (ctx.state === 'suspended') {
+      try {
+        await ctx.resume();
+      } catch (error: unknown) {
+        console.warn("Audio context resume failed:", error);
+      }
+    }
+
+    const running = ctx.state === 'running';
+    if (!running) {
+      audioInitPromise = null;
+    }
+    return running;
+  })();
+
+  return audioInitPromise;
 }
 
 export async function startAmbient() {
   if (isRunning) return
 
-  const ok = await ensureContext()
+  const ok = await initAudioInternal()
   if (!ok) return
 
   const ctx = getAudioContext() as AudioContext
@@ -113,14 +128,24 @@ export async function startAmbient() {
 }
 
 export async function ensureAudioStarted(): Promise<boolean> {
-  return ensureContext()
+  return initAudioInternal()
 }
 
 // Attach to a user gesture (canvas or document) to resume audio and start ambient
 export function resumeAudioOnGesture(element?: HTMLElement | Document) {
   const target: any = element || document
+
+  try {
+    initAudioOnFirstClick?.(target as any)
+  } catch {
+    // ignore if the helper is not supported or the target is invalid
+  }
+
   const handler = async () => {
-    try { await startAmbient() } catch {}
+    try {
+      const started = await initAudioInternal()
+      if (started) await startAmbient()
+    } catch {}
     try { target.removeEventListener('pointerdown', handler) } catch {}
     try { target.removeEventListener('touchstart', handler) } catch {}
     try { target.removeEventListener('keydown', handler) } catch {}
