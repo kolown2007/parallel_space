@@ -60,7 +60,6 @@ export class WormHoleScene2 {
 		const { followCamera, switchCamera } = setupCameras(scene, canvas, 'follow');
 		setupLighting(scene);
 
-		startAmbient().catch(() => {});
 		resumeAudioOnGesture(canvas);
 
 		// Torus track
