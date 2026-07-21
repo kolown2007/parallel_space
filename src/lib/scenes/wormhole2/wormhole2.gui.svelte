@@ -21,8 +21,11 @@
     char: letterOptions[Math.floor(Math.random() * letterOptions.length)],
   })));
   let matrixInterval: ReturnType<typeof setInterval> | null = null;
-  
- 
+  const gridCells = Array.from({ length: 20 }, (_, i) => i + 1);
+  const hiddenCells = new Set([7, 8, 9, 12, 13, 14]);
+  const smallScreenHiddenCells = new Set([1, 6, 11, 16]);
+  const visibleClass = 'bg-slate-950/5';
+  const hiddenClass = 'bg-transparent border-transparent opacity-0 pointer-events-none';
 
   let { totalUnits = 888, markerUnit = 300 }: { totalUnits?: number; markerUnit?: number } = $props();
   	const apiRevUrl = 'https://kolown.net/api/chrono-escapes/1/revolution';
@@ -39,6 +42,10 @@
     } catch (e) {
       console.warn('Failed to fetch revolution data:', e);
     }
+  }
+
+  function clampProgressPercent(value: number) {
+    return Math.max(0, Math.min(100, Math.floor(value * 100)));
   }
 
   $effect(() => {
@@ -130,91 +137,116 @@
 
 {#if showUI}
   <div class="absolute top-0 left-0 w-full h-full pointer-events-none font-mono z-10" transition:fade={{ duration: 1000 }}>
-    <div class="grid gap-4 grid-cols-1 sm:grid-cols-[auto_2fr_auto] px-2 py-2 h-full ">
-    
-      <!-- main div 1: left tracker column -->
-      <div class="hidden sm:flex relative flex-col items-center justify-between gap-4 border border-green-900 border-dashed rounded-3xl p-4 h-full min-w-50 max-w-55">
-        <div class="flex flex-col items-center justify-between gap-6 w-full h-full">
+    <div class="grid grid-cols-[0_1fr_1fr_1fr_0] sm:grid-cols-5 h-full gap-4 px-2 py-2" style="grid-template-rows:repeat(4,minmax(0,1fr));">
+      {#each gridCells as cell}
+        <div class={"relative rounded-3xl border border-transparent p-4 overflow-hidden flex flex-col " + (hiddenCells.has(cell) ? hiddenClass : visibleClass) + (smallScreenHiddenCells.has(cell) ? ' invisible sm:visible' : '')}>
+          {#if !hiddenCells.has(cell)}
+            <div class="absolute top-3 left-3 text-[8px] uppercase tracking-[0.4em] text-slate-300/40 opacity-30">{cell}</div>
+          {/if}
 
-          <!-- div 1a -->
-          <div class="flex flex-col items-center justify-start self-center max-w-xs w-full gap-2 h-80">
-            <div class="matrix-stream grid grid-cols-8 gap-1 w-full h-full text-center text-[#90ee90] opacity-90 overflow-hidden">
-              {#each matrixStream as item}
-                <span class="text-[10px] leading-none">{item.char}</span>
-              {/each}
+          {#if cell === 1}
+            <div class="pointer-events-auto flex h-full flex-col justify-between gap-4">
+              <div class="text-[12px] uppercase tracking-[0.3em] text-slate-300/80"></div>
+              <div class="matrix-stream grid grid-cols-8 gap-1 w-full flex-1 text-center text-slate-100 opacity-90 overflow-hidden">
+                {#each matrixStream as item}
+                  <span class="text-[10px] leading-none">{item.char}</span>
+                {/each}
+              </div>
             </div>
-            
-          </div>
-
-          <!-- div 1b -->
-          <div class="pointer-events-auto max-w-xs h-36 min-h-36 text-center text-[#90ee90] rounded-3xl p-0.5 self-center ">
-            <div>Speed: <br/> {$displaySpeed} units</div>
-            <div class="w-25 h-25 border-[3px] border-dashed border-[#90ee90]/60 rounded-full relative mx-auto my-1.25">
-              <div
-                class="w-0.75 h-11.25 bg-[#90ee90] absolute bottom-1/2 left-[calc(50%-1.5px)] origin-bottom transition-transform duration-100 ease-out"
-                style="transform: rotate({-100 + ($displaySpeed * 10)}deg)"
-              ></div>
+          {:else if cell === 2}
+            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-slate-100">
+              <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Completed stations</div>
+              <div class="text-[30px] font-bold">{apiValue} / {totalUnits}</div>
             </div>
-          </div>
-
-          <!-- div 1c -->
-        </div>
-      </div>
-
-      <!-- main div 2: middle control panel column -->
-      <div class="relative flex flex-col items-center justify-between h-full  gap-6 border border-green-900 border-dashed rounded-3xl p-4 pb-8">
-        <div class="pointer-events-auto  max-w-xs h-28 min-h-28 text-center text-[#90ee90]  rounded-3xl p-1">
-          <!-- <div class="uppercase tracking-widest">timer</div> -->
-          <div class="text-[30px] mt-2.5 text-[#ff3e00] [text-shadow:0_0_10px_rgba(255,62,0,0.5)] font-bold">{countdown}</div>
-        </div>
-
-        <!-- div 2: middle status block -->
-        <div class="pointer-events-auto w-72 min-w-0  text-center text-[#90ee90] rounded-3xl p-1 overflow-hidden">
-          <div class="h-full w-full overflow-auto  whitespace-normal wrap-break-words text-sm">
-            {#if isGameOver}
-              <div class="text-[20px] font-bold text-[#ff3e00]">MISSION FAILED</div>
-              <div class="mt-2 text-[#ff3e00]/80">REGRESS STATION</div>
-              <button class="mt-4 inline-flex w-full justify-center bg-none border-2 border-current px-7.5 py-2.5 font-bold cursor-pointer hover:bg-white/10 transition-colors" onclick={restart}>TRY AGAIN</button>
-            {:else if isColliding}
-              <div class="text-[20px] font-bold text-red-600">COLLISION!</div>
-              <div class="mt-2 text-red-400">-{currentReduction}% SPEED</div>
-            {:else if isColliding}
-              <div class="text-[20px] font-bold text-red-600">COLLISION!</div>
-              <div class="mt-2 text-red-400">-{currentReduction}% SPEED</div>
-            {:else}
-              <div class="uppercase tracking-widest">GOAL</div>
-              <div class="mt-2 text-[#90ee90]/80">REACH NEXT STATION</div>
-            {/if}
-          </div>
-        </div>
-      </div>
-
-      <!-- main div 3: right tracker column -->
-      <div class="hidden sm:flex relative items-stretch rounded-3xl p-4 border border-green-900 border-dashed">
-        <div class="flex flex-col h-full ">
-
-          <div class="flex-none h-1/5  text-center text-[#90ee90]">
-            <div class="text-sm uppercase tracking-[0.3em]">Stations<br/> Completed</div>
-            <div class="text-[14px] font-bold mt-1">{apiValue} / {totalUnits}<br/>↓<br/>↓</div>
-
-          </div>
-
-          <div class="flex-1 flex items-center justify-center">
-            <div class="relative h-75 w-6">
-              <div class="absolute left-0 w-full h-0.5 bg-[#90ee90]/60 top-0"></div>
-              <div class="absolute left-0 w-full h-0.5 bg-[#90ee90]/60 bottom-0"></div>
-              <div class="absolute -top-20 left-1/2 -translate-x-1/2 text-[12px] text-green-700 text-center">Next<br/>Station</div>
-              <div class="absolute -top-6.25 left-1/2 -translate-x-1/2 text-[#90ee90] whitespace-nowrap">{Math.floor($droneControl.progress * 100)}%</div>
-              <div
-                class="absolute w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-b-12 border-b-[#90ee90] left-1/2 -translate-x-1/2 translate-y-1/2 transition-[bottom] duration-100 ease-out"
-                style="bottom: {$droneControl.progress * 100}%"
-              ></div>
+          {:else if cell === 3}
+            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-slate-100">
+              <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Countdown</div>
+              <div class="text-[30px] text-[#ff3e00] font-bold [text-shadow:0_0_10px_rgba(255,62,0,0.5)]">{countdown}</div>
             </div>
-          </div>
+          {:else if cell === 4}
+            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-slate-100">
+              <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Station progress</div>
+              <div class="relative h-28 w-6">
+                <div class="absolute left-0 w-full h-0.5 bg-slate-300/60 top-0"></div>
+                <div class="absolute left-0 w-full h-0.5 bg-slate-300/60 bottom-0"></div>
+                <div class="absolute left-1/2 -translate-x-1/2 flex flex-col items-center" style="bottom: calc({clampProgressPercent($droneControl.progress)}% - 12px)">
+                  <div
+                    class="w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-b-12 border-b-slate-300 transition-[bottom] duration-100 ease-out"
+                  ></div>
+                  <div class="mt-2 text-[10px] text-slate-100 text-center">{clampProgressPercent($droneControl.progress)}%</div>
+                </div>
+              </div>
+            </div>
+          {:else if cell === 5}
+            <div class="pointer-events-auto flex h-full items-center justify-center">
+              <img src="/parallelspace.png" alt="Parallel Space" class="max-h-full max-w-full object-contain" />
+            </div>
+          {:else if cell === 6}
+            <div class="pointer-events-auto flex h-full items-center justify-center text-center text-slate-100 px-3">
+              <div>
+                <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Info</div>
+                <div class="text-[14px] font-semibold">we are kolown</div>
+              </div>
+            </div>
+          {:else if cell === 10}
+            <div class="pointer-events-auto flex h-full items-center justify-center">
+              <img src="/unos.svg" alt="Unos" class="max-h-full max-w-full object-contain" />
+            </div>
+          {:else if cell === 11}
+            <div class="pointer-events-auto flex h-full items-center justify-center">
+              <img src="/bagyo.svg" alt="Bagyo" class="max-h-full max-w-full object-contain" />
+            </div>
+          {:else if cell === 15}
+            <div class="pointer-events-auto flex h-full items-center justify-center">
+              <img src="/init.svg" alt="Init" class="max-h-full max-w-full object-contain" />
+            </div>
+          {:else if cell === 16}
+            <div class="pointer-events-auto flex h-full items-center justify-center">
+              <img src="/unos.svg" alt="Unos" class="max-h-full max-w-full object-contain" />
+            </div>
+          {:else if cell === 20}
+            <div class="pointer-events-auto flex h-full items-center justify-center">
+              <img src="/bagyo.svg" alt="Bagyo" class="max-h-full max-w-full object-contain" />
+            </div>
+          {:else if cell === 17}
+            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-slate-100">
+              <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Speed gauge</div>
+              <div class="w-20 h-20 border-[3px] border-dashed border-slate-300/60 rounded-full relative flex items-center justify-center">
+                <div
+                  class="w-0.75 h-11.25 bg-slate-100 absolute bottom-1/2 left-[calc(50%-1.5px)] origin-bottom transition-transform duration-100 ease-out"
+                  style="transform: rotate({-100 + ($displaySpeed * 10)}deg)"
+                ></div>
+              </div>
+              <div class="mt-3 text-sm">{$displaySpeed} units</div>
+            </div>
+          {:else if cell === 18}
+            <div class="pointer-events-auto flex h-full flex-col justify-center text-center text-slate-100">
+              {#if isGameOver}
+                <div class="text-[16px] font-bold text-[#ff3e00]">MISSION FAILED</div>
+                <div class="mt-2 text-[#ff3e00]/80">REGRESS STATION</div>
+              {:else if isColliding}
+                <div class="text-[16px] font-bold text-red-600">COLLISION!</div>
+                <div class="mt-2 text-red-400">-{currentReduction}% SPEED</div>
+              {:else}
+                <div class="uppercase tracking-widest text-slate-300/80">GOAL</div>
+                <div class="mt-2 text-slate-300/80">REACH NEXT STATION</div>
+              {/if}
+            </div>
+          {:else if cell === 19}
+            <div class="pointer-events-auto flex h-full items-center justify-center text-center text-slate-100 px-3">
+              <div>
+                <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Message</div>
+                <div class="text-[14px] font-semibold">The USB is inside the wormhole</div>
+              </div>
+            </div>
+          {:else if hiddenCells.has(cell)}
+            <div class="flex-1"></div>
+          {:else}
+            <div class="mt-6 text-slate-300/70 text-sm">Blank debug cell</div>
+          {/if}
         </div>
-      </div>
+      {/each}
     </div>
-
   </div>
 {/if}
 
