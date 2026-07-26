@@ -21,8 +21,14 @@ var createScene = async function (
 ): Promise<BABYLON.Scene> {
 	var scene = new BABYLON.Scene(engine);
 
-	var camera = new BABYLON.ArcRotateCamera("Camera", 3 * Math.PI / 2, Math.PI / 4, 100, BABYLON.Vector3.Zero(), scene);
-	camera.attachControl(canvas, true, false);
+	var camera = new BABYLON.ArcRotateCamera("Camera", 3 * Math.PI / 2, Math.PI / 4, 550, BABYLON.Vector3.Zero(), scene);
+	camera.attachControl(canvas, true, true);
+	camera.useAutoRotationBehavior = true;
+	if (camera.autoRotationBehavior) {
+		camera.autoRotationBehavior.idleRotationSpeed = 0.02;
+		camera.autoRotationBehavior.idleRotationWaitTime = 0;
+		camera.autoRotationBehavior.idleRotationSpinupTime = 2000;
+	}
 
 	var light = new BABYLON.HemisphericLight("light1", new BABYLON.Vector3(0, 1, 0), scene);
 	

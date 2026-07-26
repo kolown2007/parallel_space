@@ -65,7 +65,7 @@ export class WormHoleScene2 {
 		// Torus track
 		const { torus, torusMainRadius, torusTubeRadius, pathPoints } = await createTorus(scene, {
 			...cfg.torus,
-			materialTextureId: randomFrom('collage1')
+			materialTextureId: randomFrom('loading3', 'rag', 'mat', 'cube3', 'collage1', 'wood')
 		});
 		WormHoleScene2.pathPoints = pathPoints;
 		const torusCenter = torus.getAbsolutePosition();

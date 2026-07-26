@@ -9,8 +9,8 @@
   import createOceanScene from '$lib/scenes/ocean';
   import { SceneManager } from '$lib/core/SceneManager';
 
-
   import DroneHUD from '$lib/scenes/wormhole2/wormhole2.gui.svelte';
+  import OceanGUI from '$lib/scenes/ocean.gui.svelte';
   import IntroScene from '$lib/scenes/IntroScene.svelte';
   import { missionRetry } from '$lib/stores/missionState';
   let canvas: HTMLCanvasElement | null = null;
@@ -29,35 +29,19 @@
   // MASTER SYNC FUNCTION: Updates both Babylon AND Svelte UI at the same time
   // =========================================================================
   const changeScene = (sceneName: AppScene) => {
-    console.log(`+page: changeScene requested -> ${sceneName}`, { sceneManagerAvailable: !!sceneManager });
     if (sceneManager && sceneName !== 'loading' && sceneName !== 'intro') {
-      try {
-        console.log(`+page: calling sceneManager.switchTo(${sceneName})`);
-        sceneManager.switchTo(sceneName as any);
-        console.log('+page: sceneManager.switchTo returned');
-      } catch (e) {
-        console.warn('+page: sceneManager.switchTo threw', e);
-      }
-    } else {
-      console.log('+page: no sceneManager switch required for', sceneName);
+      try { sceneManager.switchTo(sceneName as any); } catch (e) { console.warn('+page: sceneManager.switchTo threw', e); }
     }
-    activeScene = sceneName; // Triggers Svelte conditional DOM mounting instantly
-    console.log('+page: activeScene set to', activeScene);
+    activeScene = sceneName;
   };
 
-  const startWormhole = () => {
-    missionRetry.set(false);
-    if (sceneManager) {
-      changeScene('scene2');
-    }
-  };
+  let scene3Result: 'success' | 'failure' = $state('failure');
 
-  const retryMission = () => {
-    missionRetry.set(true);
-    if (sceneManager) {
-      changeScene('scene2');
-    }
-  };
+  const startWormhole = () => { missionRetry.set(false); changeScene('scene2'); };
+  const retryMission  = () => { missionRetry.set(true);  changeScene('scene2'); };
+
+  const handleMissionFailed = () => { scene3Result = 'failure'; changeScene('scene3'); };
+  const handleMissionSuccess = () => { scene3Result = 'success'; changeScene('scene3'); };
 
   onMount(() => {
     if (!canvas) return;
@@ -122,14 +106,16 @@
 
         try {
           // A. CHANGED: Sync UI state when WormHole transitions internally
-          const scene2 = await WormHoleScene2.CreateScene(engine, canv, () => {
+          const createScene2 = async () => WormHoleScene2.CreateScene(engine, canv, () => {
             changeScene('scene1');
           });
+          const scene2 = await createScene2();
 
           // B. CHANGED: Sync UI state when VideoScene finishes playback loops
           sceneManager = new SceneManager(
             engine,
             scene2,
+            createScene2,
             () => createOceanScene(engine, canv),
             () => mountVideoScene(undefined, undefined, () => changeScene('scene2'))
           );
@@ -184,8 +170,12 @@
     <IntroScene initialCountdown={60} onStart={startWormhole} />
   {/if}
 
+  {#if activeScene === 'scene3'}
+    <OceanGUI result={scene3Result} onNewMission={retryMission} />
+  {/if}
+
   {#if isGameplayActive()}
-    <DroneHUD />
+    <DroneHUD missionFailed={handleMissionFailed} missionSuccess={handleMissionSuccess} />
   {/if}
 
 </div>

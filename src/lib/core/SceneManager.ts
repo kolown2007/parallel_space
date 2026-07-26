@@ -4,15 +4,28 @@ export class SceneManager {
   mode: SceneMode = 'scene2';
   private videoMount: any = null;
   private renderActive = false;
+  private scene2: any = null;
+  private scene2Factory: () => Promise<any>;
+  private scene2Loading = false;
   private scene3: any = null;
   private scene3Loading = false;
 
   constructor(
     private engine: any,
-    private scene2: any,
+    scene2: any,
+    scene2Factory: () => Promise<any>,
     private scene3Factory: () => Promise<any>,
     private mountVideo: () => any
-  ) {}
+  ) {
+    this.scene2 = scene2;
+    this.scene2Factory = scene2Factory;
+  }
+
+  private disposeScene2() {
+    try { this.scene2?.dispose(); } catch {}
+    this.scene2 = null;
+    this.scene2Loading = false;
+  }
 
   switchTo(mode: SceneMode) {
     if (mode === 'scene1') {
@@ -23,6 +36,7 @@ export class SceneManager {
       this.mode = mode;
     } else if (mode === 'scene3') {
       this.cleanup();
+      this.disposeScene2();
       this.mode = mode;
       if (!this.scene3 && !this.scene3Loading) {
         this.scene3Loading = true;
@@ -39,8 +53,20 @@ export class SceneManager {
       }
     } else {
       this.cleanup();
-      this.startRender();
       this.mode = mode;
+      if (!this.scene2 && !this.scene2Loading) {
+        this.scene2Loading = true;
+        this.scene2Factory().then((s) => {
+          this.scene2 = s;
+          this.scene2Loading = false;
+          if (this.mode === 'scene2') this.startRender();
+        }).catch((e) => {
+          console.warn('Scene2 failed to load', e);
+          this.scene2Loading = false;
+        });
+      } else if (this.scene2) {
+        this.startRender();
+      }
     }
   }
 
@@ -66,7 +92,7 @@ export class SceneManager {
   dispose() {
     this.stopRender();
     this.cleanup();
-    try { this.scene2?.dispose(); } catch {}
+    this.disposeScene2();
     try { this.scene3?.dispose(); } catch {}
     this.scene3 = null;
   }

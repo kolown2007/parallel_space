@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
   import { displaySpeed, droneControl, droneEvents, adjustDroneSpeed, updateProgress } from '../../stores/droneControl.svelte.js';
-  import { missionRetry } from '../../stores/missionState';
+  interface Props { missionFailed?: () => void; missionSuccess?: () => void; totalUnits?: number; markerUnit?: number; }
+  const { missionFailed = () => {}, missionSuccess = () => {}, totalUnits = 888, markerUnit = 300 }: Props = $props();
   // 1. New visibility flag controlled by our startup timer
   let showUI = $state(false);
 
@@ -27,10 +28,7 @@
   const visibleClass = 'bg-slate-950/5';
   const hiddenClass = 'bg-transparent border-transparent opacity-0 pointer-events-none';
 
-  let { totalUnits = 888, markerUnit = 300 }: { totalUnits?: number; markerUnit?: number } = $props();
-  	const apiRevUrl = 'https://kolown.net/api/chrono-escapes/1/revolution';
-
- 
+  const apiRevUrl = 'https://kolown.net/api/chrono-escapes/1/revolution';
 
   async function fetchRevolutionData() {
     try {
@@ -108,23 +106,11 @@
     };
   });
 
-  function restart() {
-    // Soft reset of local state
-    isGameOver = false;
-    isWin = false;
-    countdown = 60;
-    
-    // Reset the store values
-    updateProgress(0);
-    adjustDroneSpeed(0); // Assuming 0 or a positive value resets the drone's velocity
-    
-    startCountdown();
-  }
-
   function handleGameOver() {
     isGameOver = true;
     adjustDroneSpeed(-100); // Stop the drone
     if (countdownInterval) clearInterval(countdownInterval);
+    missionFailed?.();
   }
 
   function handleWin() {
@@ -132,6 +118,7 @@
     adjustDroneSpeed(-100); // Stop the drone
     updateProgress(1.0);    // Snap visual to 100%
     if (countdownInterval) clearInterval(countdownInterval);
+    missionSuccess?.();
   }
 </script>
 
