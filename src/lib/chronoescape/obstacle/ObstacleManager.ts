@@ -139,6 +139,130 @@ export class ObstacleManager {
 	// ===================================================================
 
 	/**
+	 * Shared cube construction: creates mesh, applies material/texture, physics, thrust, and auto-dispose.
+	 */
+	private static _buildCube(
+		scene: BABYLON.Scene,
+		position: BABYLON.Vector3,
+		size: number,
+		color: BABYLON.Color3,
+		options: CubeOptions,
+		thrustDirection: BABYLON.Vector3 | null
+	): BABYLON.Mesh {
+		const {
+			physics = true,
+			thrustMs,
+			thrustSpeed,
+			autoDisposeMs,
+			faceUVTextureUrl,
+			faceUVTextureId,
+			faceUVLayout = 'grid'
+		} = options;
+
+		// Build faceUV array when using a face-mapped texture
+		let faceUV: BABYLON.Vector4[] | undefined;
+		if (faceUVTextureUrl || faceUVTextureId) {
+			faceUV = new Array(6);
+			if (faceUVLayout === 'vertical') {
+				for (let i = 0; i < 6; i++) faceUV[i] = new BABYLON.Vector4(0, i / 6, 1, (i + 1) / 6);
+			} else if (faceUVLayout === 'horizontal') {
+				for (let i = 0; i < 6; i++) faceUV[i] = new BABYLON.Vector4(i / 6, 0, (i + 1) / 6, 1);
+			} else {
+				// Grid layout (3x2) - Babylon.js face order: back, front, right, left, top, bottom
+				faceUV[0] = new BABYLON.Vector4(0, 0.5, 1/3, 1);
+				faceUV[1] = new BABYLON.Vector4(1/3, 0.5, 2/3, 1);
+				faceUV[2] = new BABYLON.Vector4(2/3, 0.5, 1, 1);
+				faceUV[3] = new BABYLON.Vector4(0, 0, 1/3, 0.5);
+				faceUV[4] = new BABYLON.Vector4(1/3, 0, 2/3, 0.5);
+				faceUV[5] = new BABYLON.Vector4(2/3, 0, 1, 0.5);
+			}
+		}
+
+		const cube = BABYLON.MeshBuilder.CreateBox(
+			`obstacle_cube_${Date.now()}`,
+			faceUV ? { size, faceUV } : { size },
+			scene
+		);
+		cube.position.copyFrom(position);
+
+		const mat = new BABYLON.StandardMaterial(`cubeMat_${Date.now()}`, scene);
+		mat.backFaceCulling = false;
+
+		const applyFallbackColor = () => {
+			mat.diffuseColor = color;
+			mat.emissiveColor = BABYLON.Color3.Black();
+		};
+		const applyFaceUVTexture = (url: string) => {
+			const texture = new BABYLON.Texture(url, scene, false, true, BABYLON.Texture.TRILINEAR_SAMPLINGMODE);
+			texture.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;
+			texture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
+			mat.diffuseTexture = texture;
+			mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
+			mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+		};
+
+		if (faceUVTextureUrl) {
+			applyFaceUVTexture(faceUVTextureUrl);
+		} else if (faceUVTextureId) {
+			applyFallbackColor(); // placeholder while texture loads
+			(async () => {
+				try {
+					const url = await getTextureUrl(faceUVTextureId);
+					if (url) applyFaceUVTexture(url);
+					else { console.warn(`⚠️ faceUVTextureId '${faceUVTextureId}' resolved to empty URL`); applyFallbackColor(); }
+				} catch (e) {
+					console.error(`❌ Failed to resolve faceUVTextureId '${faceUVTextureId}':`, e);
+					applyFallbackColor();
+				}
+			})();
+		} else if ((options as any)?.textureUrl) {
+			mat.diffuseTexture = new BABYLON.Texture((options as any).textureUrl, scene);
+			mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+		} else if ((options as any)?.textureId) {
+			applyFallbackColor();
+			(async () => {
+				try {
+					const url = await getTextureUrl((options as any).textureId);
+					if (url) mat.diffuseTexture = new BABYLON.Texture(url, scene);
+					else applyFallbackColor();
+				} catch { applyFallbackColor(); }
+			})();
+		} else {
+			applyFallbackColor();
+		}
+
+		cube.material = mat;
+
+		if (physics && scene.getPhysicsEngine()) {
+			const physicsOptions = typeof physics === 'object' ? physics : { mass: 0.05, restitution: 0.3, friction: 0.05 };
+			new BABYLON.PhysicsAggregate(
+				cube,
+				physicsOptions.shape ?? BABYLON.PhysicsShapeType.BOX,
+				{ mass: physicsOptions.mass ?? 0.05, restitution: physicsOptions.restitution ?? 0.3, friction: physicsOptions.friction ?? 0.05 },
+				scene
+			);
+
+			if (thrustMs && thrustSpeed && thrustDirection) {
+				const initialVel = thrustDirection.scale(-thrustSpeed);
+				const applyVelocity = (vel: BABYLON.Vector3) => {
+					try {
+						if ((cube as any).physicsBody?.setLinearVelocity) (cube as any).physicsBody.setLinearVelocity(vel);
+						if ((cube as any).physicsImpostor?.setLinearVelocity) (cube as any).physicsImpostor.setLinearVelocity(vel);
+					} catch (e) { /* ignore */ }
+				};
+				setTimeout(() => applyVelocity(initialVel), 0);
+				setTimeout(() => applyVelocity(BABYLON.Vector3.Zero()), thrustMs);
+			}
+
+			if (autoDisposeMs && autoDisposeMs > 0) {
+				setTimeout(() => { try { cube.dispose(); } catch (e) { /* ignore */ } }, autoDisposeMs);
+			}
+		}
+
+		return cube;
+	}
+
+	/**
 	 * Place a cube obstacle in front of a drone (common game pattern).
 	 * Default: spawns 5 units ahead with thrust for 2 seconds.
 	 */
@@ -151,26 +275,17 @@ export class ObstacleManager {
 			distance = 10,
 			size = 6,
 			color = new BABYLON.Color3(1, 0.5, 0),
-			physics = true,
 			offsetY = 0,
 			thrustMs = 2000,
 			thrustSpeed = 5,
 			pointsAhead = 10,
-			autoDisposeMs = 60000,
-			faceUVTextureUrl,
-			faceUVTextureId,
-			faceUVLayout = 'grid'
 		} = options || {};
 
 		const pathPoints: BABYLON.Vector3[] = (scene as any).metadata?.pathPoints || (scene as any).pathPoints || [];
+		const normalizeIndex = (idx: number) => ((idx % pathPoints.length) + pathPoints.length) % pathPoints.length;
 
-		const normalizeIndex = (idx: number) => {
-			if (!pathPoints || pathPoints.length === 0) return 0;
-			return ((idx % pathPoints.length) + pathPoints.length) % pathPoints.length;
-		};
-
-		if (pathPoints && pathPoints.length > 0) {
-			// find nearest path point to drone
+		if (pathPoints.length > 0) {
+			// Find nearest path point to drone
 			let currentPointIndex = 0;
 			let minDistSq = Number.POSITIVE_INFINITY;
 			const dronePos = (droneMesh as any).position ?? droneMesh.getAbsolutePosition?.();
@@ -186,320 +301,20 @@ export class ObstacleManager {
 			const pos = pathPoints[targetIndex].clone();
 			pos.y += offsetY;
 
-			// Generate faceUV if using faceUV texture
-			let faceUV: BABYLON.Vector4[] | undefined;
-			if (faceUVTextureUrl || faceUVTextureId) {
-				faceUV = new Array(6);
-				if (faceUVLayout === 'vertical') {
-					for (let i = 0; i < 6; i++) {
-						faceUV[i] = new BABYLON.Vector4(0, i / 6, 1, (i + 1) / 6);
-					}
-				} else if (faceUVLayout === 'horizontal') {
-					for (let i = 0; i < 6; i++) {
-						faceUV[i] = new BABYLON.Vector4(i / 6, 0, (i + 1) / 6, 1);
-					}
-				} else {
-					// Grid layout (3x2) - Babylon.js face order: back, front, right, left, top, bottom
-					faceUV[0] = new BABYLON.Vector4(0, 0.5, 1/3, 1);
-					faceUV[1] = new BABYLON.Vector4(1/3, 0.5, 2/3, 1);
-					faceUV[2] = new BABYLON.Vector4(2/3, 0.5, 1, 1);
-					faceUV[3] = new BABYLON.Vector4(0, 0, 1/3, 0.5);
-					faceUV[4] = new BABYLON.Vector4(1/3, 0, 2/3, 0.5);
-					faceUV[5] = new BABYLON.Vector4(2/3, 0, 1, 0.5);
-				}
+			let thrustDir: BABYLON.Vector3 | null = null;
+			if (thrustMs && thrustSpeed && pathPoints.length > 1) {
+				const nextIdx = normalizeIndex(targetIndex + 1);
+				thrustDir = pathPoints[nextIdx].subtract(pathPoints[targetIndex]).normalize();
 			}
 
-			const boxOptions: any = { size };
-			if (faceUV) {
-				boxOptions.faceUV = faceUV;
-			}
-
-			const cube = BABYLON.MeshBuilder.CreateBox(
-				`obstacle_cube_${targetIndex}_${Date.now()}`,
-				boxOptions,
-				scene
-			);
-			cube.position.copyFrom(pos);
-
-			const mat = new BABYLON.StandardMaterial(`cubeMat_${Date.now()}`, scene);
-			mat.backFaceCulling = false;
-			const applyFallbackColor = () => {
-				mat.diffuseColor = color;
-				mat.emissiveColor = BABYLON.Color3.Black();
-			};
-
-			// Apply faceUV texture helper
-			const applyFaceUVTexture = (url: string) => {
-				const texture = new BABYLON.Texture(url, scene, false, true, BABYLON.Texture.TRILINEAR_SAMPLINGMODE);
-				texture.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;
-				texture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
-				mat.diffuseTexture = texture;
-				mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
-				mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
-			};
-
-			// Priority 1: faceUVTextureUrl
-			if (faceUVTextureUrl) {
-				applyFaceUVTexture(faceUVTextureUrl);
-			}
-			// Priority 2: faceUVTextureId (async resolve) - await it!
-			else if (faceUVTextureId) {
-				// Use IIFE to await the texture URL resolution
-				(async () => {
-					try {
-						const url = await getTextureUrl(faceUVTextureId);
-						if (url) {
-							console.log(`✅ Resolved faceUVTextureId '${faceUVTextureId}' -> ${url}`);
-							applyFaceUVTexture(url);
-						} else {
-							console.warn(`⚠️ faceUVTextureId '${faceUVTextureId}' resolved to empty URL`);
-							applyFallbackColor();
-						}
-					} catch (e) {
-						console.error(`❌ Failed to resolve faceUVTextureId '${faceUVTextureId}':`, e);
-						applyFallbackColor();
-					}
-				})();
-				// Apply placeholder color immediately while texture loads
-				applyFallbackColor();
-			}
-			// Priority 3: textureUrl
-			else if ((options as any)?.textureUrl) {
-				mat.diffuseTexture = new BABYLON.Texture((options as any).textureUrl, scene);
-				mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
-			}
-			// Priority 4: textureId (async resolve)
-			else if ((options as any)?.textureId) {
-				(async () => {
-					try {
-						const url = await getTextureUrl((options as any).textureId);
-						if (url) mat.diffuseTexture = new BABYLON.Texture(url, scene);
-						else applyFallbackColor();
-					} catch {
-						applyFallbackColor();
-					}
-				})();
-			} else {
-				// Priority 5: Fallback color
-				applyFallbackColor();
-			}
-		
-			cube.material = mat;
-			if (physics && scene.getPhysicsEngine()) {
-				const physicsOptions = typeof physics === 'object' ? physics : {
-					mass: 0.05,
-					restitution: 0.3,
-					friction: 0.05
-				};
-				new BABYLON.PhysicsAggregate(
-					cube,
-					physicsOptions.shape ?? BABYLON.PhysicsShapeType.BOX,
-					{
-						mass: physicsOptions.mass ?? 0.05,
-						restitution: physicsOptions.restitution ?? 0.3,
-						friction: physicsOptions.friction ?? 0.05
-					},
-					scene
-				);
-
-				// Optional thrust along path tangent (use opposite direction to drone)
-				if (thrustMs && thrustSpeed && pathPoints.length > 1) {
-					const nextIdx = normalizeIndex(targetIndex + 1);
-					const dir = pathPoints[nextIdx].subtract(pathPoints[targetIndex]).normalize();
-					const initialVel = dir.scale(-thrustSpeed); // opposite the forward/path tangent
-
-					setTimeout(() => {
-						try {
-							if ((cube as any).physicsBody?.setLinearVelocity) {
-								(cube as any).physicsBody.setLinearVelocity(initialVel);
-							}
-							if ((cube as any).physicsImpostor?.setLinearVelocity) {
-								(cube as any).physicsImpostor.setLinearVelocity(initialVel);
-							}
-						} catch (e) { /* ignore */ }
-					}, 0);
-
-					setTimeout(() => {
-						try {
-							if ((cube as any).physicsBody?.setLinearVelocity) {
-								(cube as any).physicsBody.setLinearVelocity(BABYLON.Vector3.Zero());
-							}
-							if ((cube as any).physicsImpostor?.setLinearVelocity) {
-								(cube as any).physicsImpostor.setLinearVelocity(BABYLON.Vector3.Zero());
-							}
-						} catch (e) { /* ignore */ }
-					}, thrustMs);
-				}
-
-				// Auto-dispose to free memory after a configurable delay
-				if (autoDisposeMs && typeof autoDisposeMs === 'number' && autoDisposeMs > 0) {
-					setTimeout(() => {
-						try { cube.dispose(); } catch (e) { /* ignore */ }
-					}, autoDisposeMs);
-				}
-			}
-
-			return cube;
+			return ObstacleManager._buildCube(scene, pos, size, color, options || {}, thrustDir);
 		}
 
-		// Fallback: original behaviour (place directly in front of drone) if no pathPoints
+		// Fallback: place directly in front of drone when no path is available
 		const forward = droneMesh.forward.clone().normalize();
 		const targetPos = droneMesh.position.clone().add(forward.scale(distance));
 		targetPos.y += offsetY;
-
-		// Generate faceUV if using faceUV texture (fallback branch)
-		let faceUVFallback: BABYLON.Vector4[] | undefined;
-		if (faceUVTextureUrl || faceUVTextureId) {
-			faceUVFallback = new Array(6);
-			if (faceUVLayout === 'vertical') {
-				for (let i = 0; i < 6; i++) {
-					faceUVFallback[i] = new BABYLON.Vector4(0, i / 6, 1, (i + 1) / 6);
-				}
-			} else if (faceUVLayout === 'horizontal') {
-				for (let i = 0; i < 6; i++) {
-					faceUVFallback[i] = new BABYLON.Vector4(i / 6, 0, (i + 1) / 6, 1);
-				}
-			} else {
-				// Grid layout (3x2)
-				faceUVFallback[0] = new BABYLON.Vector4(0, 0.5, 1/3, 1);
-				faceUVFallback[1] = new BABYLON.Vector4(1/3, 0.5, 2/3, 1);
-				faceUVFallback[2] = new BABYLON.Vector4(2/3, 0.5, 1, 1);
-				faceUVFallback[3] = new BABYLON.Vector4(0, 0, 1/3, 0.5);
-				faceUVFallback[4] = new BABYLON.Vector4(1/3, 0, 2/3, 0.5);
-				faceUVFallback[5] = new BABYLON.Vector4(2/3, 0, 1, 0.5);
-			}
-		}
-
-		const boxOptionsFallback: any = { size };
-		if (faceUVFallback) {
-			boxOptionsFallback.faceUV = faceUVFallback;
-		}
-
-		const cube = BABYLON.MeshBuilder.CreateBox(
-			`obstacle_cube_${Date.now()}`,
-			boxOptionsFallback,
-			scene
-		);
-		cube.position.copyFrom(targetPos);
-
-		const mat = new BABYLON.StandardMaterial(`cubeMat_${Date.now()}`, scene);
-		mat.backFaceCulling = false;
-		const applyFallbackColor2 = () => {
-			mat.diffuseColor = color;
-			mat.emissiveColor = color.scale(0.3);
-		};
-
-		// Apply faceUV texture helper (fallback branch)
-		const applyFaceUVTextureFallback = (url: string) => {
-			const texture = new BABYLON.Texture(url, scene, false, true, BABYLON.Texture.TRILINEAR_SAMPLINGMODE);
-			texture.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;
-			texture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
-			mat.diffuseTexture = texture;
-			mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
-			mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
-		};
-
-		// Priority 1: faceUVTextureUrl
-		if (faceUVTextureUrl) {
-			applyFaceUVTextureFallback(faceUVTextureUrl);
-		}
-		// Priority 2: faceUVTextureId (async resolve)
-		else if (faceUVTextureId) {
-			(async () => {
-				try {
-					const url = await getTextureUrl(faceUVTextureId);
-					if (url) {
-						console.log(`✅ Resolved faceUVTextureId '${faceUVTextureId}' -> ${url}`);
-						applyFaceUVTextureFallback(url);
-					} else {
-						console.warn(`⚠️ faceUVTextureId '${faceUVTextureId}' resolved to empty URL`);
-						applyFallbackColor2();
-					}
-				} catch (e) {
-					console.error(`❌ Failed to resolve faceUVTextureId '${faceUVTextureId}':`, e);
-					applyFallbackColor2();
-				}
-			})();
-			// Placeholder color while texture loads
-			applyFallbackColor2();
-		}
-		// Priority 3: textureUrl
-		else if ((options as any)?.textureUrl) {
-			try {
-				mat.diffuseTexture = new BABYLON.Texture((options as any).textureUrl, scene);
-				mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
-			} catch (e) {
-				applyFallbackColor2();
-			}
-		}
-		// Priority 4: textureId (async resolve)
-		else if ((options as any)?.textureId) {
-			(async () => {
-				try {
-					const url = await getTextureUrl((options as any).textureId);
-					if (url) mat.diffuseTexture = new BABYLON.Texture(url, scene);
-				} catch (e) {
-					applyFallbackColor2();
-				}
-			})();
-			applyFallbackColor2();
-		} else {
-			applyFallbackColor2();
-		}
-		cube.material = mat;
-
-		if (physics && scene.getPhysicsEngine()) {
-			const physicsOptions = typeof physics === 'object' ? physics : {
-				mass: 0.05,
-				restitution: 0.3,
-				friction: 0.05
-			};
-			new BABYLON.PhysicsAggregate(
-				cube,
-				physicsOptions.shape ?? BABYLON.PhysicsShapeType.BOX,
-				{
-					mass: physicsOptions.mass ?? 0.05,
-					restitution: physicsOptions.restitution ?? 0.3,
-					friction: physicsOptions.friction ?? 0.05
-				},
-				scene
-			);
-
-			// Apply thrust opposite the drone forward
-			if (thrustMs && thrustSpeed) {
-				const initialVel = forward.scale(-thrustSpeed);
-				setTimeout(() => {
-					try {
-						if ((cube as any).physicsBody?.setLinearVelocity) {
-							(cube as any).physicsBody.setLinearVelocity(initialVel);
-						}
-						if ((cube as any).physicsImpostor?.setLinearVelocity) {
-							(cube as any).physicsImpostor.setLinearVelocity(initialVel);
-						}
-					} catch (e) { /* ignore */ }
-				}, 0);
-
-				setTimeout(() => {
-					try {
-						if ((cube as any).physicsBody?.setLinearVelocity) {
-							(cube as any).physicsBody.setLinearVelocity(BABYLON.Vector3.Zero());
-						}
-						if ((cube as any).physicsImpostor?.setLinearVelocity) {
-							(cube as any).physicsImpostor.setLinearVelocity(BABYLON.Vector3.Zero());
-						}
-					} catch (e) { /* ignore */ }
-				}, thrustMs);
-			}
-
-			// Auto-dispose to free memory after a configurable delay
-			if (autoDisposeMs && typeof autoDisposeMs === 'number' && autoDisposeMs > 0) {
-				setTimeout(() => {
-					try { cube.dispose(); } catch (e) { /* ignore */ }
-				}, autoDisposeMs);
-			}
-		}
-
-		return cube;
+		return ObstacleManager._buildCube(scene, targetPos, size, color, options || {}, forward);
 	}
 
 	/**

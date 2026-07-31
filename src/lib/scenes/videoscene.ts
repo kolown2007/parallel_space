@@ -125,8 +125,9 @@ export function mountVideoScene(
 
     // If the video element reports an error, attempt fallbacks (random videos)
     const handleError = async () => {
-        // If we've exhausted attempts, just call onEnd and stop
+        // If we've exhausted attempts, clean up and call onEnd
         if (attempts >= MAX_ATTEMPTS) {
+            cleanup();
             if (onEnd) onEnd();
             return;
         }
@@ -139,11 +140,10 @@ export function mountVideoScene(
     };
     video.addEventListener('error', handleError);
 
-    // Call onEnd callback when video finishes
+    // Call onEnd callback when video finishes, then self-clean all listeners
     const handleEnded = () => {
-        if (onEnd) {
-            onEnd();
-        }
+        cleanup();
+        if (onEnd) onEnd();
     };
     video.addEventListener('ended', handleEnded);
 
@@ -191,7 +191,6 @@ export async function playVideoScene(videoRef: string, onEnd?: () => void, poste
         }
     } catch {}
 
-    const mount = mountVideoScene(undefined, src, onEnd, poster);
-    setTimeout(() => mount.video.play().catch(() => {}), 50);
-    return mount;
+    // mountVideoScene already schedules a play() call internally; no duplicate needed
+    return mountVideoScene(undefined, src, onEnd, poster);
 }

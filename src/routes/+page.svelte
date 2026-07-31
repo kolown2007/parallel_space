@@ -13,7 +13,32 @@
   import OceanGUI from '$lib/scenes/ocean.gui.svelte';
   import IntroScene from '$lib/scenes/IntroScene.svelte';
   import { missionRetry } from '$lib/stores/missionState';
+  import { gameMode, type GameMode } from '$lib/stores/gameState';
+  import { setCompletedStations } from '$lib/stores/stationProgress';
+
+  const SCENE_TO_MODE: Record<string, GameMode> = {
+    loading: 'loading',
+    intro:   'intro',
+    scene2:  'wormhole',
+    scene3:  'ocean',
+    scene1:  'video'
+  };
   let canvas: HTMLCanvasElement | null = null;
+
+  async function fetchCompletedStations() {
+    try {
+      const response = await fetch('https://kolown.net/api/chrono-escapes/1/revolution');
+      if (!response.ok) {
+        console.warn('Failed to fetch completed stations:', response.status);
+        return;
+      }
+      const data = await response.json();
+      const value = typeof data.revolution === 'number' ? data.revolution : 0;
+      setCompletedStations(value);
+    } catch (error) {
+      console.warn('Failed to fetch completed stations:', error);
+    }
+  }
   let engine: any = null;
   let sceneManager: SceneManager | null = null;
   let cursorTimeout: number | null = null;
@@ -33,15 +58,24 @@
       try { sceneManager.switchTo(sceneName as any); } catch (e) { console.warn('+page: sceneManager.switchTo threw', e); }
     }
     activeScene = sceneName;
+    gameMode.set(SCENE_TO_MODE[sceneName] ?? 'loading');
   };
 
   let scene3Result: 'success' | 'failure' = $state('failure');
 
-  const startWormhole = () => { missionRetry.set(false); changeScene('scene2'); };
-  const retryMission  = () => { missionRetry.set(true);  changeScene('scene2'); };
+  const startWormhole = () => { missionRetry.set(false); scene3Result = 'success'; changeScene('scene2'); };
+  const retryMission  = () => { missionRetry.set(true);  scene3Result = 'success'; changeScene('scene2'); };
 
   const handleMissionFailed = () => { scene3Result = 'failure'; changeScene('scene3'); };
   const handleMissionSuccess = () => { scene3Result = 'success'; changeScene('scene3'); };
+
+  const updateCompletedStations = (count: number) => {
+    setCompletedStations(count);
+  };
+
+  const updateTotalStations = (count: number) => {
+    setTotalStations(count);
+  };
 
   onMount(() => {
     if (!canvas) return;
@@ -77,6 +111,7 @@
       };
 
       try {
+        await fetchCompletedStations();
         engine = await createEngine();
 
         try {
@@ -108,7 +143,7 @@
           // A. CHANGED: Sync UI state when WormHole transitions internally
           const createScene2 = async () => WormHoleScene2.CreateScene(engine, canv, () => {
             changeScene('scene1');
-          });
+          }, retryMission);
           const scene2 = await createScene2();
 
           // B. CHANGED: Sync UI state when VideoScene finishes playback loops
