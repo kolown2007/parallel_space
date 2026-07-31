@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { completedStations, totalStations } from '$lib/stores/stationProgress';
+
   interface Props {
     result?: 'success' | 'failure';
     onNewMission?: () => void;
@@ -17,6 +19,12 @@
         Progress deducted 1. Ready for a new mission?
       {/if}
     </p>
+
+    <div class="mb-6 rounded-3xl border border-slate-700 bg-slate-900/80 p-4 text-slate-200">
+      <div class="text-[10px] uppercase tracking-[0.3em] text-slate-400 mb-2">Completed stations</div>
+      <div class="text-3xl font-bold">{$completedStations} / {$totalStations}</div>
+    </div>
+
     <button class="rounded-full px-8 py-3 text-sm font-semibold text-white transition {result === 'success' ? 'bg-emerald-500 hover:bg-emerald-400' : 'bg-orange-500 hover:bg-orange-400'}" type="button" onclick={onNewMission}>
       {result === 'success' ? 'Next Mission' : 'New Mission'}
     </button>

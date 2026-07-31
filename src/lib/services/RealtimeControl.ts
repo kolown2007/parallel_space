@@ -6,9 +6,12 @@
 import Ably from 'ably';
 import { burstAccelerate, adjustDroneSpeed, SPEED_INCREMENT } from '$lib/stores/droneControl.svelte';
 import { ObstacleManager } from '$lib/chronoescape/obstacle/ObstacleManager';
+import { getNearestPathIndex } from '$lib/chronoescape/drone/droneControllers';
 import { WormHoleScene2 } from '$lib/scenes/wormhole2';
 import type * as BABYLON from '@babylonjs/core';
 import { randomFrom } from '$lib/assetsConfig';
+import { get } from 'svelte/store';
+import { gameMode } from '$lib/stores/gameState';
 
 export interface RealtimeControlConfig {
 	scene: BABYLON.Scene;
@@ -17,6 +20,7 @@ export interface RealtimeControlConfig {
 	channelName?: string;
 	onPortalTrigger?: () => void;
 	setPortal?: (portal: any, remove?: boolean) => void;
+	onNextMission?: () => void;
 }
 
 export interface RealtimeConnection {
@@ -35,30 +39,34 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 		authUrl = 'https://kolown.net/api/ghost_auth',
 		channelName = 'chronoescape',
 		onPortalTrigger,
-		setPortal
+		setPortal,
+		onNextMission
 	} = config;
 
 	let client: Ably.Realtime | null = null;
 	let channel: any = null;
 	let connected = false;
+	let gameModeUnsubscribe: (() => void) | null = null;
 
 	// Shared obstacle manager — created once, reused for all commands
 	const realtimeModelCache = new Map<string, any>();
 	const realtimeCleanupRegistry: Array<() => void> = [];
 	const obstacles = new ObstacleManager(scene, WormHoleScene2.pathPoints, realtimeModelCache, realtimeCleanupRegistry);
 
-	function getNearestPathIndex(): number {
-		const pathPoints = WormHoleScene2.pathPoints;
-		if (!pathPoints?.length) return 0;
-		const dronePos = (droneMesh as any).position ?? droneMesh.getAbsolutePosition?.();
-		let minDistSq = Number.POSITIVE_INFINITY;
-		let nearest = 0;
-		for (let i = 0; i < pathPoints.length; i++) {
-			const d = pathPoints[i].subtract(dronePos).lengthSquared();
-			if (d < minDistSq) { minDistSq = d; nearest = i; }
+	const publishState = () => {
+		if (!connected || !channel) return;
+		const mode = get(gameMode);
+		const statePayload = {
+			gameMode: mode,
+			nextMissionEnabled: mode === 'ocean',
+			timestamp: Date.now()
+		};
+		try {
+			channel.publish('state', statePayload);
+		} catch (err) {
+			console.warn('Failed to publish game state:', err);
 		}
-		return nearest;
-	}
+	};
 
 	// Safe command execution with scene validation
 	async function executeCommand(action: string, _data?: any) {
@@ -73,7 +81,7 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 
 				case 'obstruct': {
 					if (!pathPoints?.length) { console.warn('No pathPoints for obstruct'); break; }
-					const targetIdx = ((getNearestPathIndex() + 10) % pathPoints.length + pathPoints.length) % pathPoints.length;
+					const targetIdx = ((getNearestPathIndex(droneMesh.position, pathPoints) + 10) % pathPoints.length + pathPoints.length) % pathPoints.length;
 					await obstacles.place('cube', {
 						index: targetIdx,
 						size: 5.5, physics: true, thrustMs: 3000, thrustSpeed: -30, autoDisposeMs: 60000,
@@ -85,7 +93,7 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 
 				case 'portal': {
 					if (!pathPoints?.length) { console.warn('No pathPoints for portal'); break; }
-					const targetIdx = ((getNearestPathIndex() + 10) % pathPoints.length + pathPoints.length) % pathPoints.length;
+					const targetIdx = ((getNearestPathIndex(droneMesh.position, pathPoints) + 10) % pathPoints.length + pathPoints.length) % pathPoints.length;
 					const portal = await obstacles.place('portal', {
 						index: targetIdx,
 						posterTextureId: randomFrom('portal1', 'portal2'),
@@ -103,6 +111,16 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 				case 'speeddown':
 					adjustDroneSpeed(-SPEED_INCREMENT);
 					break;
+
+				case 'next_mission': {
+					const mode = get(gameMode);
+					if (mode !== 'ocean') {
+						console.warn('next_mission ignored: game is not in ocean state (current:', mode, ')');
+						break;
+					}
+					try { onNextMission?.(); } catch (e) { console.warn('onNextMission error:', e); }
+					break;
+				}
 
 				default:
 					console.warn('Unknown action:', action);
@@ -135,6 +153,7 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 		client.connection.on('connected', () => {
 			connected = true;
 			console.log('✅ Ably connected to', channelName);
+			publishState();
 		});
 
 		client.connection.on('disconnected', () => {
@@ -166,6 +185,10 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 		});
 
 		console.log('🔌 Realtime control initialized for', channelName);
+
+		// Broadcast current game state whenever it changes
+		gameModeUnsubscribe = gameMode.subscribe(() => publishState());
+		realtimeCleanupRegistry.push(() => { try { gameModeUnsubscribe?.(); } catch {} });
 	} catch (err) {
 		console.error('Failed to initialize realtime control:', err);
 		throw err;
@@ -179,6 +202,8 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 			try { client?.close(); } catch (e) { console.warn('Client close error:', e); }
 			for (const fn of realtimeCleanupRegistry) { try { fn(); } catch {} }
 			realtimeCleanupRegistry.length = 0;
+			try { gameModeUnsubscribe?.(); } catch (e) { console.warn('gameMode unsubscribe error:', e); }
+			gameModeUnsubscribe = null;
 			client = null;
 			channel = null;
 			connected = false;

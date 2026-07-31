@@ -2,8 +2,17 @@
   import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
   import { displaySpeed, droneControl, droneEvents, adjustDroneSpeed, updateProgress } from '../../stores/droneControl.svelte.js';
-  interface Props { missionFailed?: () => void; missionSuccess?: () => void; totalUnits?: number; markerUnit?: number; }
+  import { playRevolutionComplete } from '$lib/scores/ambient';
+  import { completedStations, totalStations, setCompletedStations, setTotalStations } from '$lib/stores/stationProgress';
+
+  interface Props {
+    missionFailed?: () => void;
+    missionSuccess?: () => void;
+    totalUnits?: number;
+    markerUnit?: number;
+  }
   const { missionFailed = () => {}, missionSuccess = () => {}, totalUnits = 888, markerUnit = 300 }: Props = $props();
+
   // 1. New visibility flag controlled by our startup timer
   let showUI = $state(false);
 
@@ -36,6 +45,7 @@
       if (response.ok) {
         const data = await response.json();
         apiValue = data.revolution ?? 0;
+        setCompletedStations(apiValue);
       }
     } catch (e) {
       console.warn('Failed to fetch revolution data:', e);
@@ -66,10 +76,15 @@
   }
 
   onMount(() => {
-    fetchRevolutionData();
-    const apiInterval = setInterval(fetchRevolutionData, 5000);
+    setTotalStations(totalUnits);
 
-    const mountDelayTimeout = setTimeout(() => {
+    let apiInterval: ReturnType<typeof setInterval> | null = null;
+    let mountDelayTimeout: ReturnType<typeof setTimeout> | null = null;
+
+    fetchRevolutionData();
+    apiInterval = setInterval(fetchRevolutionData, 5000);
+
+    mountDelayTimeout = setTimeout(() => {
       showUI = true;
       startCountdown();
     }, 8000);
@@ -94,15 +109,13 @@
       }));
     }, 200);
 
-    // 3. Clean up ALL active timers when switching away from scene2
     return () => {
       unsubscribe();
-      clearTimeout(mountDelayTimeout);
-      clearInterval(apiInterval);
+      if (mountDelayTimeout) clearTimeout(mountDelayTimeout);
+      if (apiInterval) clearInterval(apiInterval);
       if (countdownInterval) clearInterval(countdownInterval);
       if (alertTimeout) clearTimeout(alertTimeout);
       if (matrixInterval) clearInterval(matrixInterval);
-
     };
   });
 
@@ -117,6 +130,7 @@
     isWin = true;
     adjustDroneSpeed(-100); // Stop the drone
     updateProgress(1.0);    // Snap visual to 100%
+    try { playRevolutionComplete(); } catch (e) { console.warn('playRevolutionComplete failed', e); }
     if (countdownInterval) clearInterval(countdownInterval);
     missionSuccess?.();
   }

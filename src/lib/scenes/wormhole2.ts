@@ -46,7 +46,7 @@ export class WormHoleScene2 {
 		try { stopAmbient(); } catch (e) { console.warn('stopAmbient error:', e); }
 	}
 
-	static async CreateScene(engine: any, canvas: HTMLCanvasElement, onPortalTrigger?: () => void): Promise<BABYLON.Scene> {
+	static async CreateScene(engine: any, canvas: HTMLCanvasElement, onPortalTrigger?: () => void, onNextMission?: () => void): Promise<BABYLON.Scene> {
 		// Reset static state from any previous scene creation
 		WormHoleScene2.cleanupRegistry = [];
 		WormHoleScene2.modelCache.clear();
@@ -126,7 +126,7 @@ export class WormHoleScene2 {
 		}
 		try {
 			await obstacles.place('model', {
-				modelNames: ['jollibee,'], count: 1, index: 25, offsetY: -1, scaleRange: [5, 7], physics: true
+				modelNames: ['jollibee'], count: 1, index: 25, offsetY: -1, scaleRange: [5, 7], physics: true
 			});
 		} catch (e) { console.warn('Failed to place physics Jollibee:', e); }
 
@@ -261,7 +261,7 @@ export class WormHoleScene2 {
 		} catch (e) { console.warn('Failed to notify loading screen:', e); }
 
 		try {
-			const realtimeConnection = await initRealtimeControl({ scene, droneMesh: drone, onPortalTrigger, setPortal });
+			const realtimeConnection = await initRealtimeControl({ scene, droneMesh: drone, onPortalTrigger, setPortal, onNextMission });
 			WormHoleScene2.registerCleanup(() => {
 				try { realtimeConnection.disconnect(); } catch (e) { console.warn('Realtime disconnect error:', e); }
 			});

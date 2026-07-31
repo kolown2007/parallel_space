@@ -252,9 +252,8 @@ export function playCollisionNoteSingle(velocity: number = 1.0) {
   const vol = Math.min(0.75 + velocity * 0.9, 1.0)
   const now = ctx.currentTime
 
-  dough({s:'bd'}, now, duration),
-   dough({s:'sd'}, now, duration)
- 
+  dough({s:'bd'}, now, duration);
+  dough({s:'sd'}, now, duration);
 }
 
 

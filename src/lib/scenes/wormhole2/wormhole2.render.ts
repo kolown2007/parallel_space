@@ -2,7 +2,7 @@ import * as BABYLON from '@babylonjs/core';
 import { get } from 'svelte/store';
 import { droneControl, updateProgress, enterPortal, FPS, MAX_SPEED } from '../../stores/droneControl.svelte';
 import { revolutionStore, triggerRevolutionComplete } from '../../stores/droneRevolution';
-import { playRevolutionComplete, playPortalSound, playCollisionNoteSingle } from '../../scores/ambient';
+import { playPortalSound, playCollisionNoteSingle } from '../../scores/ambient';
 import { updateDronePhysics, updateFollowCamera } from '../../chronoescape/drone/droneControllers';
 import { getPositionOnPath } from '../../chronoescape/world/PathUtils';
 import type { ObstacleManager } from '../../chronoescape/obstacle/ObstacleManager';
@@ -128,7 +128,6 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 				console.log(`Drone completed loop(s): ${loops}`);
 				lastLoggedLoops = loops;
 				
-				playRevolutionComplete(loops);
 				triggerRevolutionComplete(loops);
 
 				// Spawn particle bursts on revolution complete (guarded by config)
