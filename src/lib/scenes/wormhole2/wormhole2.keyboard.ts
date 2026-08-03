@@ -89,7 +89,7 @@ export function createKeyboardHandlers(deps: KeyboardHandlerDeps) {
 					thrustMs: WORMHOLE2_CONFIG.obstacles.cubeThrustMs,
 					thrustSpeed: WORMHOLE2_CONFIG.obstacles.cubeThrustSpeed,
 					autoDisposeMs: WORMHOLE2_CONFIG.obstacles.cubeAutoDispose,
-					faceUVTextureId: randomFrom('cube6'),
+					faceUVTextureId: randomFrom('cube3','cube4','cube5','cube6','cube8'),
 					faceUVLayout: 'grid'
 				});
 				

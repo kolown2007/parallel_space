@@ -109,7 +109,12 @@
 		},
 		"cube6": {
 			"rootUrl": "https://kolown.net/storage/library/chronoescape/cubes/",
-			"filename": "cube5.png",
+			"filename": "cube6.png",
+			"type": "texture"
+		},
+		"cube8": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/cubes/",
+			"filename": "cube8.png",
 			"type": "texture"
 		},
 		"portal1": {

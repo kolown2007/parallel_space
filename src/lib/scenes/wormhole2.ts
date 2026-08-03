@@ -60,7 +60,7 @@ export class WormHoleScene2 {
 		const { followCamera, switchCamera } = setupCameras(scene, canvas, 'follow');
 		setupLighting(scene);
 
-		resumeAudioOnGesture(canvas);
+		resumeAudioOnGesture(document);
 
 		// Torus track
 		const { torus, torusMainRadius, torusTubeRadius, pathPoints } = await createTorus(scene, {

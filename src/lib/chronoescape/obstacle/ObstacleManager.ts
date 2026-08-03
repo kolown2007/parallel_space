@@ -198,7 +198,8 @@ export class ObstacleManager {
 			texture.wrapV = BABYLON.Texture.CLAMP_ADDRESSMODE;
 			mat.diffuseTexture = texture;
 			mat.diffuseColor = new BABYLON.Color3(1, 1, 1);
-			mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+			mat.specularColor = BABYLON.Color3.Black();
+			mat.specularPower = 1;
 		};
 
 		if (faceUVTextureUrl) {
@@ -491,7 +492,8 @@ export class ObstacleManager {
 			else if ((options as any)?.textureUrl) {
 				try {
 					mat.diffuseTexture = new BABYLON.Texture((options as any).textureUrl, this.scene);
-					mat.specularColor = new BABYLON.Color3(0.1, 0.1, 0.1);
+					mat.specularColor = BABYLON.Color3.Black();
+					mat.specularPower = 1;
 				} catch (e) {
 					applyFallbackColor3();
 				}

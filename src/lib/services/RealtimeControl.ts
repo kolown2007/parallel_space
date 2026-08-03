@@ -174,13 +174,11 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 		// Subscribe to channel
 		channel = client.channels.get(channelName);
 		channel.subscribe((msg: any) => {
-			try {
-				console.log('📨 Ably message:', msg.name, msg.data);
-				if (msg.name === 'action') {
-					executeCommand(msg.data, msg);
-				}
-			} catch (err) {
-				console.error('Message handler error:', err);
+			console.log('📨 Ably message:', msg.name, msg.data);
+			if (msg.name === 'action') {
+				executeCommand(msg.data, msg).catch((err) => {
+					console.error('Message handler error:', err);
+				});
 			}
 		});
 
