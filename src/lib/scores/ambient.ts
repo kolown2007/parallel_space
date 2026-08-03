@@ -5,6 +5,9 @@ import { superdough,samples, getAudioContext, initAudio, registerSynthSounds, in
 
 
 const samplesPromise = samples('github:tidalcycles/dirt-samples');
+samplesPromise.catch((error: unknown) => {
+  console.warn('Audio samples load failed:', error);
+});
 
 // ── typed wrappers ────────────────────────────────────────────────────────
 type DoughValue = Record<string, unknown>
@@ -80,10 +83,6 @@ async function initAudioInternal(): Promise<boolean> {
       console.warn("Audio init failed:", error);
     }
 
-    samplesPromise.catch((error: unknown) => {
-      console.warn("Audio samples load failed:", error);
-    });
-
     const ctx = getAudioContext() as AudioContext | null;
     if (!ctx) return false;
 
@@ -134,11 +133,24 @@ export async function ensureAudioStarted(): Promise<boolean> {
 // Attach to a user gesture (canvas or document) to resume audio and start ambient
 export function resumeAudioOnGesture(element?: HTMLElement | Document) {
   const target: any = element || document
+  const fallback: any = document
 
   try {
     initAudioOnFirstClick?.(target as any)
+    if (target !== document) initAudioOnFirstClick?.(fallback)
   } catch {
     // ignore if the helper is not supported or the target is invalid
+  }
+
+  const cleanup = () => {
+    try { target.removeEventListener('pointerdown', handler) } catch {}
+    try { target.removeEventListener('touchstart', handler) } catch {}
+    try { target.removeEventListener('keydown', handler) } catch {}
+    if (target !== document) {
+      try { fallback.removeEventListener('pointerdown', handler) } catch {}
+      try { fallback.removeEventListener('touchstart', handler) } catch {}
+      try { fallback.removeEventListener('keydown', handler) } catch {}
+    }
   }
 
   const handler = async () => {
@@ -146,13 +158,17 @@ export function resumeAudioOnGesture(element?: HTMLElement | Document) {
       const started = await initAudioInternal()
       if (started) await startAmbient()
     } catch {}
-    try { target.removeEventListener('pointerdown', handler) } catch {}
-    try { target.removeEventListener('touchstart', handler) } catch {}
-    try { target.removeEventListener('keydown', handler) } catch {}
+    cleanup()
   }
-  try { target.addEventListener('pointerdown', handler, { once: true }) } catch {}
-  try { target.addEventListener('touchstart', handler, { once: true }) } catch {}
-  try { target.addEventListener('keydown', handler as any, { once: true }) } catch {}
+
+  const addListeners = (obj: any) => {
+    try { obj.addEventListener('pointerdown', handler, { once: true }) } catch {}
+    try { obj.addEventListener('touchstart', handler, { once: true }) } catch {}
+    try { obj.addEventListener('keydown', handler as any, { once: true }) } catch {}
+  }
+
+  addListeners(target)
+  if (target !== document) addListeners(fallback)
 }
 
 // Trigger piano notes on collision events
@@ -182,21 +198,25 @@ export function playCollisionNote(velocity: number = 1.0) {
   const now = ctx.currentTime
 
   chord.slice(0, notesToPlay).forEach((note, i) => {
-    dough({
-      s: 'sine',
-      note,
-      gain: vol,
-      attack: 1.5,
-      decay: 1,
-      sustain: 0.8,
-      release: 4,
-      cutoff: 900,
-      room: 0.6,
-      roomsize: 10,
-    }, now + i * 0.1, duration)
-    activeVoices++
     const ms = Math.ceil((duration + 4) * 1000) + 100
-    setTimeout(() => { activeVoices = Math.max(0, activeVoices - 1) }, ms)
+    try {
+      dough({
+        s: 'sine',
+        note,
+        gain: vol,
+        attack: 1.5,
+        decay: 1,
+        sustain: 0.8,
+        release: 4,
+        cutoff: 900,
+        room: 0.6,
+        roomsize: 10,
+      }, now + i * 0.1, duration)
+      activeVoices++
+      setTimeout(() => { activeVoices = Math.max(0, activeVoices - 1) }, ms)
+    } catch (err) {
+      console.warn('dough() failed for note', note, err)
+    }
   })
 }
 

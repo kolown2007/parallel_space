@@ -14,7 +14,7 @@
   import IntroScene from '$lib/scenes/IntroScene.svelte';
   import { missionRetry } from '$lib/stores/missionState';
   import { gameMode, type GameMode } from '$lib/stores/gameState';
-  import { setCompletedStations } from '$lib/stores/stationProgress';
+  import { setCompletedStations, setTotalStations } from '$lib/stores/stationProgress';
 
   const SCENE_TO_MODE: Record<string, GameMode> = {
     loading: 'loading',
