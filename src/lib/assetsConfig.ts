@@ -46,8 +46,14 @@ export async function loadAssetsConfig(): Promise<AssetsConfig> {
     if (!response.ok) {
       throw new Error(`Failed to load assets.json: ${response.status}`);
     }
-    cachedConfig = await response.json();
-    return cachedConfig!;
+    const jsonText = await response.text();
+    try {
+      cachedConfig = JSON.parse(jsonText) as AssetsConfig;
+      return cachedConfig!;
+    } catch (parseError) {
+      console.error('Failed to parse assets.json response:', parseError, jsonText);
+      throw parseError;
+    }
   } catch (error) {
     console.error('Failed to load assets config:', error);
     // Return empty config as fallback

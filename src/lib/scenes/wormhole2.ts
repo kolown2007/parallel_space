@@ -135,7 +135,7 @@ export class WormHoleScene2 {
 			const bbIndices = [10, 20, 60, 80, 110, 160, 210, 260, 280, 310];
 			const bbManager = await obstacles.place('billboard', {
 				count: bbIndices.length,
-				height: 15,
+				height: 35,
 				textureId: ['tribal', 'billboard1', 'billboard2', 'billboard3', 'billboard4', 'billboard5', 'billboard6'],
 			}) as any;
 			for (let i = 0; i < bbIndices.length; i++) {

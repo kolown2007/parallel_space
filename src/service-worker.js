@@ -6,7 +6,7 @@ const CACHE = `cache-${version}`;
 
 const ASSETS = [
 	...build, // the app itself
-	...files  // everything in `static`
+	...files.filter((file) => file !== '/assets.json')  // always fetch assets.json fresh
 ];
 
 // External assets to cache (optional - only if you want offline support for these)
@@ -82,7 +82,20 @@ self.addEventListener('fetch', (event) => {
 		const url = new URL(event.request.url);
 		const cache = await caches.open(CACHE);
 
-		// `build`/`files` can always be served from the cache
+// Always fetch the latest assets config first to avoid stale cached JSON
+	if (url.pathname === '/assets.json') {
+		try {
+			const response = await fetch(event.request);
+			if (response instanceof Response && response.ok) {
+				await cache.put(event.request, response.clone());
+				return response;
+			}
+		} catch (err) {
+			// network failed, fall back to cache below
+		}
+	}
+
+	// `build`/`files` can always be served from the cache
 		if (ASSETS.includes(url.pathname)) {
 			const response = await cache.match(url.pathname);
 
@@ -94,6 +107,14 @@ self.addEventListener('fetch', (event) => {
 		// for everything else, try the network first, but
 		// fall back to the cache if we're offline
 		try {
+			if (url.pathname === '/assets.json') {
+				const response = await fetch(event.request);
+				if (response instanceof Response && response.ok) {
+					return response;
+				}
+				throw new Error('network error fetching /assets.json');
+			}
+
 			const response = await fetch(event.request);
 
 			// if we're offline, fetch can return a value that is not a Response
