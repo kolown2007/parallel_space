@@ -57,6 +57,9 @@
     if (sceneManager && sceneName !== 'loading' && sceneName !== 'intro') {
       try { sceneManager.switchTo(sceneName as any); } catch (e) { console.warn('+page: sceneManager.switchTo threw', e); }
     }
+    if (sceneManager && sceneName === 'intro') {
+      try { sceneManager.pause(); } catch (e) { console.warn('+page: sceneManager.pause threw', e); }
+    }
     activeScene = sceneName;
     gameMode.set(SCENE_TO_MODE[sceneName] ?? 'loading');
   };
@@ -65,6 +68,7 @@
 
   const startWormhole = () => { missionRetry.set(false); scene3Result = 'success'; changeScene('scene2'); };
   const retryMission  = () => { missionRetry.set(true);  scene3Result = 'success'; changeScene('scene2'); };
+  const backToIntro = () => { missionRetry.set(false); changeScene('intro'); };
 
   const handleMissionFailed = () => { scene3Result = 'failure'; changeScene('scene3'); };
   const handleMissionSuccess = () => { scene3Result = 'success'; changeScene('scene3'); };
@@ -206,7 +210,7 @@
   {/if}
 
   {#if activeScene === 'scene3'}
-    <OceanGUI result={scene3Result} onNewMission={retryMission} />
+    <OceanGUI result={scene3Result} onNewMission={backToIntro} />
   {/if}
 
   {#if isGameplayActive()}

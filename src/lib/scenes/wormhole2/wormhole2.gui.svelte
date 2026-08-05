@@ -22,7 +22,7 @@
   let alertTimeout: ReturnType<typeof setTimeout> | null = null;
   let currentReduction = $state(0);
   
-  let countdown = $state(60);
+  let countdown = $state(100);
   let countdownInterval: ReturnType<typeof setInterval> | null = null;
   let apiValue = $state(0);
   const letterOptions = '0123456789%$#@!&*+-=~<>[]{}()';
