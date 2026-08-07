@@ -84,6 +84,10 @@ export class SceneManager {
     this.engine?.stopRenderLoop();
   }
 
+  public pause() {
+    this.stopRender();
+  }
+
   private cleanup() {
     this.videoMount?.cleanup();
     this.videoMount = null;
