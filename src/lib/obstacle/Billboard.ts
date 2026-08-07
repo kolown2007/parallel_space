@@ -1,5 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-import { getTextureUrl } from '../../assetsConfig';
+import { getTextureUrl } from '../assets/assetsConfig';
 
 export interface BillboardOptions {
   count?: number;

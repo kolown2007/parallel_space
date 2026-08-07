@@ -289,7 +289,7 @@ export class ModelPlacer {
 	): Promise<void> {
 		try {
 			// Dynamically import loadAssetsConfig to avoid circular dependencies
-			const { loadAssetsConfig } = await import('../../assetsConfig');
+			const { loadAssetsConfig } = await import('../assets/assetsConfig');
 			const cfg = await loadAssetsConfig();
 			
 			const {

@@ -1,4 +1,4 @@
-import type { AssetItem } from './chronoescape/assetContainers';
+import type { AssetItem } from './assetContainers';
 
 // Configurable URL for the assets config JSON
 export let ASSETS_CONFIG_URL = '/assets.json';

@@ -5,11 +5,11 @@
 
 import Ably from 'ably';
 import { burstAccelerate, adjustDroneSpeed, SPEED_INCREMENT } from '$lib/stores/droneControl.svelte';
-import { ObstacleManager } from '$lib/chronoescape/obstacle/ObstacleManager';
-import { getNearestPathIndex } from '$lib/chronoescape/drone/droneControllers';
+import { ObstacleManager } from '$lib/obstacle/ObstacleManager';
+import { getNearestPathIndex } from '$lib/drone/droneControllers';
 import { WormHoleScene2 } from '$lib/scenes/wormhole2';
 import type * as BABYLON from '@babylonjs/core';
-import { randomFrom } from '$lib/assetsConfig';
+import { randomFrom } from '$lib/assets/assetsConfig';
 import { get } from 'svelte/store';
 import { gameMode } from '$lib/stores/gameState';
 

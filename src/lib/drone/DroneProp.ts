@@ -1,6 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
-import { getModelUrl } from '../../assetsConfig';
+import { getModelUrl } from '../assets/assetsConfig';
 
 // ============================================================================
 // TYPES & INTERFACES

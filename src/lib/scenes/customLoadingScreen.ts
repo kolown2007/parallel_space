@@ -1,5 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-import { getTextureUrl, getLoadingImageUrl, randomFrom } from '../assetsConfig';
+import { getTextureUrl, getLoadingImageUrl, randomFrom } from '../assets/assetsConfig';
 
 export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
   public loadingUIBackgroundColor: string = '#BB464B';

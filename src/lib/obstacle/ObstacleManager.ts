@@ -5,7 +5,7 @@ import { BillboardManager } from './Billboard';
 import { createFloatingCubes, type FloatingCubesResult } from './Cubes';
 import { createParticles, type ParticleOptions } from './Particles';
 import { createOrb, type OrbResult } from './Orb';
-import { getTextureUrl } from '../../assetsConfig';
+import { getTextureUrl } from '../assets/assetsConfig';
 
 export type ObstacleType = 'cube' | 'model' | 'portal' | 'billboard' | 'floating-cube' | 'particles' | 'orb';
 
