@@ -7,7 +7,6 @@ import Ably from 'ably';
 import { burstAccelerate, adjustDroneSpeed, SPEED_INCREMENT } from '$lib/stores/droneControl.svelte';
 import { ObstacleManager } from '$lib/obstacle/ObstacleManager';
 import { getNearestPathIndex } from '$lib/drone/droneControllers';
-import { WormHoleScene2 } from '$lib/scenes/wormhole2';
 import type * as BABYLON from '@babylonjs/core';
 import { randomFrom } from '$lib/assets/assetsConfig';
 import { get } from 'svelte/store';
@@ -16,6 +15,7 @@ import { gameMode } from '$lib/stores/gameState';
 export interface RealtimeControlConfig {
 	scene: BABYLON.Scene;
 	droneMesh: BABYLON.AbstractMesh;
+	pathPoints: BABYLON.Vector3[];
 	authUrl?: string;
 	channelName?: string;
 	onPortalTrigger?: () => void;
@@ -36,6 +36,7 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 	const {
 		scene,
 		droneMesh,
+		pathPoints,
 		authUrl = 'https://kolown.net/api/ghost_auth',
 		channelName = 'chronoescape',
 		onPortalTrigger,
@@ -51,7 +52,7 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 	// Shared obstacle manager — created once, reused for all commands
 	const realtimeModelCache = new Map<string, any>();
 	const realtimeCleanupRegistry: Array<() => void> = [];
-	const obstacles = new ObstacleManager(scene, WormHoleScene2.pathPoints, realtimeModelCache, realtimeCleanupRegistry);
+	const obstacles = new ObstacleManager(scene, pathPoints, realtimeModelCache, realtimeCleanupRegistry);
 
 	const publishState = () => {
 		if (!connected || !channel) return;
@@ -72,8 +73,6 @@ export async function initRealtimeControl(config: RealtimeControlConfig): Promis
 	async function executeCommand(action: string, _data?: any) {
 		if (scene.isDisposed) return;
 		try {
-			const pathPoints = WormHoleScene2.pathPoints;
-
 			switch (action) {
 				case 'move':
 					burstAccelerate();

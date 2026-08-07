@@ -147,7 +147,7 @@
           // A. CHANGED: Sync UI state when WormHole transitions internally
           const createScene2 = async () => WormHoleScene2.CreateScene(engine, canv, () => {
             changeScene('scene1');
-          }, retryMission);
+          }, handleMissionSuccess);
           const scene2 = await createScene2();
 
           // B. CHANGED: Sync UI state when VideoScene finishes playback loops
