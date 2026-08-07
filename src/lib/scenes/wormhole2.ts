@@ -9,9 +9,7 @@ import { visualizePathDebug } from '../wormhole/debugPath';
 import { ObstacleManager } from '../obstacle/ObstacleManager';
 import { installKeyboardControls } from '../input/keyboardControls';
 import { randomFrom, getTextureUrl } from '../assets/assetsConfig';
-import { updateProgress, cleanupDroneControl, droneControl, displaySpeed, droneEvents } from '../stores/droneControl.svelte.js';
-import { sceneRefStore } from '../stores/sceneRefStore';
-import { registerScene, unregisterScene } from '../scenemanager/SceneRegistry';
+import { updateProgress, cleanupDroneControl, droneControl, displaySpeed, droneEvents, adjustDroneSpeed, burstAccelerate, SPEED_INCREMENT } from '../stores/droneControl.svelte.js';
 import { initRealtimeControl } from '../services/RealtimeControl';
 import { setOnRevolutionComplete } from '../stores/droneRevolution';
 import { startAmbient, resumeAudioOnGesture, stopAmbient } from '$lib/scores/ambient';
@@ -218,17 +216,6 @@ z: droneStartPos.z
 
 this.registerCleanup(setupDroneCollision(droneAggregate));
 
-try {
-const sceneId = registerScene(scene, drone, this.pathPoints);
-sceneRefStore.set({ sceneId, droneId: sceneId });
-this.registerCleanup(() => {
-sceneRefStore.set({ sceneId: null, droneId: null });
-unregisterScene(sceneId);
-});
-} catch (e) {
-console.warn('Failed to set sceneRefStore:', e);
-}
-
 getDronePathIndex = getDronePathIndexFactory(drone, pathPoints);
 
 followCamera.position = drone.position.add(
@@ -303,21 +290,49 @@ console.warn('Failed to notify loading screen:', e);
 }
 
 try {
-const realtimeConnection = await initRealtimeControl({
-scene,
-droneMesh: drone,
-pathPoints: this.pathPoints,
-onPortalTrigger,
-setPortal,
-onNextMission
-});
-this.registerCleanup(() => {
-try { realtimeConnection.disconnect(); } catch (e) { console.warn('Realtime disconnect error:', e); }
-});
-} catch (e) {
-console.warn('Failed to initialize realtime control:', e);
-}
-
+		const realtimeConnection = await initRealtimeControl({
+			authUrl: 'https://kolown.net/api/ghost_auth',
+			channelName: 'chronoescape',
+			onMove: () => burstAccelerate(),
+			onSpeedUp: () => adjustDroneSpeed(SPEED_INCREMENT),
+			onSpeedDown: () => adjustDroneSpeed(-SPEED_INCREMENT),
+			onObstruct: async () => {
+				const idx = getDronePathIndex();
+				const targetIdx = ((idx + 10) % this.pathPoints.length + this.pathPoints.length) % this.pathPoints.length;
+				await obstacles.place('cube', {
+					index: targetIdx,
+					size: 5.5,
+					physics: true,
+					thrustMs: 3000,
+					thrustSpeed: -30,
+					autoDisposeMs: 60000,
+					faceUVTextureId: randomFrom('metal', 'cube3', 'cube4', 'cube5', 'collage1', 'cube6'),
+					faceUVLayout: 'grid'
+				});
+			},
+			onPortal: async () => {
+				const idx = getDronePathIndex();
+				const targetIdx = ((idx + 10) % this.pathPoints.length + this.pathPoints.length) % this.pathPoints.length;
+				const portal = await obstacles.place('portal', {
+					index: targetIdx,
+					posterTextureId: randomFrom('portal1', 'portal2'),
+					width: 20,
+					height: 20,
+					offsetY: 0,
+					onTrigger: () => { try { onPortalTrigger?.(); } catch {} }
+				}) as any;
+				return portal;
+			},
+			onNextMission,
+			setPortal,
+			isSceneAlive: () => !!this.scene && !this.scene?.isDisposed
+		});
+		this.registerCleanup(() => {
+			try { realtimeConnection.disconnect(); } catch (e) { console.warn('Realtime disconnect error:', e); }
+		});
+	} catch (e) {
+		console.warn('Failed to initialize realtime control:', e);
+	}
 return scene;
 }
 

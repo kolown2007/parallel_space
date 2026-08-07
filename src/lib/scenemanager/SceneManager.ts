@@ -12,10 +12,10 @@ export class SceneManager {
 
   constructor(
     private engine: any,
-    scene2: any,
     scene2Factory: () => Promise<any>,
     private scene3Factory: () => Promise<any>,
-    private mountVideo: () => any
+    private mountVideo: () => any,
+    scene2: any = null
   ) {
     this.scene2 = scene2;
     this.scene2Factory = scene2Factory;
