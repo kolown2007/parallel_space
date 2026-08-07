@@ -83,11 +83,7 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 						if (p.intersects(usbAabb)) {
 
 							try { playPortalSound(); } catch (e) { console.warn('playPortalSound failed', e); }
-							try {
-								const state = get(droneControl);
-								const velocity = Math.min(state.speed / (MAX_SPEED || 1), 1.0);
-								try { playCollisionNoteSingle(velocity); } catch (e) {}
-							} catch (e) {}
+
 							console.log('✨ Drone entered portal');
 							enterPortal();
 							onPortalTrigger();

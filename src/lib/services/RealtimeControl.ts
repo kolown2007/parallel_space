@@ -1,210 +1,164 @@
 /**
  * Realtime Control Service
- * Manages Ably websocket connection and command execution for a specific scene
+ * Manages websocket command execution for a specific scene
  */
 
-import Ably from 'ably';
-import { burstAccelerate, adjustDroneSpeed, SPEED_INCREMENT } from '$lib/stores/droneControl.svelte';
-import { ObstacleManager } from '$lib/obstacle/ObstacleManager';
-import { getNearestPathIndex } from '$lib/drone/droneControllers';
-import { WormHoleScene2 } from '$lib/scenes/wormhole2';
-import type * as BABYLON from '@babylonjs/core';
-import { randomFrom } from '$lib/assets/assetsConfig';
-import { get } from 'svelte/store';
-import { gameMode } from '$lib/stores/gameState';
+import { createAblyTransport, type RealtimeTransport } from './RealtimeTransport';
+import type { GameMode } from '$lib/stores/gameState';
+
+export type RealtimeCommand =
+	| { type: 'move' }
+	| { type: 'obstruct'; targetIdx?: number }
+	| { type: 'portal'; targetIdx?: number }
+	| { type: 'speedup' }
+	| { type: 'speeddown' }
+	| { type: 'next_mission' };
 
 export interface RealtimeControlConfig {
-	scene: BABYLON.Scene;
-	droneMesh: BABYLON.AbstractMesh;
 	authUrl?: string;
 	channelName?: string;
-	onPortalTrigger?: () => void;
-	setPortal?: (portal: any, remove?: boolean) => void;
+	getGameMode?: () => GameMode;
+	onMove?: () => void;
+	onSpeedUp?: () => void;
+	onSpeedDown?: () => void;
+	onObstruct?: (payload: { targetIdx?: number }) => Promise<any>;
+	onPortal?: (payload: { targetIdx?: number }) => Promise<any>;
 	onNextMission?: () => void;
+	setPortal?: (portal: any, remove?: boolean) => void;
+	isSceneAlive?: () => boolean;
 }
 
 export interface RealtimeConnection {
-	isConnected: () => boolean;
-	disconnect: () => void;
+isConnected: () => boolean;
+disconnect: () => void;
 }
 
-/**
- * Initialize realtime control for a scene
- * Returns cleanup function to disconnect
- */
 export async function initRealtimeControl(config: RealtimeControlConfig): Promise<RealtimeConnection> {
-	const {
-		scene,
-		droneMesh,
-		authUrl = 'https://kolown.net/api/ghost_auth',
-		channelName = 'chronoescape',
-		onPortalTrigger,
-		setPortal,
-		onNextMission
-	} = config;
+const {
+authUrl = 'https://kolown.net/api/ghost_auth',
+channelName = 'chronoescape',
+getGameMode,
+onMove,
+onSpeedUp,
+onSpeedDown,
+onObstruct,
+onPortal,
+onNextMission,
+setPortal,
+isSceneAlive
+} = config;
 
-	let client: Ably.Realtime | null = null;
-	let channel: any = null;
-	let connected = false;
-	let gameModeUnsubscribe: (() => void) | null = null;
+let transport: RealtimeTransport | null = null;
+let connected = false;
+const cleanupFns: Array<() => void> = [];
 
-	// Shared obstacle manager — created once, reused for all commands
-	const realtimeModelCache = new Map<string, any>();
-	const realtimeCleanupRegistry: Array<() => void> = [];
-	const obstacles = new ObstacleManager(scene, WormHoleScene2.pathPoints, realtimeModelCache, realtimeCleanupRegistry);
+const publishState = () => {
+if (!connected || !transport) return;
+const mode = getGameMode ? getGameMode() : ('loading' as GameMode);
+const statePayload = {
+gameMode: mode,
+nextMissionEnabled: mode === 'ocean',
+timestamp: Date.now()
+};
+try {
+transport.send('state', statePayload);
+} catch (err) {
+console.warn('Failed to publish game state:', err);
+}
+};
 
-	const publishState = () => {
-		if (!connected || !channel) return;
-		const mode = get(gameMode);
-		const statePayload = {
-			gameMode: mode,
-			nextMissionEnabled: mode === 'ocean',
-			timestamp: Date.now()
+function parseRealtimeCommand(data: any): RealtimeCommand | null {
+	if (!data || typeof data !== 'object') return null;
+	const type = data.type;
+	if (type === 'move') return { type: 'move' };
+	if (type === 'obstruct') {
+		return {
+			type: 'obstruct',
+			targetIdx: typeof data.targetIdx === 'number' ? data.targetIdx : undefined
 		};
-		try {
-			channel.publish('state', statePayload);
-		} catch (err) {
-			console.warn('Failed to publish game state:', err);
-		}
-	};
-
-	// Safe command execution with scene validation
-	async function executeCommand(action: string, _data?: any) {
-		if (scene.isDisposed) return;
-		try {
-			const pathPoints = WormHoleScene2.pathPoints;
-
-			switch (action) {
-				case 'move':
-					burstAccelerate();
-					break;
-
-				case 'obstruct': {
-					if (!pathPoints?.length) { console.warn('No pathPoints for obstruct'); break; }
-					const targetIdx = ((getNearestPathIndex(droneMesh.position, pathPoints) + 10) % pathPoints.length + pathPoints.length) % pathPoints.length;
-					await obstacles.place('cube', {
-						index: targetIdx,
-						size: 5.5, physics: true, thrustMs: 3000, thrustSpeed: -30, autoDisposeMs: 60000,
-						faceUVTextureId: randomFrom('metal', 'cube3', 'cube4', 'cube5', 'collage1', 'cube6'),
-						faceUVLayout: 'grid'
-					});
-					break;
-				}
-
-				case 'portal': {
-					if (!pathPoints?.length) { console.warn('No pathPoints for portal'); break; }
-					const targetIdx = ((getNearestPathIndex(droneMesh.position, pathPoints) + 10) % pathPoints.length + pathPoints.length) % pathPoints.length;
-					const portal = await obstacles.place('portal', {
-						index: targetIdx,
-						posterTextureId: randomFrom('portal1', 'portal2'),
-						width: 20, height: 20, offsetY: 0,
-						onTrigger: () => { try { onPortalTrigger?.(); } catch {} }
-					}) as any;
-					if (setPortal && portal) setPortal(portal);
-					break;
-				}
-
-				case 'speedup':
-					adjustDroneSpeed(SPEED_INCREMENT);
-					break;
-
-				case 'speeddown':
-					adjustDroneSpeed(-SPEED_INCREMENT);
-					break;
-
-				case 'next_mission': {
-					const mode = get(gameMode);
-					if (mode !== 'ocean') {
-						console.warn('next_mission ignored: game is not in ocean state (current:', mode, ')');
-						break;
-					}
-					try { onNextMission?.(); } catch (e) { console.warn('onNextMission error:', e); }
-					break;
-				}
-
-				default:
-					console.warn('Unknown action:', action);
-			}
-		} catch (err) {
-			console.error('Command execution error:', action, err);
-		}
 	}
+	if (type === 'portal') {
+		return {
+			type: 'portal',
+			targetIdx: typeof data.targetIdx === 'number' ? data.targetIdx : undefined
+		};
+	}
+	if (type === 'speedup') return { type: 'speedup' };
+	if (type === 'speeddown') return { type: 'speeddown' };
+	if (type === 'next_mission') return { type: 'next_mission' };
+	return null;
+}
 
+async function executeCommand(command: RealtimeCommand) {
+	if (isSceneAlive && !isSceneAlive()) return;
 	try {
-		// Initialize Ably client
-		client = new Ably.Realtime({
-			authCallback: async (tokenParams: any, callback: any) => {
-				try {
-					const res = await fetch(authUrl, { credentials: 'include' });
-					if (!res.ok) throw new Error('Auth failed: ' + res.status);
-					const tokenRequest = await res.json();
-					callback(null, tokenRequest);
-				} catch (err: any) {
-					console.error('Ably auth error:', err);
-					callback(err);
-				}
-			},
-			// Auto-reconnection settings
-			disconnectedRetryTimeout: 15000,
-			suspendedRetryTimeout: 30000
-		});
+		switch (command.type) {
+			case 'move':
+				onMove?.();
+				break;
 
-		// Connection state listeners
-		client.connection.on('connected', () => {
-			connected = true;
-			console.log('✅ Ably connected to', channelName);
-			publishState();
-		});
+			case 'obstruct':
+				await onObstruct?.({ targetIdx: command.targetIdx });
+				break;
 
-		client.connection.on('disconnected', () => {
-			connected = false;
-			console.warn('⚠️ Ably disconnected - auto-retry enabled');
-		});
-
-		client.connection.on('suspended', () => {
-			connected = false;
-			console.warn('⏸️ Ably suspended - auto-retry enabled');
-		});
-
-		client.connection.on('failed', (err: any) => {
-			connected = false;
-			console.error('❌ Ably connection failed:', err);
-		});
-
-		// Subscribe to channel
-		channel = client.channels.get(channelName);
-		channel.subscribe((msg: any) => {
-			console.log('📨 Ably message:', msg.name, msg.data);
-			if (msg.name === 'action') {
-				executeCommand(msg.data, msg).catch((err) => {
-					console.error('Message handler error:', err);
-				});
+			case 'portal': {
+				const portalResult = await onPortal?.({ targetIdx: command.targetIdx });
+				if (setPortal && portalResult) setPortal(portalResult);
+				break;
 			}
-		});
 
-		console.log('🔌 Realtime control initialized for', channelName);
+			case 'speedup':
+				onSpeedUp?.();
+				break;
 
-		// Broadcast current game state whenever it changes
-		gameModeUnsubscribe = gameMode.subscribe(() => publishState());
-		realtimeCleanupRegistry.push(() => { try { gameModeUnsubscribe?.(); } catch {} });
-	} catch (err) {
-		console.error('Failed to initialize realtime control:', err);
-		throw err;
-	}
+			case 'speeddown':
+				onSpeedDown?.();
+				break;
 
-	// Return connection interface
-	return {
-		isConnected: () => connected,
-		disconnect: () => {
-			try { channel?.unsubscribe(); } catch (e) { console.warn('Channel unsubscribe error:', e); }
-			try { client?.close(); } catch (e) { console.warn('Client close error:', e); }
-			for (const fn of realtimeCleanupRegistry) { try { fn(); } catch {} }
-			realtimeCleanupRegistry.length = 0;
-			try { gameModeUnsubscribe?.(); } catch (e) { console.warn('gameMode unsubscribe error:', e); }
-			gameModeUnsubscribe = null;
-			client = null;
-			channel = null;
-			connected = false;
+			case 'next_mission': {
+				const mode = getGameMode ? getGameMode() : ('loading' as GameMode);
+				if (mode !== 'ocean') {
+					console.warn('next_mission ignored: game is not in ocean state (current:', mode, ')');
+					break;
+				}
+				try { onNextMission?.(); } catch (e) { console.warn('onNextMission error:', e); }
+				break;
+			}
 		}
-	};
+	} catch (err) {
+		console.error('Command execution error:', command.type, err);
+	}
+}
+
+try {
+transport = await createAblyTransport({ authUrl, channelName });
+await transport.connect();
+transport.subscribe('action', (msg) => {
+	console.log('📨 Realtime message:', msg.name, msg.data);
+	const command = parseRealtimeCommand(msg.data);
+	if (!command) {
+		console.warn('Received invalid realtime command:', msg.data);
+		return;
+	}
+	executeCommand(command).catch((err) => {
+		console.error('Message handler error:', err);
+	});
+});
+
+connected = transport.isConnected();
+publishState();
+cleanupFns.push(() => transport?.disconnect());
+} catch (err) {
+console.error('Failed to initialize realtime control:', err);
+throw err;
+}
+
+return {
+isConnected: () => connected,
+disconnect: () => {
+for (const fn of cleanupFns) { try { fn(); } catch {} }
+cleanupFns.length = 0;
+connected = false;
+}
+};
 }
