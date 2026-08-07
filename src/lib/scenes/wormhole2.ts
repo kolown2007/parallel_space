@@ -3,17 +3,17 @@ import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
 
 
-import { setupSceneDrone } from '../chronoescape/drone/setupDrone';
-import { getPositionOnPath } from '../chronoescape/world/PathUtils';
-import { createTorus } from '../chronoescape/world/Torus';
-import { setupPhysics, setupLighting, setupCameras } from '../chronoescape/world/sceneUtils';
-import { visualizePathDebug } from '../chronoescape/world/debugPath';
-import { ObstacleManager } from '../chronoescape/obstacle/ObstacleManager';
+import { setupSceneDrone } from '../drone/setupDrone';
+import { getPositionOnPath } from '../wormhole/PathUtils';
+import { createTorus } from '../wormhole/Torus';
+import { setupPhysics, setupLighting, setupCameras } from '../wormhole/sceneUtils';
+import { visualizePathDebug } from '../wormhole/debugPath';
+import { ObstacleManager } from '../obstacle/ObstacleManager';
 import { installKeyboardControls } from '../input/keyboardControls';
-import { randomFrom, getTextureUrl } from '../assetsConfig';
+import { randomFrom, getTextureUrl } from '../assets/assetsConfig';
 import { updateProgress, cleanupDroneControl,droneControl,displaySpeed,droneEvents } from '../stores/droneControl.svelte.js';
 import { sceneRefStore } from '../stores/sceneRefStore';
-import { registerScene, unregisterScene } from '../core/SceneRegistry';
+import { registerScene, unregisterScene } from '../scenemanager/SceneRegistry';
 import { initRealtimeControl } from '../services/RealtimeControl';
 import { setOnRevolutionComplete } from '../stores/droneRevolution';
 import { startAmbient, resumeAudioOnGesture, stopAmbient } from '$lib/scores/ambient';

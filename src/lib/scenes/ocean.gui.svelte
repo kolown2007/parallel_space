@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { completedStations, totalStations } from '$lib/stores/stationProgress';
-  import { loadBitmapFont, measureBitmapText, renderBitmapTextToCanvas } from '$lib/bitmapFont';
-  import type { BitmapFont } from '$lib/bitmapFont';
+  import { loadBitmapFont, measureBitmapText, renderBitmapTextToCanvas } from '$lib/assets/bitmapFont';
+  import type { BitmapFont } from '$lib/assets/bitmapFont';
 
   interface Props {
     result?: 'success' | 'failure';
@@ -124,7 +124,7 @@
       if (!ctx) throw new Error('Unable to draw bitmap ocean overlay');
 
       ctx.clearRect(0, 0, canvasWidth, canvasHeight);
-      ctx.fillStyle = 'rgba(15, 23, 42, 0.96)';
+      ctx.fillStyle = 'rgba(15, 23, 42, 0.22)';
       drawRoundedRect(ctx, 0, 0, canvasWidth, canvasHeight, 28);
       ctx.fill();
 
@@ -215,7 +215,7 @@
     {#if bitmapFont && !fontLoadError}
       <canvas bind:this={bitmapCanvas} class="mx-auto block max-w-full rounded-[28px]" onclick={handleCanvasClick}></canvas>
     {:else}
-      <div class="pointer-events-auto max-w-md rounded-[28px] border border-slate-700 bg-slate-950/30 p-8 text-center">
+      <div class="pointer-events-auto max-w-md rounded-[28px] border border-slate-700 bg-slate-950/10 p-8 text-center">
         <div class="mb-4 text-3xl font-bold {result === 'success' ? 'text-emerald-300' : 'text-orange-300'}">{getTitleText()}</div>
         <p class="mb-6 text-sm leading-relaxed text-slate-300">{getBodyText()}</p>
         <div class="mb-6 rounded-3xl border border-slate-700 bg-slate-900/80 p-4 text-slate-200">

@@ -1,5 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-import { getTextureUrl } from '../../assetsConfig';
+import { getTextureUrl } from '../assets/assetsConfig';
 
 export type FloatingCube = {
   mesh: BABYLON.Mesh;
@@ -56,7 +56,7 @@ export function createFloatingCubes(
   // Resolve faceUV texture URL (direct URL takes priority over ID)
   let resolvedFaceUVUrl = faceUVTextureUrl;
   if (!resolvedFaceUVUrl && faceUVTextureId) {
-    getTextureUrl(faceUVTextureId).then(url => {
+    getTextureUrl(faceUVTextureId).then((url: string | undefined) => {
       if (url) resolvedFaceUVUrl = url;
     }).catch(() => {});
   }
@@ -81,7 +81,7 @@ export function createFloatingCubes(
     mat.diffuseColor = new BABYLON.Color3(0.5, 0.5, 0.5);
     mat.backFaceCulling = false;
     materialPool.push(mat);
-    getTextureUrl(faceUVTextureId).then(url => {
+    getTextureUrl(faceUVTextureId).then((url: string | undefined) => {
       if (url) {
         const tex = new BABYLON.Texture(url, scene, false, true, BABYLON.Texture.TRILINEAR_SAMPLINGMODE);
         tex.wrapU = BABYLON.Texture.CLAMP_ADDRESSMODE;

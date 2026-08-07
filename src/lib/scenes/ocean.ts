@@ -2,7 +2,7 @@
 import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
 import { WaterMaterial } from '@babylonjs/materials/water';
-import { loadAssetsConfig } from '$lib/assetsConfig';
+import { loadAssetsConfig } from '$lib/assets/assetsConfig';
 
 
 const SKYBOX_FACE_URLS = [

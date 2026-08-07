@@ -3,9 +3,9 @@ import { get } from 'svelte/store';
 import { droneControl, updateProgress, enterPortal, FPS, MAX_SPEED } from '../../stores/droneControl.svelte';
 import { revolutionStore, triggerRevolutionComplete } from '../../stores/droneRevolution';
 import { playPortalSound, playCollisionNoteSingle } from '../../scores/ambient';
-import { updateDronePhysics, updateFollowCamera } from '../../chronoescape/drone/droneControllers';
-import { getPositionOnPath } from '../../chronoescape/world/PathUtils';
-import type { ObstacleManager } from '../../chronoescape/obstacle/ObstacleManager';
+import { updateDronePhysics, updateFollowCamera } from '../../drone/droneControllers';
+import { getPositionOnPath } from '../../wormhole/PathUtils';
+import type { ObstacleManager } from '../../obstacle/ObstacleManager';
 import { WORMHOLE2_CONFIG } from './wormhole2.config';
 
 export interface RenderLoopDeps {

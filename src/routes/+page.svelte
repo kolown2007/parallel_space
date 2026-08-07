@@ -7,7 +7,7 @@
   import mountVideoScene from '$lib/scenes/videoscene';
   import { WormHoleScene2 } from '$lib/scenes/wormhole2';
   import createOceanScene from '$lib/scenes/ocean';
-  import { SceneManager } from '$lib/core/SceneManager';
+  import { SceneManager } from '$lib/scenemanager/SceneManager';
 
   import DroneHUD from '$lib/scenes/wormhole2/wormhole2.gui.svelte';
   import OceanGUI from '$lib/scenes/ocean.gui.svelte';

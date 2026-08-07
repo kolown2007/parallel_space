@@ -1,5 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-import { getTextureUrl, getLoadingImageUrl } from '../../assetsConfig';
+import { getTextureUrl, getLoadingImageUrl } from '../assets/assetsConfig';
 
 export interface Vec3 { x: number; y: number; z: number; }
 export interface AABB { min: Vec3; max: Vec3 }

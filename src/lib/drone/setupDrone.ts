@@ -316,7 +316,7 @@ async function resolveGlbUrl(assetId?: string, glbUrl?: string): Promise<string>
 	// Try to resolve from asset ID
 	if (assetId) {
 		try {
-			const { getModelUrl } = await import('../../assetsConfig');
+			const { getModelUrl } = await import('../assets/assetsConfig');
 			const url = await getModelUrl(assetId);
 			if (url) return url;
 		} catch (e) {
@@ -326,7 +326,7 @@ async function resolveGlbUrl(assetId?: string, glbUrl?: string): Promise<string>
 
 	// Fallback to default drone asset
 	try {
-		const { getModelUrl } = await import('../../assetsConfig');
+		const { getModelUrl } = await import('../assets/assetsConfig');
 		const url = await getModelUrl('drone');
 		if (url) return url;
 	} catch {

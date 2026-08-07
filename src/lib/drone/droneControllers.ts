@@ -1,5 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-import { getPositionOnPath, getDirectionOnPath } from '../world/PathUtils';
+import { getPositionOnPath, getDirectionOnPath } from '../wormhole/PathUtils';
 
 // ============================================================================
 // TYPES & INTERFACES

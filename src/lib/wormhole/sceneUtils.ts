@@ -1,6 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import HavokPhysics from '@babylonjs/havok';
-import { getPhysicsWasmUrl } from '../../assetsConfig';
+import { getPhysicsWasmUrl } from '../assets/assetsConfig';
 
 /**
  * Initialize Havok physics engine with zero gravity

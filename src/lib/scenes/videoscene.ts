@@ -11,7 +11,7 @@ export type VideoMount = {
  * - Muted autoplay for instant playback
  * - Calls onEnd when video finishes
  */
-import { randomVideoUrl, getVideoUrl } from '../assetsConfig';
+import { randomVideoUrl, getVideoUrl } from '../assets/assetsConfig';
 
 export function mountVideoScene(
     container?: HTMLElement,

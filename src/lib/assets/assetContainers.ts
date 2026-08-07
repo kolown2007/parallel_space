@@ -1,6 +1,6 @@
 import { AssetsManager, Scene, AssetContainer, TransformNode, Mesh, AbstractMesh } from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
-import { getAssetList } from '../assetsConfig';
+import { getAssetList } from './assetsConfig';
 
 export type AssetItem = {
   id: string;

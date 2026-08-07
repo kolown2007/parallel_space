@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
   import { completedStations, totalStations } from '$lib/stores/stationProgress';
-  import { getTextureUrl } from '$lib/assetsConfig';
-  import { loadBitmapFont, renderBitmapTextToCanvas } from '$lib/bitmapFont';
+  import { getTextureUrl } from '$lib/assets/assetsConfig';
+  import { loadBitmapFont, renderBitmapTextToCanvas } from '$lib/assets/bitmapFont';
 
   export let initialCountdown = 60;
   export let onStart: () => void;
