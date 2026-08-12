@@ -25,6 +25,7 @@
   let buttonTextUrl = '';
   let countdown = initialCountdown;
   let countdownInterval: number | null = null;
+  let hasStarted = false;
   let bitmapFont: any = null;
   let bitmapFontImage: HTMLImageElement | null = null;
 
@@ -215,12 +216,20 @@
     }
   };
 
+  const beginGame = () => {
+    if (hasStarted) return;
+    hasStarted = true;
+    clearCountdown();
+    clearAutoAdvance();
+    clearTypewriter();
+    onStart();
+  };
+
   const startCountdown = () => {
-    if (countdownInterval) return;
+    if (hasStarted || countdownInterval) return;
     countdownInterval = window.setInterval(() => {
       if (countdown <= 1) {
-        clearCountdown();
-        onStart();
+        beginGame();
       } else {
         countdown -= 1;
       }
@@ -241,8 +250,7 @@
       return;
     }
 
-    clearCountdown();
-    onStart();
+    beginGame();
   };
 
   const startAutoAdvance = () => {
@@ -340,6 +348,7 @@
     clearCountdown();
     clearAutoAdvance();
     clearTypewriter();
+    hasStarted = true;
   });
 </script>
 

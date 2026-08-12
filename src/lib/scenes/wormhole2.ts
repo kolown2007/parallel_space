@@ -241,7 +241,7 @@ setPortal,
 pathPoints
 });
 this.registerCleanup(installKeyboardControls(keyboardHandlers));
-this.registerCleanup(() => cleanupDroneControl(false));
+this.registerCleanup(() => cleanupDroneControl(true));
 
 const autoCubeInterval = setInterval(() => {
 keyboardHandlers.onPlaceCube?.();
