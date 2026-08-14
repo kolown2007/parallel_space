@@ -5,13 +5,14 @@ import type { KeysPressed } from './inputTypes';
  * All keyboard input handling is consolidated here for maintainability
  * 
  * Key Mappings:
- * - W/A/S/D: Movement (W also triggers one forward burst per press)
+ * - A/S/D: Held movement inputs
+ * - W: One-shot burst and stop (burst acceleration)
  * - Q: Toggle wireframe
  * - R: Reset drone position
  * - C: Switch camera
  * - Arrow Up: Increase speed
  * - Arrow Down: Decrease speed
- * - B: Burst acceleration (5x speed for 500ms)
+ * - B: Constant speed addition
  * - Space: Place cube obstacle ahead
  * - F: Place model
  * - P: Spawn obstacle
@@ -49,16 +50,19 @@ export function installKeyboardControls(callbacks: KeyboardCallbacks) {
 
     const keydown = (event: KeyboardEvent) => {
         const key = event.key.toLowerCase();
-        
-        // Movement keys (continuous input)
-        if (['w', 'a', 's', 'd'].includes(key)) {
-            if (key === 'w' && !keysPressed[key]) {
-                callbacks.onBurst?.();
-            }
+
+        if (key === 'w') {
+            callbacks.onBurst?.();
+            keysPressed.w = false;
+            return;
+        }
+
+        // Held movement keys
+        if (['a', 's', 'd'].includes(key)) {
             keysPressed[key] = true;
             return;
         }
-        
+
         // Action keys (single press)
         switch (key) {
             case 'q':
@@ -77,7 +81,7 @@ export function installKeyboardControls(callbacks: KeyboardCallbacks) {
                 callbacks.onSpeedDown?.();
                 break;
             case 'b':
-                callbacks.onBurst?.();
+                callbacks.onSpeedUp?.();
                 break;
             case 'o':
                 callbacks.onPlacePortal?.();
@@ -100,7 +104,7 @@ export function installKeyboardControls(callbacks: KeyboardCallbacks) {
 
     const keyup = (event: KeyboardEvent) => {
         const key = event.key.toLowerCase();
-        if (['w', 'a', 's', 'd'].includes(key)) {
+        if (['a', 's', 'd', 'w'].includes(key)) {
             keysPressed[key] = false;
         }
     };
