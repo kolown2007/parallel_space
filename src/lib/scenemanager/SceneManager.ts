@@ -2,6 +2,7 @@ export type SceneMode = 'scene1' | 'scene2' | 'scene3';
 
 export class SceneManager {
   mode: SceneMode = 'scene2';
+  private paused = false;
   private videoMount: any = null;
   private renderActive = false;
   private scene2: any = null;
@@ -28,6 +29,8 @@ export class SceneManager {
   }
 
   switchTo(mode: SceneMode) {
+    this.paused = false;
+
     if (mode === 'scene1') {
       this.stopRender();
       if (!this.videoMount) {
@@ -43,12 +46,12 @@ export class SceneManager {
         this.scene3Factory().then((s) => {
           this.scene3 = s;
           this.scene3Loading = false;
-          if (this.mode === 'scene3') this.startRender();
+          if (!this.paused && this.mode === 'scene3') this.startRender();
         }).catch((e) => {
           console.warn('Scene3 failed to load', e);
           this.scene3Loading = false;
         });
-      } else {
+      } else if (!this.paused) {
         this.startRender();
       }
     } else {
@@ -59,19 +62,19 @@ export class SceneManager {
         this.scene2Factory().then((s) => {
           this.scene2 = s;
           this.scene2Loading = false;
-          if (this.mode === 'scene2') this.startRender();
+          if (!this.paused && this.mode === 'scene2') this.startRender();
         }).catch((e) => {
           console.warn('Scene2 failed to load', e);
           this.scene2Loading = false;
         });
-      } else if (this.scene2) {
+      } else if (this.scene2 && !this.paused) {
         this.startRender();
       }
     }
   }
 
   private startRender() {
-    if (this.renderActive) return;
+    if (this.paused || this.renderActive) return;
     this.renderActive = true;
     this.engine.runRenderLoop(() => {
       if (this.mode === 'scene2') this.scene2?.render();
@@ -85,6 +88,7 @@ export class SceneManager {
   }
 
   public pause() {
+    this.paused = true;
     this.stopRender();
   }
 

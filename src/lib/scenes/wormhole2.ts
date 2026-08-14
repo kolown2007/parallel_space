@@ -11,12 +11,14 @@ import { installKeyboardControls } from '../input/keyboardControls';
 import { randomFrom, getTextureUrl } from '../assets/assetsConfig';
 import { updateProgress, cleanupDroneControl, droneControl, displaySpeed, droneEvents, adjustDroneSpeed, burstAccelerate, SPEED_INCREMENT } from '../stores/droneControl.svelte.js';
 import { initRealtimeControl } from '../services/RealtimeControl';
+import { createDroneInputState, inputFromKeys } from '../input/inputTypes';
 import { setOnRevolutionComplete } from '../stores/droneRevolution';
-import { startAmbient, resumeAudioOnGesture, stopAmbient } from '$lib/scores/ambient';
+import { startAmbient, resumeAudioOnGesture, stopAmbient, playLaserFireSound } from '$lib/scores/ambient';
 import { WORMHOLE2_CONFIG } from './wormhole2/wormhole2.config';
 import { getDronePathIndexFactory } from './wormhole2/wormhole2.helpers';
 import { createKeyboardHandlers } from './wormhole2/wormhole2.keyboard';
 import { setupDroneCollision } from './wormhole2/wormhole2.collision';
+import type { DronePhysicsState } from '../drone/droneControllers';
 import { createRenderLoop } from './wormhole2/wormhole2.render';
 
 export class WormHoleScene2 {
@@ -164,6 +166,7 @@ console.warn('Billboard placement failed:', e);
 }
 
 let drone: any, droneAggregate: any;
+const physicsState: DronePhysicsState = { collisionStopUntil: 0 };
 const droneStartPos = getPositionOnPath(this.pathPoints, cfg.drone.startPathPoint);
 
 try {
@@ -214,7 +217,7 @@ z: droneStartPos.z
 }
 }
 
-this.registerCleanup(setupDroneCollision(droneAggregate));
+this.registerCleanup(setupDroneCollision(droneAggregate, physicsState));
 
 getDronePathIndex = getDronePathIndexFactory(drone, pathPoints);
 
@@ -229,6 +232,69 @@ rotationSmooth: cfg.camera.rotationSmooth,
 lookAheadDistance: cfg.camera.lookAheadDistance
 };
 
+const projectiles: Array<{ mesh: BABYLON.Mesh; aggregate: BABYLON.PhysicsAggregate | null; velocity: BABYLON.Vector3; expiry: number }> = [];
+const fireProjectile = () => {
+try {
+const rotation = drone.absoluteRotationQuaternion ?? drone.rotationQuaternion ?? BABYLON.Quaternion.Identity();
+const forward = new BABYLON.Vector3(-1, 0, 0).applyRotationQuaternion(rotation).normalize();
+
+const bbox = drone.getBoundingInfo?.().boundingBox;
+const boxCenter = bbox ? bbox.centerWorld.clone() : drone.position.clone();
+const halfSize = bbox
+? bbox.maximumWorld.subtract(bbox.minimumWorld).scale(0.5)
+: new BABYLON.Vector3(1, 1, 1);
+
+const origin = boxCenter.clone().add(forward.scale(Math.max(halfSize.x, halfSize.y, halfSize.z) * 0.9));
+
+const muzzle = BABYLON.MeshBuilder.CreateSphere('droneMuzzleFlash', { diameter: 0.45, segments: 8 }, scene);
+muzzle.position.copyFrom(origin);
+muzzle.material = new BABYLON.StandardMaterial('droneMuzzleMat', scene);
+const muzzleMat = muzzle.material as BABYLON.StandardMaterial;
+muzzleMat.diffuseColor = new BABYLON.Color3(1, 0.9, 0.3);
+muzzleMat.emissiveColor = new BABYLON.Color3(1, 0.8, 0.1);
+muzzleMat.specularColor = new BABYLON.Color3(1, 1, 1);
+muzzle.isPickable = false;
+
+const projectile = BABYLON.MeshBuilder.CreateSphere('droneProjectile', { diameter: 0.5, segments: 12 }, scene);
+projectile.position.copyFrom(origin.clone());
+projectile.material = new BABYLON.StandardMaterial('droneProjectileMat', scene);
+const mat = projectile.material as BABYLON.StandardMaterial;
+mat.diffuseColor = new BABYLON.Color3(1, 0.2, 0.2);
+mat.emissiveColor = new BABYLON.Color3(1, 0.2, 0.2);
+mat.specularColor = new BABYLON.Color3(1, 1, 1);
+projectile.isPickable = false;
+
+const aggregate = new BABYLON.PhysicsAggregate(
+projectile,
+BABYLON.PhysicsShapeType.SPHERE,
+{ mass: 1, restitution: 0.7, friction: 0.2 },
+scene
+);
+const velocity = forward.scale(45);
+aggregate.body.setLinearVelocity(velocity);
+aggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
+
+projectiles.push({
+mesh: projectile,
+aggregate,
+velocity,
+expiry: performance.now() + 2000
+});
+
+projectiles.push({
+mesh: muzzle,
+aggregate: null,
+velocity: BABYLON.Vector3.Zero(),
+expiry: performance.now() + 120
+});
+
+try { playLaserFireSound(); } catch (e) { console.warn('Laser fire sound failed:', e); }
+console.log('💥 Drone fired projectile along the real nose direction');
+} catch (e) {
+console.warn('Failed to fire projectile:', e);
+}
+};
+
 const keyboardHandlers = createKeyboardHandlers({
 drone,
 droneAggregate,
@@ -238,10 +304,12 @@ getDronePathIndex,
 switchCamera,
 onPortalTrigger,
 setPortal,
-pathPoints
+pathPoints,
+fireProjectile
 });
+const renderInput = createDroneInputState();
 this.registerCleanup(installKeyboardControls(keyboardHandlers));
-this.registerCleanup(() => cleanupDroneControl(false));
+this.registerCleanup(() => cleanupDroneControl(true));
 
 const autoCubeInterval = setInterval(() => {
 keyboardHandlers.onPlaceCube?.();
@@ -272,12 +340,47 @@ getPortal,
 setPortal,
 onPortalTrigger,
 getDronePathIndex,
-keysPressed: keyboardHandlers.keysPressed,
+	getInput: () => inputFromKeys(keyboardHandlers.keysPressed, renderInput),
+	physicsState,
 gimbal,
 torusGeometry: { torusCenter, torusMainRadius, torusTubeRadius }
 });
+const projectileUpdate = () => {
+for (let i = projectiles.length - 1; i >= 0; i--) {
+const projectile = projectiles[i];
+try {
+if (projectile.aggregate) {
+projectile.aggregate.body.setLinearVelocity(projectile.velocity);
+}
+if (performance.now() > projectile.expiry) {
+if (projectile.aggregate) {
+try { projectile.aggregate.dispose(); } catch {}
+}
+try { projectile.mesh.dispose(); } catch {}
+projectiles.splice(i, 1);
+}
+} catch {
+if (projectile.aggregate) {
+try { projectile.aggregate.dispose(); } catch {}
+}
+try { projectile.mesh.dispose(); } catch {}
+projectiles.splice(i, 1);
+}
+}
+};
 scene.registerBeforeRender(renderLoop);
+scene.registerBeforeRender(projectileUpdate);
 this.registerCleanup(() => { try { scene.unregisterBeforeRender(renderLoop); } catch {} });
+this.registerCleanup(() => { try { scene.unregisterBeforeRender(projectileUpdate); } catch {} });
+this.registerCleanup(() => {
+for (const projectile of [...projectiles]) {
+if (projectile.aggregate) {
+try { projectile.aggregate.dispose(); } catch {}
+}
+try { projectile.mesh.dispose(); } catch {}
+}
+projectiles.length = 0;
+});
 
 } catch (e) {
 console.warn('Drone setup failed:', e);

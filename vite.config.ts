@@ -6,7 +6,7 @@ import { defineConfig } from 'vite';
 const config = {
 	plugins: [tailwindcss(), sveltekit()],
 	test: {
-		workspace: [
+		projects: [
 			{
 				extends: './vite.config.ts',
 				plugins: [svelteTesting()],

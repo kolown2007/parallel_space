@@ -37,14 +37,15 @@ export const displaySpeed = derived(droneControl, $d => Math.round($d.speed * DI
 // Helper functions - use store update pattern
 export function setDroneSpeed(speed: number) {
   // clamp to [0, MAX_SPEED]
-  droneControl.update(d => ({ ...d, speed: Math.max(0, Math.min(MAX_SPEED, speed)) }));
+  const nextSpeed = Math.max(0, Math.min(MAX_SPEED, speed));
+  droneControl.update(d => d.speed === nextSpeed ? d : { ...d, speed: nextSpeed });
 }
 
 export function adjustDroneSpeed(delta: number) {
-  droneControl.update(d => ({
-    ...d,
-    speed: Math.max(0, Math.min(MAX_SPEED, d.speed + delta))
-  }));
+  droneControl.update(d => {
+    const nextSpeed = Math.max(0, Math.min(MAX_SPEED, d.speed + delta));
+    return d.speed === nextSpeed ? d : { ...d, speed: nextSpeed };
+  });
 }
 
 export function setLateralForce(force: number) {
@@ -53,7 +54,8 @@ export function setLateralForce(force: number) {
 
 export function updateProgress(progress: number) {
   // Clamp to [0, 1] to prevent invalid path positions
-  droneControl.update(d => ({ ...d, progress: Math.max(0, Math.min(1, progress)) }));
+  const nextProgress = Math.max(0, Math.min(1, progress));
+  droneControl.update(d => d.progress === nextProgress ? d : { ...d, progress: nextProgress });
 }
 
 export function resetDrone() {
@@ -65,28 +67,45 @@ let burstTimeout: any = null;
 let burstOriginalSpeed: number | null = null;
 
 /**
- * Burst accelerate: each call increases the base speed by +1 point/sec.
- * This converts the +1 display-point into internal units and clamps to MAX_SPEED.
+ * Burst accelerate temporarily, then restore the speed from before the burst.
  */
 export function burstAccelerate() {
-  const deltaInternal = 1 / DISPLAY_FACTOR; // 1 point/sec -> internal
+  const burstMultiplier = 5;
+  const burstDurationMs = 500;
+
+  if (burstTimeout !== null) clearTimeout(burstTimeout);
+
   droneControl.update(d => {
-    const newSpeed = Math.max(0, Math.min(MAX_SPEED, d.speed + deltaInternal));
-    droneEvents.set({ type: 'burstAdd', data: { deltaInternal, newSpeed } });
-    return { ...d, speed: newSpeed };
+    if (burstOriginalSpeed === null) burstOriginalSpeed = d.speed;
+    const newSpeed = Math.max(0, Math.min(MAX_SPEED, burstOriginalSpeed * burstMultiplier));
+    droneEvents.set({ type: 'burstStart', data: { originalSpeed: burstOriginalSpeed, newSpeed } });
+    return d.speed === newSpeed ? d : { ...d, speed: newSpeed };
   });
+
+  burstTimeout = setTimeout(() => {
+    const originalSpeed = burstOriginalSpeed;
+    burstTimeout = null;
+    burstOriginalSpeed = null;
+    if (originalSpeed === null) return;
+    droneControl.update(d => d.speed === originalSpeed ? d : { ...d, speed: originalSpeed });
+    droneEvents.set({ type: 'burstEnd', data: { speed: originalSpeed } });
+  }, burstDurationMs);
 }
 
 /**
- * Cancel an active burst (keeps behavior simple since bursts are now permanent increments).
+ * Cancel an active burst and restore the pre-burst speed.
  */
 export function cancelBurst() {
+  const originalSpeed = burstOriginalSpeed;
   if (burstTimeout !== null) {
     clearTimeout(burstTimeout);
     burstTimeout = null;
   }
   burstOriginalSpeed = null;
-  droneEvents.set({ type: 'burstCancelled' });
+  if (originalSpeed !== null) {
+    droneControl.update(d => d.speed === originalSpeed ? d : { ...d, speed: originalSpeed });
+    droneEvents.set({ type: 'burstCancelled', data: { speed: originalSpeed } });
+  }
 }
 
 /**

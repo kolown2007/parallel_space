@@ -1,9 +1,11 @@
+import type { KeysPressed } from './inputTypes';
+
 /**
  * Centralized keyboard controller for the game
  * All keyboard input handling is consolidated here for maintainability
  * 
  * Key Mappings:
- * - W/A/S/D: Movement (continuous input via keysPressed state)
+ * - W/A/S/D: Movement (W also triggers one forward burst per press)
  * - Q: Toggle wireframe
  * - R: Reset drone position
  * - C: Switch camera
@@ -14,8 +16,6 @@
  * - F: Place model
  * - P: Spawn obstacle
  */
-
-export type KeysPressed = { [key: string]: boolean };
 
 export interface KeyboardCallbacks {
     // Movement keys (W/A/S/D) - handled via keysPressed state
@@ -35,6 +35,7 @@ export interface KeyboardCallbacks {
     onPlaceCube?: () => void;        // Space - place cube ahead
     onPlaceModel?: () => void;       // F - place model
     onSpawn?: () => void;            // P - spawn obstacle
+    onFire?: () => void;             // L - fire projectile from drone
     // Portal obstacle
     onPlacePortal?: () => void;      // O - place portal obstacle
 }
@@ -51,6 +52,9 @@ export function installKeyboardControls(callbacks: KeyboardCallbacks) {
         
         // Movement keys (continuous input)
         if (['w', 'a', 's', 'd'].includes(key)) {
+            if (key === 'w' && !keysPressed[key]) {
+                callbacks.onBurst?.();
+            }
             keysPressed[key] = true;
             return;
         }
@@ -87,6 +91,9 @@ export function installKeyboardControls(callbacks: KeyboardCallbacks) {
                 break;
             case 'p':
                 callbacks.onSpawn?.();
+                break;
+            case 'l':
+                callbacks.onFire?.();
                 break;
         }
     };

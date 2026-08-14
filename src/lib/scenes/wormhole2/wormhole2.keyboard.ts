@@ -1,5 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-import { createKeysPressed } from '../../drone/droneControllers';
+import { createKeysPressed, resetDronePosition } from '../../drone/droneControllers';
 import { adjustDroneSpeed, burstAccelerate, SPEED_INCREMENT, droneControl } from '../../stores/droneControl.svelte';
 import { revolutionStore } from '../../stores/droneRevolution';
 import { get } from 'svelte/store';
@@ -17,6 +17,7 @@ export interface KeyboardHandlerDeps {
 	onPortalTrigger?: () => void;
 	setPortal: (portal: any) => void;
 	pathPoints: BABYLON.Vector3[];
+	fireProjectile?: () => void;
 }
 
 export function createKeyboardHandlers(deps: KeyboardHandlerDeps) {
@@ -29,7 +30,8 @@ export function createKeyboardHandlers(deps: KeyboardHandlerDeps) {
 		switchCamera,
 		onPortalTrigger,
 		setPortal,
-		pathPoints
+		pathPoints,
+		fireProjectile
 	} = deps;
 
 	const keysPressed = createKeysPressed();
@@ -43,10 +45,11 @@ export function createKeyboardHandlers(deps: KeyboardHandlerDeps) {
 		},
 
 		onReset: () => {
-			drone.position = new BABYLON.Vector3(40, 1, 0);
+			const resetPosition = new BABYLON.Vector3(40, 1, 0);
+			drone.rotationQuaternion = null;
+			drone.rotation.set(-Math.PI / 2, 0, 0);
 			try {
-				droneAggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
-				droneAggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
+				resetDronePosition(drone, droneAggregate, resetPosition);
 			} catch (e) {
 				/* ignore if aggregate missing */
 			}
@@ -122,6 +125,10 @@ export function createKeyboardHandlers(deps: KeyboardHandlerDeps) {
 			} catch (e) {
 				console.warn('Failed to place portal:', e);
 			}
+		},
+
+		onFire: () => {
+			fireProjectile?.();
 		}
 	};
 }

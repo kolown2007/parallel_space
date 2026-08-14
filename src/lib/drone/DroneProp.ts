@@ -58,6 +58,43 @@ function getBoundingInfo(mesh: BABYLON.AbstractMesh): BABYLON.BoundingInfo | nul
 	}
 }
 
+function addDebugFaceLabels(
+	helper: BABYLON.Mesh,
+	scene: BABYLON.Scene,
+	size: BABYLON.Vector3
+): BABYLON.Mesh[] {
+	const faceOffset = 0.02;
+	const labels: Array<{ text: string; width: number; height: number; color: BABYLON.Color3; position: BABYLON.Vector3; rotation: BABYLON.Vector3 }> = [
+		{ text: 'RIGHT', width: size.x, height: size.y, color: new BABYLON.Color3(0.1, 0.8, 0.25), position: new BABYLON.Vector3(0, 0, size.z / 2 + faceOffset), rotation: BABYLON.Vector3.Zero() },
+		{ text: 'LEFT', width: size.x, height: size.y, color: new BABYLON.Color3(0.9, 0.1, 0.1), position: new BABYLON.Vector3(0, 0, -size.z / 2 - faceOffset), rotation: new BABYLON.Vector3(0, Math.PI, 0) },
+		{ text: 'BACK', width: size.z, height: size.y, color: new BABYLON.Color3(0.95, 0.45, 0.05), position: new BABYLON.Vector3(size.x / 2 + faceOffset, 0, 0), rotation: new BABYLON.Vector3(0, Math.PI / 2, 0) },
+		{ text: 'FRONT', width: size.z, height: size.y, color: new BABYLON.Color3(0.1, 0.4, 0.95), position: new BABYLON.Vector3(-size.x / 2 - faceOffset, 0, 0), rotation: new BABYLON.Vector3(0, -Math.PI / 2, 0) },
+		{ text: 'TOP', width: size.x, height: size.z, color: new BABYLON.Color3(0.95, 0.8, 0.05), position: new BABYLON.Vector3(0, size.y / 2 + faceOffset, 0), rotation: new BABYLON.Vector3(Math.PI / 2, 0, 0) },
+		{ text: 'BOTTOM', width: size.x, height: size.z, color: new BABYLON.Color3(0.75, 0.15, 0.85), position: new BABYLON.Vector3(0, -size.y / 2 - faceOffset, 0), rotation: new BABYLON.Vector3(-Math.PI / 2, 0, 0) }
+	];
+
+	return labels.map(({ text, width, height, color, position, rotation }) => {
+		const label = BABYLON.MeshBuilder.CreatePlane(`${helper.name}_${text.toLowerCase()}`, {
+			width: Math.max(0.01, width),
+			height: Math.max(0.01, height)
+		}, scene);
+		const texture = new BABYLON.DynamicTexture(`${label.name}_texture`, { width: 256, height: 64 }, scene, true);
+		texture.hasAlpha = true;
+		texture.drawText(text, 128, 46, 'bold 34px Arial', 'white', color.toHexString(), true, true);
+		const material = new BABYLON.StandardMaterial(`${label.name}_material`, scene);
+		material.diffuseTexture = texture;
+		material.emissiveColor = color;
+		material.useAlphaFromDiffuseTexture = true;
+		material.backFaceCulling = false;
+		material.disableDepthWrite = true;
+		label.material = material;
+		label.parent = helper;
+		label.position.copyFrom(position);
+		label.rotation.copyFrom(rotation);
+		return label;
+	});
+}
+
 /** Parse GLB URL into root and filename */
 function parseGlbUrl(url: string): { rootUrl: string; fileName: string } {
 	if (!url.includes('/')) {
@@ -444,6 +481,7 @@ export function debugPhysicsAggregate(
 			height: Math.max(0.01, Math.abs(size.y)),
 			depth: Math.max(0.01, Math.abs(size.z))
 		}, scene);
+		const labels = addDebugFaceLabels(helper, scene, size);
 
 		// Create material
 		const color = options.color ?? new BABYLON.Color3(1, 0.2, 0.2);
@@ -462,6 +500,11 @@ export function debugPhysicsAggregate(
 		// Parent to source so it follows automatically
 		helper.parent = source;
 		helper.position.copyFrom(localCenter);
+		const originalDispose = helper.dispose.bind(helper);
+		helper.dispose = () => {
+			labels.forEach((label) => label.dispose());
+			originalDispose();
+		};
 
 		return helper;
 	} catch (e) {
