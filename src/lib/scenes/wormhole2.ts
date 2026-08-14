@@ -11,12 +11,14 @@ import { installKeyboardControls } from '../input/keyboardControls';
 import { randomFrom, getTextureUrl } from '../assets/assetsConfig';
 import { updateProgress, cleanupDroneControl, droneControl, displaySpeed, droneEvents, adjustDroneSpeed, burstAccelerate, SPEED_INCREMENT } from '../stores/droneControl.svelte.js';
 import { initRealtimeControl } from '../services/RealtimeControl';
+import { createDroneInputState, inputFromKeys } from '../input/inputTypes';
 import { setOnRevolutionComplete } from '../stores/droneRevolution';
 import { startAmbient, resumeAudioOnGesture, stopAmbient, playLaserFireSound } from '$lib/scores/ambient';
 import { WORMHOLE2_CONFIG } from './wormhole2/wormhole2.config';
 import { getDronePathIndexFactory } from './wormhole2/wormhole2.helpers';
 import { createKeyboardHandlers } from './wormhole2/wormhole2.keyboard';
 import { setupDroneCollision } from './wormhole2/wormhole2.collision';
+import type { DronePhysicsState } from '../drone/droneControllers';
 import { createRenderLoop } from './wormhole2/wormhole2.render';
 
 export class WormHoleScene2 {
@@ -164,6 +166,7 @@ console.warn('Billboard placement failed:', e);
 }
 
 let drone: any, droneAggregate: any;
+const physicsState: DronePhysicsState = { collisionStopUntil: 0 };
 const droneStartPos = getPositionOnPath(this.pathPoints, cfg.drone.startPathPoint);
 
 try {
@@ -214,7 +217,7 @@ z: droneStartPos.z
 }
 }
 
-this.registerCleanup(setupDroneCollision(droneAggregate));
+this.registerCleanup(setupDroneCollision(droneAggregate, physicsState));
 
 getDronePathIndex = getDronePathIndexFactory(drone, pathPoints);
 
@@ -304,6 +307,7 @@ setPortal,
 pathPoints,
 fireProjectile
 });
+const renderInput = createDroneInputState();
 this.registerCleanup(installKeyboardControls(keyboardHandlers));
 this.registerCleanup(() => cleanupDroneControl(true));
 
@@ -336,7 +340,8 @@ getPortal,
 setPortal,
 onPortalTrigger,
 getDronePathIndex,
-keysPressed: keyboardHandlers.keysPressed,
+	getInput: () => inputFromKeys(keyboardHandlers.keysPressed, renderInput),
+	physicsState,
 gimbal,
 torusGeometry: { torusCenter, torusMainRadius, torusTubeRadius }
 });

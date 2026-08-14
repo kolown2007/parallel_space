@@ -1,5 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import { getPositionOnPath, getDirectionOnPath } from '../wormhole/PathUtils';
+import type { DroneInputState, KeysPressed } from '../input/inputTypes';
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -10,6 +11,7 @@ export interface DronePhysicsConfig {
     followStrength?: number;
     velocityDamping?: number;
     lateralForce?: number;
+    yawRate?: number;
 }
 
 export interface CameraGimbalConfig {
@@ -27,12 +29,8 @@ export interface CameraBounds {
     margin?: number;
 }
 
-export interface KeysPressed {
-    w: boolean;
-    a: boolean;
-    s: boolean;
-    d: boolean;
-    [key: string]: boolean;
+export interface DronePhysicsState {
+    collisionStopUntil: number;
 }
 
 // ============================================================================
@@ -43,7 +41,8 @@ export const DEFAULT_PHYSICS_CONFIG: Required<DronePhysicsConfig> = {
     maxFollowSpeed: 40,
     followStrength: 100.0,
     velocityDamping: 0.98,
-    lateralForce: 8
+    lateralForce: 8,
+    yawRate: 0.04
 };
 
 export const DEFAULT_GIMBAL_CONFIG: CameraGimbalConfig = {
@@ -65,10 +64,16 @@ const _tempDesiredVel = new BABYLON.Vector3();
 const _tempVelocityError = new BABYLON.Vector3();
 const _tempStabilizedVel = new BABYLON.Vector3();
 const _tempLateralForce = new BABYLON.Vector3();
+const _tempAngularVelocity = new BABYLON.Vector3();
 
 const _tempDesiredCamPos = new BABYLON.Vector3();
 const _tempToCamTarget = new BABYLON.Vector3();
 const _tempTargetQuat = new BABYLON.Quaternion();
+const _tempOrientationQuat = new BABYLON.Quaternion();
+const _tempOrientationMatrix = new BABYLON.Matrix();
+const _tempForward = new BABYLON.Vector3();
+const _tempRight = new BABYLON.Vector3();
+const _tempUp = new BABYLON.Vector3();
 
 // ============================================================================
 // DRONE PHYSICS
@@ -82,18 +87,75 @@ export function updateDronePhysics(
     aggregate: BABYLON.PhysicsAggregate,
     pathPoints: BABYLON.Vector3[],
     pathProgress: number,
-    keysPressed: KeysPressed,
+    input: DroneInputState,
+    state: DronePhysicsState,
     config: DronePhysicsConfig = {}
 ): void {
     const {
         maxFollowSpeed,
         followStrength,
         velocityDamping,
-        lateralForce
+        yawRate
     } = { ...DEFAULT_PHYSICS_CONFIG, ...config };
 
-    // Maintain drone orientation
-    drone.rotation.x = -Math.PI / 2;
+    const droneMetadata = ((drone as any).metadata ??= {}) as Record<string, any>;
+    const stabilizedOrientation = droneMetadata._stabilizedOrientation as BABYLON.Quaternion | undefined;
+    const collisionStopUntil = state.collisionStopUntil;
+
+    // Keep quaternion orientation after stabilization so releasing S does not
+    // reveal and restore the previous Euler rotation.
+    if (stabilizedOrientation) {
+        if (!drone.rotationQuaternion) drone.rotationQuaternion = new BABYLON.Quaternion();
+        drone.rotationQuaternion.copyFrom(stabilizedOrientation);
+        if (input.brake <= 0 && input.yaw !== 0) {
+            drone.rotate(BABYLON.Axis.Y, input.yaw * yawRate, BABYLON.Space.LOCAL);
+            stabilizedOrientation.copyFrom(drone.rotationQuaternion);
+        }
+    } else {
+        drone.rotation.x = -Math.PI / 2;
+        if (input.brake <= 0 && input.yaw !== 0) {
+            drone.rotation.y += input.yaw * yawRate;
+        }
+    }
+
+    if (input.brake > 0) {
+        _tempForward.copyFrom(getDirectionOnPath(pathPoints, pathProgress));
+        _tempUp.copyFrom(BABYLON.Axis.Y);
+        BABYLON.Vector3.CrossToRef(_tempUp, _tempForward, _tempRight);
+        if (_tempRight.lengthSquared() < 0.0001) {
+            _tempUp.copyFrom(BABYLON.Axis.Z);
+            BABYLON.Vector3.CrossToRef(_tempUp, _tempForward, _tempRight);
+        }
+        _tempRight.normalize();
+        BABYLON.Vector3.CrossToRef(_tempForward, _tempRight, _tempUp);
+        _tempUp.normalize();
+
+        BABYLON.Matrix.FromXYZAxesToRef(
+            _tempForward.scale(-1),
+            _tempUp,
+            _tempRight,
+            _tempOrientationMatrix
+        );
+        BABYLON.Quaternion.FromRotationMatrixToRef(_tempOrientationMatrix, _tempOrientationQuat);
+        if (!drone.rotationQuaternion) drone.rotationQuaternion = new BABYLON.Quaternion();
+        BABYLON.Quaternion.SlerpToRef(drone.rotationQuaternion, _tempOrientationQuat, 0.18, drone.rotationQuaternion);
+        droneMetadata._stabilizedOrientation = drone.rotationQuaternion.clone();
+
+        const currentVelocity = aggregate.body.getLinearVelocity();
+        if (currentVelocity) {
+            _tempCurrentVel.copyFrom(currentVelocity).scaleInPlace(0.78);
+            aggregate.body.setLinearVelocity(_tempCurrentVel);
+        }
+        const currentAngularVelocity = aggregate.body.getAngularVelocity();
+        if (currentAngularVelocity) {
+            _tempAngularVelocity.copyFrom(currentAngularVelocity).scaleInPlace(0.72);
+            aggregate.body.setAngularVelocity(_tempAngularVelocity);
+        }
+        return;
+    }
+
+    // During collision recovery, leave separation and contact response to Havok.
+    if (performance.now() < collisionStopUntil) return;
 
     // Get target positions
     const targetPos = getPositionOnPath(pathPoints, pathProgress);
@@ -149,15 +211,6 @@ export function updateDronePhysics(
     // Commit cleanly back to the simulation body
     aggregate.body.setLinearVelocity(_tempStabilizedVel);
 
-    // ZERO-ALLOCATION: Apply lateral controls
-    const reducedLateral = lateralForce * 0.3;
-    if (keysPressed.a || keysPressed.d) {
-        _tempLateralForce.set(0, 0, 0);
-        if (keysPressed.a) _tempLateralForce.z = reducedLateral;
-        if (keysPressed.d) _tempLateralForce.z -= reducedLateral;
-        
-        aggregate.body.applyForce(_tempLateralForce, drone.position);
-    }
 }
 
 /**
@@ -169,6 +222,9 @@ export function resetDronePosition(
     position: BABYLON.Vector3
 ): void {
     drone.position.copyFrom(position);
+    if ((drone as any).metadata) {
+        delete (drone as any).metadata._stabilizedOrientation;
+    }
     try {
         aggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
         aggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());

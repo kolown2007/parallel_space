@@ -3,10 +3,11 @@ import { get } from 'svelte/store';
 import { droneControl, updateProgress, enterPortal, FPS, MAX_SPEED } from '../../stores/droneControl.svelte';
 import { revolutionStore, triggerRevolutionComplete } from '../../stores/droneRevolution';
 import { playPortalSound, playCollisionNoteSingle } from '../../scores/ambient';
-import { updateDronePhysics, updateFollowCamera } from '../../drone/droneControllers';
+import { updateDronePhysics, updateFollowCamera, type DronePhysicsState } from '../../drone/droneControllers';
 import { getPositionOnPath } from '../../wormhole/PathUtils';
 import type { ObstacleManager } from '../../obstacle/ObstacleManager';
 import { WORMHOLE2_CONFIG } from './wormhole2.config';
+import type { DroneInputState } from '../../input/inputTypes';
 
 export interface RenderLoopDeps {
 	engine: any;
@@ -20,7 +21,8 @@ export interface RenderLoopDeps {
 	setPortal: (portal: any, remove?: boolean) => void;
 	onPortalTrigger?: () => void;
 	getDronePathIndex: () => number;
-	keysPressed: any;
+	getInput: () => DroneInputState;
+	physicsState: DronePhysicsState;
 	gimbal: {
 		followDistance: number;
 		followHeight: number;
@@ -48,7 +50,8 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 		setPortal,
 		onPortalTrigger,
 		getDronePathIndex,
-		keysPressed,
+		getInput,
+		physicsState,
 		gimbal,
 		torusGeometry
 	} = deps;
@@ -58,7 +61,9 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 	return () => {
 		const dt = engine.getDeltaTime() / 1000;
 		const control = get(droneControl);
+		const input = getInput();
 		const portals = getPortal();
+		const collisionStopUntil = physicsState.collisionStopUntil;
 
 		// Portal collision check (support multiple portals)
 		if (portals && portals.length > 0 && onPortalTrigger) {
@@ -109,7 +114,8 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 		
 		// Scale speed by frame time so movement is consistent across variable FPS.
 		const frameFactor = Math.max(0, dt * FPS); // at 60fps dt~1/60 -> frameFactor ~1
-		let newProgress = control.progress + (control.speed * progressMultiplier * frameFactor);
+		const effectiveSpeed = input.brake > 0 || performance.now() < collisionStopUntil ? 0 : control.speed;
+		let newProgress = control.progress + (effectiveSpeed * progressMultiplier * frameFactor);
 		if (newProgress > 1) {
 			newProgress = 0;
 		}
@@ -157,8 +163,12 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 			droneAggregate,
 			pathPoints,
 			control.progress,
-			keysPressed,
-			{ lateralForce: control.lateralForce }
+			input,
+			physicsState,
+			{
+				lateralForce: control.lateralForce,
+				maxFollowSpeed: Math.min(80, (control.speed / MAX_SPEED) * 80)
+			}
 		);
 
 		// Update follow camera
