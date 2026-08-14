@@ -171,109 +171,112 @@ export function resumeAudioOnGesture(element?: HTMLElement | Document) {
   if (target !== document) addListeners(fallback)
 }
 
-// Trigger piano notes on collision events
+// Impact for non-cube mesh collisions: sharper, more metallic and percussive.
 export function playCollisionNote(velocity: number = 1.0) {
   if (!isRunning) return
 
   const ctx = getAudioContext() as AudioContext
   if (ctx.state !== 'running') return
 
-  const chords = [
-    ['C3', 'E3', 'G3', 'D4', 'E4'],
-    ['A2', 'C3', 'E3', 'G3', 'B3'],
-    ['F2', 'A2', 'C3', 'E3', 'G3'],
-    ['G2', 'B2', 'D3', 'F3', 'A3'],
-    ['D3', 'F#3', 'A3', 'C4', 'E4'],
-    ['E2', 'G#2', 'B2', 'D3', 'F#3'],
-  ]
-
-  const chord = chords[Math.floor(Math.random() * chords.length)]
-  const duration = Math.min(4 + velocity * 8, 12)
-  const vol = Math.min(0.3 + velocity * 0.5, 0.8)
-
-  const available = Math.max(0, MAX_POLYPHONY - activeVoices)
-  if (available <= 0) return
-
-  const notesToPlay = Math.min(chord.length, available)
+  const notes = ['C3', 'D3', 'E3', 'G3', 'A3', 'C4', 'D4']
+  const note = notes[Math.floor(Math.random() * notes.length)]
+  const duration = Math.min(0.14 + velocity * 0.32, 0.8)
+  const vol = Math.min(0.55 + velocity * 0.55, 1.2)
   const now = ctx.currentTime
 
-  chord.slice(0, notesToPlay).forEach((note, i) => {
-    const ms = Math.ceil((duration + 4) * 1000) + 100
-    try {
-      dough({
-        s: 'sine',
-        note,
-        gain: vol,
-        attack: 1.5,
-        decay: 1,
-        sustain: 0.8,
-        release: 4,
-        cutoff: 900,
-        room: 0.6,
-        roomsize: 10,
-      }, now + i * 0.1, duration)
-      activeVoices++
-      setTimeout(() => { activeVoices = Math.max(0, activeVoices - 1) }, ms)
-    } catch (err) {
-      console.warn('dough() failed for note', note, err)
-    }
-  })
+  dough({
+    s: 'triangle',
+    note,
+    gain: vol,
+    attack: 0.01,
+    decay: 0.05,
+    sustain: 0.1,
+    release: 0.35,
+    cutoff: 1800 + velocity * 2000,
+    resonance: 2.2,
+    room: 0.7,
+    roomsize: 14,
+  }, now, duration)
+
+  dough({
+    s: 'sawtooth',
+    note: note,
+    gain: vol * 0.9,
+    attack: 0.005,
+    decay: 0.03,
+    sustain: 0.05,
+    release: 0.22,
+    cutoff: 1200 + velocity * 1500,
+    resonance: 1.8,
+    room: 0.55,
+    roomsize: 12,
+  }, now + 0.02, duration * 0.9)
+
+  dough({
+    s: 'white',
+    gain: 0.16 + velocity * 0.12,
+    attack: 0.005,
+    decay: 0.08,
+    sustain: 0,
+    release: 0.2,
+    cutoff: 3200,
+    room: 0.6,
+    roomsize: 10,
+  }, now, duration)
 }
 
-// Play a single random note for simple collisions (e.g. boxes)
-// export function playCollisionNoteSingle(velocity: number = 1.0) {
-//   if (!isRunning) return
-
-//   const ctx = getAudioContext() as AudioContext
-//   if (ctx.state !== 'running') return
-
-//   const scale = ['C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4']
-//   const note = scale[Math.floor(Math.random() * scale.length)]
-//   const duration = Math.min(0.25 + velocity * 0.75, 2)
-//   const vol = Math.min(0.75 + velocity * 0.9, 1.0)
-//   const now = ctx.currentTime
-
-//   const available = Math.max(0, MAX_POLYPHONY - activeVoices)
-//   if (available <= 0) {
-//     dough({
-//       s: 'triangle',
-//       note,
-//       gain: vol * 0.6,
-//       attack: 0.01,
-//       sustain: 0.0,
-//       release: 0.12,
-//     }, now, 0.12)
-//     return
-//   }
-
-//   dough({
-//     s: 'triangle',
-//     note,
-//     gain: vol,
-//     attack: 0.02,
-//     sustain: 0.3,
-//     release: 0.5,
-//     cutoff: 1200,
-//   }, now, duration)
-//   activeVoices++
-//   const ms = Math.ceil((duration + 0.5) * 1000) + 80
-//   setTimeout(() => { activeVoices = Math.max(0, activeVoices - 1) }, ms)
-// }
-
+// Heavy cube collisions: chunkier rock/metal strike with low-end body and bright clatter.
 export function playCollisionNoteSingle(velocity: number = 1.0) {
   if (!isRunning) return
 
   const ctx = getAudioContext() as AudioContext
   if (ctx.state !== 'running') return
 
-  const scale = ['C3', 'D3', 'E3', 'F3', 'G3', 'A3', 'B3', 'C4']
-  const note = scale[Math.floor(Math.random() * scale.length)]
-  const duration = Math.min(0.25 + velocity * 0.75, 2)
-  const vol = Math.min(0.75 + velocity * 0.9, 1.0)
+  const hits = ['A1', 'C2', 'D2', 'E2', 'F2', 'G2']
+  const note = hits[Math.floor(Math.random() * hits.length)]
+  const duration = Math.min(0.18 + velocity * 0.6, 1.8)
+  const vol = Math.min(1.0 + velocity * 0.8, 1.9)
   const now = ctx.currentTime
 
-  dough({s:'bd'}, now, duration);
-  dough({s:'sd'}, now, duration);
+  dough({
+    s: 'triangle',
+    note,
+    gain: vol * 1.35,
+    attack: 0.003,
+    decay: 0.04,
+    sustain: 0.08,
+    release: 0.6,
+    cutoff: 420 + velocity * 360,
+    resonance: 4.2,
+    room: 0.8,
+    roomsize: 9,
+  }, now, duration)
+
+  dough({
+    s: 'sawtooth',
+    note,
+    gain: vol * 1.1,
+    attack: 0.002,
+    decay: 0.025,
+    sustain: 0.02,
+    release: 0.4,
+    cutoff: 1200 + velocity * 1600,
+    resonance: 3.1,
+    room: 0.7,
+    roomsize: 8,
+  }, now + 0.01, duration * 0.9)
+
+  dough({
+    s: 'white',
+    gain: 0.28 + velocity * 0.2,
+    attack: 0.002,
+    decay: 0.05,
+    sustain: 0,
+    release: 0.45,
+    cutoff: 3000,
+    room: 0.55,
+    roomsize: 7,
+  }, now, duration)
 }
 
 export function playLaserFireSound() {
