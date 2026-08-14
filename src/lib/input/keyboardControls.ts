@@ -35,6 +35,7 @@ export interface KeyboardCallbacks {
     onPlaceCube?: () => void;        // Space - place cube ahead
     onPlaceModel?: () => void;       // F - place model
     onSpawn?: () => void;            // P - spawn obstacle
+    onFire?: () => void;             // J - fire projectile from drone
     // Portal obstacle
     onPlacePortal?: () => void;      // O - place portal obstacle
 }
@@ -87,6 +88,9 @@ export function installKeyboardControls(callbacks: KeyboardCallbacks) {
                 break;
             case 'p':
                 callbacks.onSpawn?.();
+                break;
+            case 'j':
+                callbacks.onFire?.();
                 break;
         }
     };

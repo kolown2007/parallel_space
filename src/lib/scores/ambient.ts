@@ -276,6 +276,43 @@ export function playCollisionNoteSingle(velocity: number = 1.0) {
   dough({s:'sd'}, now, duration);
 }
 
+export function playLaserFireSound() {
+  if (!isRunning) return
+
+  const ctx = getAudioContext() as AudioContext
+  if (ctx.state !== 'running') return
+
+  const now = ctx.currentTime
+  const dur = 0.18
+
+  dough({
+    s: 'sawtooth',
+    note: 'C5',
+    gain: 0.12,
+    attack: 0.01,
+    decay: 0.04,
+    sustain: 0.04,
+    release: 0.12,
+    cutoff: 1800,
+    resonance: 1.2,
+    room: 0.1,
+    roomsize: 1,
+  }, now, dur)
+
+  dough({
+    s: 'square',
+    note: 'G5',
+    gain: 0.08,
+    attack: 0.005,
+    decay: 0.02,
+    sustain: 0.02,
+    release: 0.08,
+    cutoff: 2600,
+    resonance: 1.5,
+    room: 0.1,
+  }, now, dur * 0.9)
+}
+
 
 
 

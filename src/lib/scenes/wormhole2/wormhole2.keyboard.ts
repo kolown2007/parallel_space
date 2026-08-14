@@ -17,6 +17,7 @@ export interface KeyboardHandlerDeps {
 	onPortalTrigger?: () => void;
 	setPortal: (portal: any) => void;
 	pathPoints: BABYLON.Vector3[];
+	fireProjectile?: () => void;
 }
 
 export function createKeyboardHandlers(deps: KeyboardHandlerDeps) {
@@ -29,7 +30,8 @@ export function createKeyboardHandlers(deps: KeyboardHandlerDeps) {
 		switchCamera,
 		onPortalTrigger,
 		setPortal,
-		pathPoints
+		pathPoints,
+		fireProjectile
 	} = deps;
 
 	const keysPressed = createKeysPressed();
@@ -122,6 +124,10 @@ export function createKeyboardHandlers(deps: KeyboardHandlerDeps) {
 			} catch (e) {
 				console.warn('Failed to place portal:', e);
 			}
+		},
+
+		onFire: () => {
+			fireProjectile?.();
 		}
 	};
 }
