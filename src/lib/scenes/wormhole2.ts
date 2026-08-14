@@ -232,7 +232,7 @@ rotationSmooth: cfg.camera.rotationSmooth,
 lookAheadDistance: cfg.camera.lookAheadDistance
 };
 
-const projectiles: Array<{ mesh: BABYLON.Mesh; aggregate: BABYLON.PhysicsAggregate | null; velocity: BABYLON.Vector3; expiry: number }> = [];
+const projectiles: Array<{ mesh: BABYLON.Mesh; aggregate: BABYLON.PhysicsAggregate | null; velocity: BABYLON.Vector3; expiry: number; light?: BABYLON.PointLight }> = [];
 const fireProjectile = () => {
 try {
 const rotation = drone.absoluteRotationQuaternion ?? drone.rotationQuaternion ?? BABYLON.Quaternion.Identity();
@@ -254,6 +254,12 @@ muzzleMat.diffuseColor = new BABYLON.Color3(1, 0.9, 0.3);
 muzzleMat.emissiveColor = new BABYLON.Color3(1, 0.8, 0.1);
 muzzleMat.specularColor = new BABYLON.Color3(1, 1, 1);
 muzzle.isPickable = false;
+
+const projectileLight = new BABYLON.PointLight('droneProjectileLight', origin.clone(), scene);
+projectileLight.diffuse = new BABYLON.Color3(1, 0.8, 0.2);
+projectileLight.specular = new BABYLON.Color3(1, 0.7, 0.1);
+projectileLight.intensity = 0.9;
+projectileLight.range = 12;
 
 const projectile = BABYLON.MeshBuilder.CreateSphere('droneProjectile', { diameter: 0.5, segments: 12 }, scene);
 projectile.position.copyFrom(origin.clone());
@@ -278,14 +284,16 @@ projectiles.push({
 mesh: projectile,
 aggregate,
 velocity,
-expiry: performance.now() + 2000
+expiry: performance.now() + 2000,
+light: projectileLight
 });
 
 projectiles.push({
 mesh: muzzle,
 aggregate: null,
 velocity: BABYLON.Vector3.Zero(),
-expiry: performance.now() + 120
+expiry: performance.now() + 120,
+light: projectileLight
 });
 
 try { playLaserFireSound(); } catch (e) { console.warn('Laser fire sound failed:', e); }
@@ -352,9 +360,19 @@ try {
 if (projectile.aggregate) {
 projectile.aggregate.body.setLinearVelocity(projectile.velocity);
 }
+if (projectile.light) {
+const elapsed = performance.now() - (projectile.expiry - 2000);
+const fade = Math.max(0, 1 - elapsed / 2000);
+projectile.light.intensity = 0.9 * fade;
+projectile.light.range = 12 * fade;
+projectile.light.position.copyFrom(projectile.mesh.position);
+}
 if (performance.now() > projectile.expiry) {
 if (projectile.aggregate) {
 try { projectile.aggregate.dispose(); } catch {}
+}
+if (projectile.light) {
+try { projectile.light.dispose(); } catch {}
 }
 try { projectile.mesh.dispose(); } catch {}
 projectiles.splice(i, 1);
@@ -362,6 +380,9 @@ projectiles.splice(i, 1);
 } catch {
 if (projectile.aggregate) {
 try { projectile.aggregate.dispose(); } catch {}
+}
+if (projectile.light) {
+try { projectile.light.dispose(); } catch {}
 }
 try { projectile.mesh.dispose(); } catch {}
 projectiles.splice(i, 1);

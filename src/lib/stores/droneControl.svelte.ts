@@ -68,16 +68,17 @@ let burstOriginalSpeed: number | null = null;
 
 /**
  * Burst accelerate temporarily, then restore the speed from before the burst.
+ * W is meant to be a single, fast spike: +10 points/sec for a brief burst.
  */
 export function burstAccelerate() {
-  const burstMultiplier = 5;
+  const burstAmount = 10 / (FPS * PATH_POINTS_TOTAL);
   const burstDurationMs = 500;
 
   if (burstTimeout !== null) clearTimeout(burstTimeout);
 
   droneControl.update(d => {
     if (burstOriginalSpeed === null) burstOriginalSpeed = d.speed;
-    const newSpeed = Math.max(0, Math.min(MAX_SPEED, burstOriginalSpeed * burstMultiplier));
+    const newSpeed = Math.max(0, Math.min(MAX_SPEED, burstOriginalSpeed + burstAmount));
     droneEvents.set({ type: 'burstStart', data: { originalSpeed: burstOriginalSpeed, newSpeed } });
     return d.speed === newSpeed ? d : { ...d, speed: newSpeed };
   });
