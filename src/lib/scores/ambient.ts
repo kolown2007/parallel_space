@@ -69,6 +69,11 @@ function triggerPadChord(deadline: number) {
   }, deadline, PAD_INTERVAL_S + 1)
 }
 
+function getSoundContext(): AudioContext | null {
+  const ctx = getAudioContext() as AudioContext | null
+  return ctx && ctx.state === 'running' ? ctx : null
+}
+
 // ── audio init ────────────────────────────────────────────────────────────
 
 
@@ -105,25 +110,17 @@ async function initAudioInternal(): Promise<boolean> {
 }
 
 export async function startAmbient() {
-  if (isRunning) return
-
+  // Ambient background is intentionally disabled. We still initialize audio so
+  // collision / event sounds can play without the pad layer.
   const ok = await initAudioInternal()
   if (!ok) return
 
-  const ctx = getAudioContext() as AudioContext
+  if (schedulerId !== null) {
+    clearInterval(schedulerId)
+    schedulerId = null
+  }
+  isRunning = false
   lfoPhase = 0
-  isRunning = true
-
-  // Fire first chord immediately, then schedule repeating chords
-  triggerPadChord(ctx.currentTime + 0.05)
-
-  schedulerId = setInterval(() => {
-    if (!isRunning) return
-    // Advance LFO one interval's worth of phase
-    lfoPhase = (lfoPhase + LFO_FREQ_HZ * PAD_INTERVAL_S * 2 * Math.PI) % (Math.PI * 2)
-    const ac = getAudioContext() as AudioContext
-    triggerPadChord(ac.currentTime + 0.05)
-  }, PAD_INTERVAL_MS)
 }
 
 export async function ensureAudioStarted(): Promise<boolean> {
@@ -155,8 +152,7 @@ export function resumeAudioOnGesture(element?: HTMLElement | Document) {
 
   const handler = async () => {
     try {
-      const started = await initAudioInternal()
-      if (started) await startAmbient()
+      await initAudioInternal()
     } catch {}
     cleanup()
   }
@@ -171,119 +167,66 @@ export function resumeAudioOnGesture(element?: HTMLElement | Document) {
   if (target !== document) addListeners(fallback)
 }
 
-// Impact for non-cube mesh collisions: sharper, more metallic and percussive.
+// Uniform rock hit for all collisions: low, dense, and cavernous. The ambient pad
+// is disabled, so this is the only sustained texture in the scene.
 export function playCollisionNote(velocity: number = 1.0) {
-  if (!isRunning) return
-
-  const ctx = getAudioContext() as AudioContext
-  if (ctx.state !== 'running') return
-
-  const notes = ['C3', 'D3', 'E3', 'G3', 'A3', 'C4', 'D4']
-  const note = notes[Math.floor(Math.random() * notes.length)]
-  const duration = Math.min(0.14 + velocity * 0.32, 0.8)
-  const vol = Math.min(0.55 + velocity * 0.55, 1.2)
-  const now = ctx.currentTime
-
-  dough({
-    s: 'triangle',
-    note,
-    gain: vol,
-    attack: 0.01,
-    decay: 0.05,
-    sustain: 0.1,
-    release: 0.35,
-    cutoff: 1800 + velocity * 2000,
-    resonance: 2.2,
-    room: 0.7,
-    roomsize: 14,
-  }, now, duration)
-
-  dough({
-    s: 'sawtooth',
-    note: note,
-    gain: vol * 0.9,
-    attack: 0.005,
-    decay: 0.03,
-    sustain: 0.05,
-    release: 0.22,
-    cutoff: 1200 + velocity * 1500,
-    resonance: 1.8,
-    room: 0.55,
-    roomsize: 12,
-  }, now + 0.02, duration * 0.9)
-
-  dough({
-    s: 'white',
-    gain: 0.16 + velocity * 0.12,
-    attack: 0.005,
-    decay: 0.08,
-    sustain: 0,
-    release: 0.2,
-    cutoff: 3200,
-    room: 0.6,
-    roomsize: 10,
-  }, now, duration)
+  playCollisionNoteSingle(velocity)
 }
 
-// Heavy cube collisions: chunkier rock/metal strike with low-end body and bright clatter.
 export function playCollisionNoteSingle(velocity: number = 1.0) {
-  if (!isRunning) return
-
-  const ctx = getAudioContext() as AudioContext
-  if (ctx.state !== 'running') return
+  const ctx = getAudioContext() as AudioContext | null
+  if (!ctx || ctx.state !== 'running') return
 
   const hits = ['A1', 'C2', 'D2', 'E2', 'F2', 'G2']
   const note = hits[Math.floor(Math.random() * hits.length)]
-  const duration = Math.min(0.18 + velocity * 0.6, 1.8)
-  const vol = Math.min(1.0 + velocity * 0.8, 1.9)
+  const duration = Math.min(0.22 + velocity * 0.65, 1.8)
+  const vol = Math.min(0.9 + velocity * 0.7, 1.7)
   const now = ctx.currentTime
 
   dough({
     s: 'triangle',
     note,
-    gain: vol * 1.35,
+    gain: vol * 1.1,
     attack: 0.003,
-    decay: 0.04,
+    decay: 0.08,
     sustain: 0.08,
-    release: 0.6,
-    cutoff: 420 + velocity * 360,
-    resonance: 4.2,
-    room: 0.8,
-    roomsize: 9,
+    release: 0.8,
+    cutoff: 380 + velocity * 280,
+    resonance: 4.5,
+    room: 0.95,
+    roomsize: 18,
   }, now, duration)
 
   dough({
     s: 'sawtooth',
     note,
-    gain: vol * 1.1,
-    attack: 0.002,
-    decay: 0.025,
-    sustain: 0.02,
-    release: 0.4,
-    cutoff: 1200 + velocity * 1600,
-    resonance: 3.1,
-    room: 0.7,
-    roomsize: 8,
-  }, now + 0.01, duration * 0.9)
+    gain: vol * 0.7,
+    attack: 0.004,
+    decay: 0.06,
+    sustain: 0.04,
+    release: 0.6,
+    cutoff: 700 + velocity * 1200,
+    resonance: 3.2,
+    room: 0.9,
+    roomsize: 16,
+  }, now + 0.015, duration * 0.9)
 
   dough({
     s: 'white',
-    gain: 0.28 + velocity * 0.2,
+    gain: 0.13 + velocity * 0.18,
     attack: 0.002,
-    decay: 0.05,
+    decay: 0.06,
     sustain: 0,
-    release: 0.45,
-    cutoff: 3000,
-    room: 0.55,
-    roomsize: 7,
+    release: 0.55,
+    cutoff: 2500,
+    room: 0.9,
+    roomsize: 19,
   }, now, duration)
 }
 
 export function playLaserFireSound() {
-  if (!isRunning) return
-
-  const ctx = getAudioContext() as AudioContext
-  if (ctx.state !== 'running') return
+  const ctx = getSoundContext()
+  if (!ctx) return
 
   const now = ctx.currentTime
   const dur = 0.18
@@ -341,10 +284,8 @@ export function isAmbientRunning() {
 
 // Play a triumphant sound when the drone completes a full revolution
 export function playRevolutionComplete(loopCount: number = 1) {
-  if (!isRunning) return
-
-  const ctx = getAudioContext() as AudioContext
-  if (ctx.state !== 'running') return
+  const ctx = getSoundContext()
+  if (!ctx) return
 
   const chords = [
     ['C4', 'E4', 'G4', 'B4', 'D5'],
@@ -393,7 +334,8 @@ export async function playPortalSound() {
     const ok = await ensureAudioStarted()
     if (!ok) return
 
-    const ctx = getAudioContext() as AudioContext
+    const ctx = getSoundContext()
+    if (!ctx) return
     const now = ctx.currentTime
     const dur = 3.0
 
