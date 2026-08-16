@@ -26,6 +26,8 @@ export interface AssetsConfig {
   }>;
   loading?: {
     backgroundImage: string;
+    foregroundImage?: string;
+    bgtexture?: string;
   };
   physics?: {
     havokWasm: string;
@@ -160,6 +162,11 @@ export async function getPhysicsWasmUrl(): Promise<string> {
 export async function getLoadingImageUrl(): Promise<string> {
   const config = await loadAssetsConfig();
   return config.loading?.backgroundImage || '';
+}
+
+export async function getLoadingBgTextureUrl(): Promise<string> {
+  const config = await loadAssetsConfig();
+  return config.loading?.bgtexture || '';
 }
 
 /**

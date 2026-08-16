@@ -203,8 +203,12 @@
 		}
 	},
 	"loading": {
-		"backgroundImage": "https://kolown.net/storage/library/chronoescape/loading/parallelspace.png"
+		"backgroundImage": "https://kolown.net/storage/library/chronoescape/loading/parallelspace.png",
+		"foregroundImage": "https://kolown.net/storage/library/chronoescape/loading/chronoescape_intro.png",
+		"bgtexture": "https://kolown.net/storage/library/chronoescape/loading/kraftpaper.png"
 	},
+
+
 	"physics": {
 		"havokWasm": "https://kolown.net/storage/library/chronoescape/HavokPhysics.wasm"
 	}

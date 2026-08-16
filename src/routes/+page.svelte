@@ -1,10 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { initGameRuntime, type GameRuntime, type RendererOverride } from '$lib/app/runtime';
+  import { getLoadingBgTextureUrl } from '$lib/assets/assetsConfig';
 
   import DroneHUD from '$lib/scenes/wormhole2/wormhole2.gui.svelte';
   import OceanGUI from '$lib/scenes/ocean.gui.svelte';
   import IntroScene from '$lib/scenes/IntroScene.svelte';
+  import TransitionScreen from '$lib/scenes/TransitionScreen.svelte';
   import { missionRetry } from '$lib/stores/missionState';
   import { gameMode, type GameMode } from '$lib/stores/gameState';
   import { resetDrone } from '$lib/stores/droneControl.svelte';
@@ -27,6 +29,8 @@
   type AppScene = 'loading' | 'intro' | 'scene2' | 'scene1' | 'scene3';
   let activeScene: AppScene = $state('loading');
   let gameplaySessionActive = $state(false);
+  let introBackgroundUrl = $state('');
+  let sceneTransitioning = $state(false);
   const isGameplayActive = () => activeScene === 'scene2';
 
   // =========================================================================
@@ -47,7 +51,14 @@
     }
 
     if (sceneManager && sceneName !== 'loading' && sceneName !== 'intro') {
-      try { sceneManager.switchTo(sceneName as any); } catch (e) { console.warn('+page: sceneManager.switchTo threw', e); }
+      // keep the transition overlay up until the new scene has actually started rendering
+      sceneTransitioning = true;
+      try {
+        sceneManager.switchTo(sceneName as any, () => { sceneTransitioning = false; });
+      } catch (e) {
+        sceneTransitioning = false;
+        console.warn('+page: sceneManager.switchTo threw', e);
+      }
     }
     if (sceneManager && sceneName === 'intro') {
       try { sceneManager.pause(); } catch (e) { console.warn('+page: sceneManager.pause threw', e); }
@@ -116,12 +127,18 @@
       const rendererOverride = new URLSearchParams(window.location.search).get('renderer')?.toLowerCase() as RendererOverride;
 
       try {
-        runtime = await initGameRuntime(canv, {
-          rendererOverride,
-          onPortalTrigger: () => changeScene('scene1'),
-          onMissionSuccess: handleMissionSuccess,
-          onReturnToScene2: () => changeScene('scene2')
-        });
+        const [initializedRuntime] = await Promise.all([
+          initGameRuntime(canv, {
+            rendererOverride,
+            onPortalTrigger: () => changeScene('scene1'),
+            onMissionSuccess: handleMissionSuccess,
+            onReturnToScene2: () => changeScene('scene2')
+          }),
+          getLoadingBgTextureUrl().then((url) => { introBackgroundUrl = url; }).catch((e) => {
+            console.warn('+page: failed to preload intro background texture', e);
+          })
+        ]);
+        runtime = initializedRuntime;
 
         engine = runtime.engine;
         sceneManager = runtime.sceneManager;
@@ -165,7 +182,11 @@
   ></canvas>
 
   {#if activeScene === 'intro'}
-    <IntroScene initialCountdown={60} onStart={startWormhole} />
+    <IntroScene initialCountdown={60} onStart={startWormhole} backgroundUrl={introBackgroundUrl} />
+  {/if}
+
+  {#if sceneTransitioning}
+    <TransitionScreen backgroundUrl={introBackgroundUrl} label="Loading..." />
   {/if}
 
   {#if activeScene === 'scene3'}
