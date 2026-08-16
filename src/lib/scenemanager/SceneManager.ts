@@ -28,7 +28,7 @@ export class SceneManager {
     this.scene2Loading = false;
   }
 
-  switchTo(mode: SceneMode) {
+  switchTo(mode: SceneMode, onReady?: () => void) {
     this.paused = false;
 
     if (mode === 'scene1') {
@@ -37,6 +37,7 @@ export class SceneManager {
         this.videoMount = this.mountVideo();
       }
       this.mode = mode;
+      onReady?.();
     } else if (mode === 'scene3') {
       this.cleanup();
       this.disposeScene2();
@@ -47,12 +48,15 @@ export class SceneManager {
           this.scene3 = s;
           this.scene3Loading = false;
           if (!this.paused && this.mode === 'scene3') this.startRender();
+          onReady?.();
         }).catch((e) => {
           console.warn('Scene3 failed to load', e);
           this.scene3Loading = false;
+          onReady?.();
         });
-      } else if (!this.paused) {
-        this.startRender();
+      } else {
+        if (!this.paused) this.startRender();
+        onReady?.();
       }
     } else {
       this.cleanup();
@@ -63,12 +67,15 @@ export class SceneManager {
           this.scene2 = s;
           this.scene2Loading = false;
           if (!this.paused && this.mode === 'scene2') this.startRender();
+          onReady?.();
         }).catch((e) => {
           console.warn('Scene2 failed to load', e);
           this.scene2Loading = false;
+          onReady?.();
         });
-      } else if (this.scene2 && !this.paused) {
-        this.startRender();
+      } else {
+        if (this.scene2 && !this.paused) this.startRender();
+        onReady?.();
       }
     }
   }

@@ -259,6 +259,47 @@ export function playLaserFireSound() {
   }, now, dur * 0.9)
 }
 
+// Loud, sharp beep for the final countdown seconds
+export async function playCountdownBeep() {
+  // make sure the audio context is actually resumed instead of silently
+  // no-oping when it hasn't been running yet
+  const ok = await ensureAudioStarted()
+  if (!ok) return
+
+  const ctx = getSoundContext()
+  if (!ctx) return
+
+  const now = ctx.currentTime
+  const dur = 0.2
+
+  dough({
+    s: 'square',
+    note: 'A5',
+    gain: 1,
+    attack: 0.001,
+    decay: 0.05,
+    sustain: 0.6,
+    release: 0.15,
+    cutoff: 6000,
+    resonance: 1,
+    room: 0,
+  }, now, dur)
+
+  dough({
+    s: 'square',
+    note: 'A6',
+    gain: 0.5,
+    attack: 0.001,
+    decay: 0.04,
+    sustain: 0.3,
+    release: 0.1,
+    cutoff: 8000,
+    resonance: 1,
+    room: 0,
+  }, now, dur * 0.8)
+}
+
+
 
 
 

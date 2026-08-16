@@ -2,7 +2,7 @@
   import { onMount } from 'svelte';
   import { fade } from 'svelte/transition';
   import { displaySpeed, droneControl, droneEvents, adjustDroneSpeed, updateProgress } from '../../stores/droneControl.svelte.js';
-  import { playRevolutionComplete } from '$lib/scores/ambient';
+  import { playRevolutionComplete, playCountdownBeep } from '$lib/scores/ambient';
   import { completedStations, totalStations, setCompletedStations, setTotalStations } from '$lib/stores/stationProgress';
 
   interface Props {
@@ -34,7 +34,7 @@
   const gridCells = Array.from({ length: 20 }, (_, i) => i + 1);
   const hiddenCells = new Set([7, 8, 9, 12, 13, 14]);
   const smallScreenHiddenCells = new Set([1, 6, 11, 16]);
-  const visibleClass = 'bg-slate-950/5';
+  const visibleClass = 'bg-transparent';
   const hiddenClass = 'bg-transparent border-transparent opacity-0 pointer-events-none';
 
   const apiRevUrl = 'https://kolown.net/api/chrono-escapes/1/revolution';
@@ -68,6 +68,9 @@
     countdownInterval = setInterval(() => {
       if (countdown > 0 && !isGameOver && !isWin) {
         countdown--;
+        if (countdown <= 10 && countdown > 0) {
+          try { playCountdownBeep(); } catch (e) { console.warn('playCountdownBeep failed', e); }
+        }
         if (countdown === 0) {
           handleGameOver();
         }
@@ -155,17 +158,17 @@
               </div>
             </div>
           {:else if cell === 2}
-            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-slate-100">
+            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center text-slate-100">
               <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Completed stations</div>
-              <div class="text-[30px] font-bold">{apiValue} / {totalUnits}</div>
+              <div class="text-[20px] font-bold">{apiValue} / {totalUnits}</div>
             </div>
           {:else if cell === 3}
-            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-slate-100">
+            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center text-slate-100">
               <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Countdown</div>
               <div class="text-[30px] text-[#ff3e00] font-bold [text-shadow:0_0_10px_rgba(255,62,0,0.5)]">{countdown}</div>
             </div>
           {:else if cell === 4}
-            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-slate-100">
+            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center text-slate-100">
               <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Station progress</div>
               <div class="relative h-28 w-6">
                 <div class="absolute left-0 w-full h-0.5 bg-slate-300/60 top-0"></div>

@@ -1,5 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
-import { getTextureUrl, getLoadingImageUrl, randomFrom } from '../assets/assetsConfig';
+import { getLoadingImageUrl, getLoadingBgTextureUrl } from '../assets/assetsConfig';
 
 export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
   public loadingUIBackgroundColor: string = '#BB464B';
@@ -51,8 +51,7 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
 
     // Load image URLs from assets config
     const foregroundUrl = await getLoadingImageUrl();
-    const backgroundId = randomFrom('loading1', 'loading2');
-    const backgroundUrl = await getTextureUrl(backgroundId);
+    const bgUrl = await getLoadingBgTextureUrl();
 
     // Create container with random background image
     const container = document.createElement('div');
@@ -62,7 +61,7 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
       width: 100vw;
       height: 100vh;
       display: block;
-      background-image: url('${backgroundUrl}');
+      background-image: url('${bgUrl}');
       background-size: cover;
       background-position: center;
       background-repeat: no-repeat;
@@ -71,7 +70,7 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
     `;
     container.setAttribute('role', 'status');
 
-    // Create and add foreground image
+    // Create and add foreground image, sized to scale between mobile and desktop viewports
     const img = document.createElement('img');
     img.src = foregroundUrl;
     img.alt = 'Loading';
@@ -80,8 +79,9 @@ export class CustomLoadingScreen implements BABYLON.ILoadingScreen {
       left: 50%;
       top: 50%;
       transform: translate(-50%, -50%);
-      max-width: 80vw;
-      max-height: 80vh;
+      width: clamp(200px, 60vw, 480px);
+      max-width: 90vw;
+      max-height: 70vh;
       object-fit: contain;
       pointer-events: none;
     `;
