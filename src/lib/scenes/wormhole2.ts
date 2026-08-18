@@ -8,6 +8,7 @@ import { setupPhysics, setupLighting, setupCameras } from '../wormhole/sceneUtil
 import { visualizePathDebug } from '../wormhole/debugPath';
 import { ObstacleManager } from '../obstacle/ObstacleManager';
 import { installKeyboardControls } from '../input/keyboardControls';
+import { installDualShockControls } from '../input/dualshockControls';
 import { randomFrom, getTextureUrl } from '../assets/assetsConfig';
 import { updateProgress, cleanupDroneControl, droneControl, displaySpeed, droneEvents, adjustDroneSpeed, burstAccelerate, SPEED_INCREMENT } from '../stores/droneControl.svelte.js';
 import { initRealtimeControl } from '../services/RealtimeControl';
@@ -317,10 +318,11 @@ fireProjectile
 });
 const renderInput = createDroneInputState();
 this.registerCleanup(installKeyboardControls(keyboardHandlers));
+this.registerCleanup(installDualShockControls(scene, keyboardHandlers));
 this.registerCleanup(() => cleanupDroneControl(true));
 
 const autoCubeInterval = setInterval(() => {
-keyboardHandlers.onPlaceCube?.();
+	keyboardHandlers.onPlaceCube?.();
 }, 3000);
 this.registerCleanup(() => clearInterval(autoCubeInterval));
 
