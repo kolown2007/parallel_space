@@ -99,27 +99,19 @@ export function updateDronePhysics(
     } = { ...DEFAULT_PHYSICS_CONFIG, ...config };
 
     const droneMetadata = ((drone as any).metadata ??= {}) as Record<string, any>;
-    const stabilizedOrientation = droneMetadata._stabilizedOrientation as BABYLON.Quaternion | undefined;
     const collisionStopUntil = state.collisionStopUntil;
+    const wasReorienting = droneMetadata._wasReorienting as boolean | undefined;
+    const isReorienting = input.brake > 0;
+    droneMetadata._wasReorienting = isReorienting;
 
-    // Keep quaternion orientation after stabilization so releasing S does not
-    // reveal and restore the previous Euler rotation.
-    if (stabilizedOrientation) {
-        if (!drone.rotationQuaternion) drone.rotationQuaternion = new BABYLON.Quaternion();
-        drone.rotationQuaternion.copyFrom(stabilizedOrientation);
-        if (input.brake <= 0 && input.yaw !== 0) {
-            drone.rotate(BABYLON.Axis.Y, input.yaw * yawRate, BABYLON.Space.LOCAL);
-            stabilizedOrientation.copyFrom(drone.rotationQuaternion);
-        }
-    } else {
-        drone.rotation.x = -Math.PI / 2;
-        if (input.brake <= 0 && input.yaw !== 0) {
-            drone.rotation.y += input.yaw * yawRate;
-        }
-    }
+    // During collision recovery, leave separation and contact response to Havok.
+    if (performance.now() < collisionStopUntil) return;
 
-    if (input.brake > 0) {
+    if (isReorienting) {
+        aggregate.body.disablePreStep = false;
+
         _tempForward.copyFrom(getDirectionOnPath(pathPoints, pathProgress));
+        _tempForward.normalize();
         _tempUp.copyFrom(BABYLON.Axis.Y);
         BABYLON.Vector3.CrossToRef(_tempUp, _tempForward, _tempRight);
         if (_tempRight.lengthSquared() < 0.0001) {
@@ -138,24 +130,11 @@ export function updateDronePhysics(
         );
         BABYLON.Quaternion.FromRotationMatrixToRef(_tempOrientationMatrix, _tempOrientationQuat);
         if (!drone.rotationQuaternion) drone.rotationQuaternion = new BABYLON.Quaternion();
-        BABYLON.Quaternion.SlerpToRef(drone.rotationQuaternion, _tempOrientationQuat, 0.18, drone.rotationQuaternion);
-        droneMetadata._stabilizedOrientation = drone.rotationQuaternion.clone();
-
-        const currentVelocity = aggregate.body.getLinearVelocity();
-        if (currentVelocity) {
-            _tempCurrentVel.copyFrom(currentVelocity).scaleInPlace(0.78);
-            aggregate.body.setLinearVelocity(_tempCurrentVel);
-        }
-        const currentAngularVelocity = aggregate.body.getAngularVelocity();
-        if (currentAngularVelocity) {
-            _tempAngularVelocity.copyFrom(currentAngularVelocity).scaleInPlace(0.72);
-            aggregate.body.setAngularVelocity(_tempAngularVelocity);
-        }
-        return;
+        BABYLON.Quaternion.SlerpToRef(drone.rotationQuaternion, _tempOrientationQuat, 0.38, drone.rotationQuaternion);
+        aggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
+    } else if (wasReorienting) {
+        aggregate.body.disablePreStep = true;
     }
-
-    // During collision recovery, leave separation and contact response to Havok.
-    if (performance.now() < collisionStopUntil) return;
 
     // Get target positions
     const targetPos = getPositionOnPath(pathPoints, pathProgress);
