@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import { completedStations, totalStations } from '$lib/stores/stationProgress';
 
   interface Props {
@@ -7,6 +8,41 @@
   }
 
   const { result = 'failure', onNewMission = () => {} }: Props = $props();
+
+  let rafId: number | null = null;
+  let lastCirclePressed = false;
+
+  function pollGamepad() {
+    const gamepads = typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function'
+      ? navigator.getGamepads()
+      : null;
+
+    if (gamepads) {
+      for (const gp of gamepads) {
+        if (!gp) continue;
+        const circleButton = gp.buttons?.[1];
+        if (circleButton) {
+          if (circleButton.pressed && !lastCirclePressed) {
+            onNewMission();
+          }
+          lastCirclePressed = circleButton.pressed;
+          break;
+        }
+      }
+    }
+
+    rafId = requestAnimationFrame(pollGamepad);
+  }
+
+  onMount(() => {
+    rafId = requestAnimationFrame(pollGamepad);
+  });
+
+  onDestroy(() => {
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+    }
+  });
 
   const getTitleText = () => result === 'success' ? 'Mission Complete' : 'Mission Failed';
   const getBodyText = () => result === 'success'

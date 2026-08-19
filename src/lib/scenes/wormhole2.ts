@@ -1,5 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
+import { WaterMaterial } from '@babylonjs/materials/water';
 
 import { setupSceneDrone } from '../drone/setupDrone';
 import { getPositionOnPath } from '../wormhole/PathUtils';
@@ -64,7 +65,7 @@ setupLighting(scene);
 resumeAudioOnGesture(document);
 
 // Torus track
-const { torus, torusMainRadius, torusTubeRadius, pathPoints } = await createTorus(scene, {
+const { torus, torusPlane, torusMainRadius, torusTubeRadius, pathPoints } = await createTorus(scene, {
 ...cfg.torus,
 materialTextureId: randomFrom('loading3', 'rag', 'mat', 'cube3', 'collage1', 'wood')
 });
@@ -202,41 +203,25 @@ cfg.drone.diffuseColor.b
 );
 }
 
-updateProgress(0);
-drone.position.copyFrom(droneStartPos);
-if (droneAggregate?.body) {
-try {
-droneAggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
-droneAggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
-(droneAggregate.body as any).setPosition?.({
-x: droneStartPos.x,
-y: droneStartPos.y,
-z: droneStartPos.z
-});
-} catch {
 /* ignore transient physics positioning errors */
-}
-}
 
-this.registerCleanup(setupDroneCollision(droneAggregate, physicsState));
+	this.registerCleanup(setupDroneCollision(droneAggregate, physicsState));
+	getDronePathIndex = getDronePathIndexFactory(drone, pathPoints);
+	followCamera.position = drone.position.add(
+		new BABYLON.Vector3(0, cfg.camera.initialOffsetY, cfg.camera.initialOffsetZ)
+	);
+	const gimbal = {
+		followDistance: cfg.camera.followDistance,
+		followHeight: cfg.camera.followHeight,
+		positionSmooth: cfg.camera.positionSmooth,
+		rotationSmooth: cfg.camera.rotationSmooth,
+		lookAheadDistance: cfg.camera.lookAheadDistance
+	};
 
-getDronePathIndex = getDronePathIndexFactory(drone, pathPoints);
-
-followCamera.position = drone.position.add(
-new BABYLON.Vector3(0, cfg.camera.initialOffsetY, cfg.camera.initialOffsetZ)
-);
-const gimbal = {
-followDistance: cfg.camera.followDistance,
-followHeight: cfg.camera.followHeight,
-positionSmooth: cfg.camera.positionSmooth,
-rotationSmooth: cfg.camera.rotationSmooth,
-lookAheadDistance: cfg.camera.lookAheadDistance
-};
-
-const projectiles: Array<{ mesh: BABYLON.Mesh; aggregate: BABYLON.PhysicsAggregate | null; velocity: BABYLON.Vector3; expiry: number; light?: BABYLON.PointLight }> = [];
-const fireProjectile = () => {
-try {
-const rotation = drone.absoluteRotationQuaternion ?? drone.rotationQuaternion ?? BABYLON.Quaternion.Identity();
+	const projectiles: Array<{ mesh: BABYLON.Mesh; aggregate: BABYLON.PhysicsAggregate | null; velocity: BABYLON.Vector3; expiry: number; light?: BABYLON.PointLight }> = [];
+	const fireProjectile = () => {
+		try {
+			const rotation = drone.absoluteRotationQuaternion ?? drone.rotationQuaternion ?? BABYLON.Quaternion.Identity();
 const forward = new BABYLON.Vector3(-1, 0, 0).applyRotationQuaternion(rotation).normalize();
 
 const bbox = drone.getBoundingInfo?.().boundingBox;
@@ -352,8 +337,8 @@ onPortalTrigger,
 getDronePathIndex,
 	getInput: () => inputFromKeys(keyboardHandlers.keysPressed, renderInput),
 	physicsState,
-gimbal,
-torusGeometry: { torusCenter, torusMainRadius, torusTubeRadius }
+	gimbal,
+	torusGeometry: { torusCenter, torusMainRadius, torusTubeRadius }
 });
 const projectileUpdate = () => {
 for (let i = projectiles.length - 1; i >= 0; i--) {

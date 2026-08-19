@@ -1,4 +1,5 @@
 import * as BABYLON from '@babylonjs/core';
+import { WaterMaterial } from '@babylonjs/materials/water';
 import { getTextureUrl } from '../assets/assetsConfig';
 
 export interface TorusOptions {
@@ -21,6 +22,7 @@ export interface TorusOptions {
 export interface TorusResult {
   torus: BABYLON.Mesh;
   torusAggregate: BABYLON.PhysicsAggregate;
+  torusPlane: BABYLON.Mesh;
   torusMainRadius: number;
   torusTubeRadius: number;
   pathPoints: BABYLON.Vector3[];
@@ -50,6 +52,33 @@ export async function createTorus(scene: BABYLON.Scene, opts: TorusOptions = {})
     { mass: 0, restitution: 0.8, friction: 0.5 },
     scene
   );
+
+  const planeSize = diameter * 1.5;
+  const torusPlane = BABYLON.MeshBuilder.CreatePlane('torusPlane', {
+    width: planeSize,
+    height: planeSize,
+    sideOrientation: BABYLON.Mesh.DOUBLESIDE
+  }, scene);
+  torusPlane.rotation.x = Math.PI / 2;
+
+  const planeMat = new WaterMaterial('materialTorusPlane', scene, new BABYLON.Vector2(256, 256));
+  planeMat.backFaceCulling = false;
+  const bumpTexture = new BABYLON.Texture('https://playground.babylonjs.com/textures/waterbump.png', scene);
+  bumpTexture.uOffset = 0;
+  bumpTexture.vOffset = 0;
+  bumpTexture.coordinatesMode = BABYLON.Texture.INVCUBIC_MODE;
+  planeMat.bumpTexture = bumpTexture;
+  planeMat.windForce = 2;
+  planeMat.waveHeight = 0.06;
+  planeMat.bumpHeight = 0.12;
+  planeMat.windDirection = new BABYLON.Vector2(1, 1);
+  planeMat.waterColor = new BABYLON.Color3(0.06, 0.12, 0.22);
+  planeMat.colorBlendFactor = 0.12;
+  planeMat.alpha = 0.6;
+  planeMat.specularColor = new BABYLON.Color3(0.85, 0.9, 1);
+  planeMat.specularPower = 48;
+  planeMat.addToRenderList(torus);
+  torusPlane.material = planeMat;
 
   const mat = new BABYLON.StandardMaterial('materialTorus', scene);
   if (opts.materialTextureUrl) {
@@ -83,6 +112,12 @@ export async function createTorus(scene: BABYLON.Scene, opts: TorusOptions = {})
   const torusTubeRadius = torusThickness / 2;
   const torusMainRadius = torusOuterRadius - torusTubeRadius;
   const torusTubeRadiusActual = torusTubeRadius;
+
+  torusPlane.position = new BABYLON.Vector3(
+    torus.position.x,
+    torus.position.y - torusTubeRadiusActual + 2,
+    torus.position.z
+  );
 
   const lineRadius = torusTubeRadiusActual * lineRadiusFactor;
   const points: BABYLON.Vector3[] = [];
@@ -137,6 +172,7 @@ export async function createTorus(scene: BABYLON.Scene, opts: TorusOptions = {})
   return {
     torus,
     torusAggregate,
+    torusPlane,
     torusMainRadius,
     torusTubeRadius: torusTubeRadiusActual,
     pathPoints: points

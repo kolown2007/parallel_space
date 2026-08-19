@@ -1,6 +1,7 @@
 import { get } from 'svelte/store';
 import { hitCollision, droneControl, MAX_SPEED } from '../../stores/droneControl.svelte';
 import { playCollisionNote, playCollisionNoteSingle } from '../../scores/ambient';
+import { triggerDualShockRumble } from '../../input/dualshockControls';
 import { WORMHOLE2_CONFIG } from './wormhole2.config';
 import type { DronePhysicsState } from '../../drone/droneControllers';
 
@@ -55,15 +56,15 @@ export function setupDroneCollision(droneAggregate: any, state: DronePhysicsStat
 				state.collisionStopUntil = performance.now() + 250;
 				
 				console.log(`✨ Drone hit obstacle: ${collidedName}`);
-				hitCollision({ percent: WORMHOLE2_CONFIG.collision.speedPenaltyPercent });
 				
-				// Trigger collision sound based on drone speed (0-1 normalized)
 				const controlState = get(droneControl);
 				const velocity = Math.min(controlState.speed / MAX_SPEED, 1.0);
-				
 				if (nameLower.includes('obstacle_cube')) {
+					hitCollision({ percent: 1, minSpeed: 0 });
 					playCollisionNoteSingle(velocity);
+					triggerDualShockRumble(250, 1.0, 0.8);
 				} else {
+					hitCollision({ percent: WORMHOLE2_CONFIG.collision.speedPenaltyPercent });
 					playCollisionNote(velocity);
 				}
 			}
