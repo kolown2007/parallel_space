@@ -21,6 +21,8 @@
   let hasStarted = false;
 
   let totalSlides = 3;
+  let rafId: number | null = null;
+  let lastCirclePressed = false;
 
   const normalizeStoryText = (data: any): string => {
     if (typeof data === 'string') return data;
@@ -245,6 +247,44 @@
     }
   };
 
+  const getCircleButton = (gp: Gamepad) => {
+    if (!gp.buttons || gp.buttons.length === 0) return null;
+    return gp.buttons[1] ?? gp.buttons[0] ?? null;
+  };
+
+  const pollGamepads = () => {
+    const gamepads = typeof navigator !== 'undefined' && typeof navigator.getGamepads === 'function'
+      ? navigator.getGamepads()
+      : null;
+
+    if (gamepads) {
+      for (const gp of gamepads) {
+        if (!gp) continue;
+        const circle = getCircleButton(gp);
+        if (circle) {
+          if (circle.pressed) {
+            if (!lastCirclePressed) {
+              handleButton();
+            }
+            lastCirclePressed = true;
+            break;
+          }
+        }
+      }
+    }
+
+    if (gamepads) {
+      const anyPressed = Array.from(gamepads).some((gp) => gp?.buttons?.[1]?.pressed);
+      if (!anyPressed) {
+        lastCirclePressed = false;
+      }
+    } else {
+      lastCirclePressed = false;
+    }
+
+    rafId = requestAnimationFrame(pollGamepads);
+  };
+
   $: {
     if (slide === totalSlides) {
       startCountdown();
@@ -259,6 +299,7 @@
 
   onMount(async () => {
     window.addEventListener('keydown', handleKeydown);
+    rafId = requestAnimationFrame(pollGamepads);
 
     if (!backgroundUrl) {
       try {
@@ -273,6 +314,9 @@
 
   onDestroy(() => {
     window.removeEventListener('keydown', handleKeydown);
+    if (rafId !== null) {
+      cancelAnimationFrame(rafId);
+    }
     clearCountdown();
     clearAutoAdvance();
     hasStarted = true;

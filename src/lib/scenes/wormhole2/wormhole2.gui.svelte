@@ -25,7 +25,7 @@
   let collisionDetail = $state('');
   let collisionTextClass = $state('text-slate-100');
   
-  let countdown = $state(100);
+  let countdown = $state(60);
   let countdownInterval: ReturnType<typeof setInterval> | null = null;
   let apiValue = $state(0);
   const letterOptions = '0123456789%$#@!&*+-=~<>[]{}()';
@@ -199,7 +199,7 @@
             </div>
           {:else if cell === 5}
             <div class="pointer-events-auto flex h-full items-center justify-center">
-              <img src="/parallelspace.png" alt="Parallel Space" class="max-h-full max-w-full object-contain" />
+              <img src="/parallelspace.png" alt="Parallel Space" class="max-h-full max-w-full object-contain" class:filter-red={isColliding} />
             </div>
           {:else if cell === 6}
             <div class="pointer-events-auto flex h-full items-center justify-center text-center px-3 {collisionTextClass}">
@@ -210,23 +210,23 @@
             </div>
           {:else if cell === 10}
             <div class="pointer-events-auto flex h-full items-center justify-center">
-              <img src="/unos.svg" alt="Unos" class="max-h-full max-w-full object-contain" />
+              <img src="/unos.svg" alt="Unos" class="max-h-full max-w-full object-contain" class:filter-red={isColliding} />
             </div>
           {:else if cell === 11}
             <div class="pointer-events-auto flex h-full items-center justify-center">
-              <img src="/bagyo.svg" alt="Bagyo" class="max-h-full max-w-full object-contain" />
+              <img src="/bagyo.svg" alt="Bagyo" class="max-h-full max-w-full object-contain" class:filter-red={isColliding} />
             </div>
           {:else if cell === 15}
             <div class="pointer-events-auto flex h-full items-center justify-center">
-              <img src="/init.svg" alt="Init" class="max-h-full max-w-full object-contain" />
+              <img src="/init.svg" alt="Init" class="max-h-full max-w-full object-contain" class:filter-red={isColliding} />
             </div>
           {:else if cell === 16}
             <div class="pointer-events-auto flex h-full items-center justify-center">
-              <img src="/unos.svg" alt="Unos" class="max-h-full max-w-full object-contain" />
+              <img src="/unos.svg" alt="Unos" class="max-h-full max-w-full object-contain" class:filter-red={isColliding} />
             </div>
           {:else if cell === 20}
             <div class="pointer-events-auto flex h-full items-center justify-center">
-              <img src="/bagyo.svg" alt="Bagyo" class="max-h-full max-w-full object-contain" />
+              <img src="/bagyo.svg" alt="Bagyo" class="max-h-full max-w-full object-contain" class:filter-red={isColliding} />
             </div>
           {:else if cell === 17}
             <div class="pointer-events-auto flex h-full flex-col items-center justify-center {collisionTextClass}">
@@ -269,6 +269,19 @@
     </div>
   </div>
 {/if}
+
+<svg aria-hidden="true" style="position:absolute;width:0;height:0;visibility:hidden;">
+  <filter id="solidRed" color-interpolation-filters="sRGB">
+    <feColorMatrix type="matrix" values="0 0 0 0 1  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0" />
+  </filter>
+</svg>
+
+<style>
+  .filter-red {
+    filter: url('#solidRed');
+    transition: filter 150ms ease;
+  }
+</style>
 
 
 

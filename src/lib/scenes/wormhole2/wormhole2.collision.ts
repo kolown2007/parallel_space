@@ -1,6 +1,7 @@
 import { get } from 'svelte/store';
 import { hitCollision, droneControl, MAX_SPEED } from '../../stores/droneControl.svelte';
 import { playCollisionNote, playCollisionNoteSingle } from '../../scores/ambient';
+import { triggerDualShockRumble } from '../../input/dualshockControls';
 import { WORMHOLE2_CONFIG } from './wormhole2.config';
 import type { DronePhysicsState } from '../../drone/droneControllers';
 
@@ -61,6 +62,7 @@ export function setupDroneCollision(droneAggregate: any, state: DronePhysicsStat
 				if (nameLower.includes('obstacle_cube')) {
 					hitCollision({ percent: 1, minSpeed: 0 });
 					playCollisionNoteSingle(velocity);
+					triggerDualShockRumble(250, 1.0, 0.8);
 				} else {
 					hitCollision({ percent: WORMHOLE2_CONFIG.collision.speedPenaltyPercent });
 					playCollisionNote(velocity);
