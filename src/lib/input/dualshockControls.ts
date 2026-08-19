@@ -3,6 +3,31 @@ import type { KeyboardCallbacks } from './keyboardControls';
 
 const TRIGGER_FIRE_THRESHOLD = 0.4;
 
+export function triggerDualShockRumble(duration = 200, strongMagnitude = 0.5, weakMagnitude = 0.5) {
+  if (typeof navigator === 'undefined' || typeof navigator.getGamepads !== 'function') {
+    return;
+  }
+
+  const gamepads = navigator.getGamepads();
+  if (!gamepads) return;
+
+  for (const pad of gamepads) {
+    if (!pad) continue;
+    const actuator = (pad as any).vibrationActuator || (pad as any).hapticActuators?.[0];
+    if (!actuator || typeof actuator.playEffect !== 'function') continue;
+
+    try {
+      actuator.playEffect('dual-rumble', {
+        duration,
+        strongMagnitude,
+        weakMagnitude
+      });
+    } catch (e) {
+      console.warn('DualShock rumble failed:', e);
+    }
+  }
+}
+
 export function installDualShockControls(scene: BABYLON.Scene, callbacks: KeyboardCallbacks) {
 	const { keysPressed } = callbacks;
 	const manager = new BABYLON.GamepadManager(scene);

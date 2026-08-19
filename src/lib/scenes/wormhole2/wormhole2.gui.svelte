@@ -21,6 +21,9 @@
   let isWin = $state(false);
   let alertTimeout: ReturnType<typeof setTimeout> | null = null;
   let currentReduction = $state(0);
+  let collisionMessage = $state('');
+  let collisionDetail = $state('');
+  let collisionTextClass = $state('text-slate-100');
   
   let countdown = $state(100);
   let countdownInterval: ReturnType<typeof setInterval> | null = null;
@@ -95,10 +98,23 @@
     const unsubscribe = droneEvents.subscribe(event => {
       if (event?.type === 'collision') {
         if (alertTimeout) clearTimeout(alertTimeout);
-        currentReduction = Math.floor(event.data.reduction * 100);
+        const reduction = Math.floor((event.data?.reduction ?? 0) * 100);
+        const speedAfter = event.data?.speedAfter ?? 0;
+        currentReduction = reduction;
+        collisionTextClass = 'text-red-700';
+        if (speedAfter === 0) {
+          collisionMessage = 'CUBE HIT!';
+          collisionDetail = 'SPEED ZERO';
+        } else {
+          collisionMessage = 'COLLISION!';
+          collisionDetail = `-${currentReduction}% SPEED`;
+        }
         isColliding = true;
         alertTimeout = setTimeout(() => {
           isColliding = false;
+          collisionMessage = '';
+          collisionDetail = '';
+          collisionTextClass = 'text-slate-100';
         }, 1500);
       }
     });
@@ -151,24 +167,24 @@
           {#if cell === 1}
             <div class="pointer-events-auto flex h-full flex-col justify-between gap-4">
               <div class="text-[12px] uppercase tracking-[0.3em] text-slate-300/80"></div>
-              <div class="matrix-stream grid grid-cols-8 gap-1 w-full flex-1 text-center text-slate-100 opacity-90 overflow-hidden">
+              <div class="matrix-stream grid grid-cols-8 gap-1 w-full flex-1 text-center opacity-90 overflow-hidden {collisionTextClass}">
                 {#each matrixStream as item}
                   <span class="text-[10px] leading-none">{item.char}</span>
                 {/each}
               </div>
             </div>
           {:else if cell === 2}
-            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center text-slate-100">
+            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center {collisionTextClass}">
               <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Completed stations</div>
               <div class="text-[20px] font-bold">{apiValue} / {totalUnits}</div>
             </div>
           {:else if cell === 3}
-            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center text-slate-100">
+            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center {collisionTextClass}">
               <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Countdown</div>
               <div class="text-[30px] text-[#ff3e00] font-bold [text-shadow:0_0_10px_rgba(255,62,0,0.5)]">{countdown}</div>
             </div>
           {:else if cell === 4}
-            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center text-slate-100">
+            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center {collisionTextClass}">
               <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Station progress</div>
               <div class="relative h-28 w-6">
                 <div class="absolute left-0 w-full h-0.5 bg-slate-300/60 top-0"></div>
@@ -177,7 +193,7 @@
                   <div
                     class="w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-b-12 border-b-slate-300 transition-[bottom] duration-100 ease-out"
                   ></div>
-                  <div class="mt-2 text-[10px] text-slate-100 text-center">{clampProgressPercent($droneControl.progress)}%</div>
+                  <div class="mt-2 text-[10px] text-center {collisionTextClass}">{clampProgressPercent($droneControl.progress)}%</div>
                 </div>
               </div>
             </div>
@@ -186,7 +202,7 @@
               <img src="/parallelspace.png" alt="Parallel Space" class="max-h-full max-w-full object-contain" />
             </div>
           {:else if cell === 6}
-            <div class="pointer-events-auto flex h-full items-center justify-center text-center text-slate-100 px-3">
+            <div class="pointer-events-auto flex h-full items-center justify-center text-center px-3 {collisionTextClass}">
               <div>
                 <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Info</div>
                 <div class="text-[14px] font-semibold">we are kolown</div>
@@ -213,7 +229,7 @@
               <img src="/bagyo.svg" alt="Bagyo" class="max-h-full max-w-full object-contain" />
             </div>
           {:else if cell === 17}
-            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-slate-100">
+            <div class="pointer-events-auto flex h-full flex-col items-center justify-center {collisionTextClass}">
               <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Speed gauge</div>
               <div class="w-20 h-20 border-[3px] border-dashed border-slate-300/60 rounded-full relative flex items-center justify-center">
                 <div
@@ -221,23 +237,23 @@
                   style="transform: rotate({-100 + ($displaySpeed * 10)}deg)"
                 ></div>
               </div>
-              <div class="mt-3 text-sm">{$displaySpeed} units</div>
+              <div class="mt-3 text-sm {collisionTextClass}">{$displaySpeed} units</div>
             </div>
           {:else if cell === 18}
-            <div class="pointer-events-auto flex h-full flex-col justify-center text-center text-slate-100">
+            <div class="pointer-events-auto flex h-full flex-col justify-center text-center {collisionTextClass}">
               {#if isGameOver}
                 <div class="text-[16px] font-bold text-[#ff3e00]">MISSION FAILED</div>
                 <div class="mt-2 text-[#ff3e00]/80">REGRESS STATION</div>
               {:else if isColliding}
-                <div class="text-[16px] font-bold text-red-600">COLLISION!</div>
-                <div class="mt-2 text-red-400">-{currentReduction}% SPEED</div>
+                <div class="text-[16px] font-bold text-red-600">{collisionMessage}</div>
+                <div class="mt-2 text-red-400">{collisionDetail}</div>
               {:else}
                 <div class="uppercase tracking-widest text-slate-300/80">GOAL</div>
                 <div class="mt-2 text-slate-300/80">REACH NEXT STATION</div>
               {/if}
             </div>
           {:else if cell === 19}
-            <div class="pointer-events-auto flex h-full items-center justify-center text-center text-slate-100 px-3">
+            <div class="pointer-events-auto flex h-full items-center justify-center text-center px-3 {collisionTextClass}">
               <div>
                 <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Message</div>
                 <div class="text-[14px] font-semibold">The USB is inside the wormhole</div>

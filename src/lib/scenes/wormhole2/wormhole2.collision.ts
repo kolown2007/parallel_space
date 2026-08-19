@@ -55,15 +55,14 @@ export function setupDroneCollision(droneAggregate: any, state: DronePhysicsStat
 				state.collisionStopUntil = performance.now() + 250;
 				
 				console.log(`✨ Drone hit obstacle: ${collidedName}`);
-				hitCollision({ percent: WORMHOLE2_CONFIG.collision.speedPenaltyPercent });
 				
-				// Trigger collision sound based on drone speed (0-1 normalized)
 				const controlState = get(droneControl);
 				const velocity = Math.min(controlState.speed / MAX_SPEED, 1.0);
-				
 				if (nameLower.includes('obstacle_cube')) {
+					hitCollision({ percent: 1, minSpeed: 0 });
 					playCollisionNoteSingle(velocity);
 				} else {
+					hitCollision({ percent: WORMHOLE2_CONFIG.collision.speedPenaltyPercent });
 					playCollisionNote(velocity);
 				}
 			}

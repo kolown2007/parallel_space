@@ -205,25 +205,23 @@ cfg.drone.diffuseColor.b
 
 /* ignore transient physics positioning errors */
 
-this.registerCleanup(setupDroneCollision(droneAggregate, physicsState));
+	this.registerCleanup(setupDroneCollision(droneAggregate, physicsState));
+	getDronePathIndex = getDronePathIndexFactory(drone, pathPoints);
+	followCamera.position = drone.position.add(
+		new BABYLON.Vector3(0, cfg.camera.initialOffsetY, cfg.camera.initialOffsetZ)
+	);
+	const gimbal = {
+		followDistance: cfg.camera.followDistance,
+		followHeight: cfg.camera.followHeight,
+		positionSmooth: cfg.camera.positionSmooth,
+		rotationSmooth: cfg.camera.rotationSmooth,
+		lookAheadDistance: cfg.camera.lookAheadDistance
+	};
 
-getDronePathIndex = getDronePathIndexFactory(drone, pathPoints);
-
-followCamera.position = drone.position.add(
-new BABYLON.Vector3(0, cfg.camera.initialOffsetY, cfg.camera.initialOffsetZ)
-);
-const gimbal = {
-followDistance: cfg.camera.followDistance,
-followHeight: cfg.camera.followHeight,
-positionSmooth: cfg.camera.positionSmooth,
-rotationSmooth: cfg.camera.rotationSmooth,
-lookAheadDistance: cfg.camera.lookAheadDistance
-};
-
-const projectiles: Array<{ mesh: BABYLON.Mesh; aggregate: BABYLON.PhysicsAggregate | null; velocity: BABYLON.Vector3; expiry: number; light?: BABYLON.PointLight }> = [];
-const fireProjectile = () => {
-try {
-const rotation = drone.absoluteRotationQuaternion ?? drone.rotationQuaternion ?? BABYLON.Quaternion.Identity();
+	const projectiles: Array<{ mesh: BABYLON.Mesh; aggregate: BABYLON.PhysicsAggregate | null; velocity: BABYLON.Vector3; expiry: number; light?: BABYLON.PointLight }> = [];
+	const fireProjectile = () => {
+		try {
+			const rotation = drone.absoluteRotationQuaternion ?? drone.rotationQuaternion ?? BABYLON.Quaternion.Identity();
 const forward = new BABYLON.Vector3(-1, 0, 0).applyRotationQuaternion(rotation).normalize();
 
 const bbox = drone.getBoundingInfo?.().boundingBox;
@@ -339,8 +337,8 @@ onPortalTrigger,
 getDronePathIndex,
 	getInput: () => inputFromKeys(keyboardHandlers.keysPressed, renderInput),
 	physicsState,
-gimbal,
-torusGeometry: { torusCenter, torusMainRadius, torusTubeRadius }
+	gimbal,
+	torusGeometry: { torusCenter, torusMainRadius, torusTubeRadius }
 });
 const projectileUpdate = () => {
 for (let i = projectiles.length - 1; i >= 0; i--) {
