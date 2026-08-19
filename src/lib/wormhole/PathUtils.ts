@@ -27,8 +27,10 @@ export function getDirectionOnPath(points: BABYLON.Vector3[] | undefined, progre
   if (!points || points.length < 2) return new BABYLON.Vector3(0, 0, 1);
   const defaultEps = 1 / Math.max(8, points.length);
   const eps = Math.max(0.0001, epsilon ?? defaultEps);
-  const p0 = getPositionOnPath(points, progress);
-  const p1 = getPositionOnPath(points, Math.min(1, progress + eps));
+  // near the end, sample backward so p0 != p1
+  const useBackward = progress + eps > 1;
+  const p0 = getPositionOnPath(points, useBackward ? progress - eps : progress);
+  const p1 = getPositionOnPath(points, useBackward ? progress : progress + eps);
   const dir = p1.subtract(p0);
   const len = dir.length();
   return len === 0 ? new BABYLON.Vector3(0, 0, 1) : dir.scale(1 / len);
