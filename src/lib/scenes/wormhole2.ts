@@ -1,5 +1,6 @@
 import * as BABYLON from '@babylonjs/core';
 import '@babylonjs/loaders/glTF';
+import { WaterMaterial } from '@babylonjs/materials/water';
 
 import { setupSceneDrone } from '../drone/setupDrone';
 import { getPositionOnPath } from '../wormhole/PathUtils';
@@ -64,7 +65,7 @@ setupLighting(scene);
 resumeAudioOnGesture(document);
 
 // Torus track
-const { torus, torusMainRadius, torusTubeRadius, pathPoints } = await createTorus(scene, {
+const { torus, torusPlane, torusMainRadius, torusTubeRadius, pathPoints } = await createTorus(scene, {
 ...cfg.torus,
 materialTextureId: randomFrom('loading3', 'rag', 'mat', 'cube3', 'collage1', 'wood')
 });
@@ -202,21 +203,7 @@ cfg.drone.diffuseColor.b
 );
 }
 
-updateProgress(0);
-drone.position.copyFrom(droneStartPos);
-if (droneAggregate?.body) {
-try {
-droneAggregate.body.setLinearVelocity(BABYLON.Vector3.Zero());
-droneAggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
-(droneAggregate.body as any).setPosition?.({
-x: droneStartPos.x,
-y: droneStartPos.y,
-z: droneStartPos.z
-});
-} catch {
 /* ignore transient physics positioning errors */
-}
-}
 
 this.registerCleanup(setupDroneCollision(droneAggregate, physicsState));
 
