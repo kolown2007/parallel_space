@@ -83,8 +83,8 @@ export const WORMHOLE2_CONFIG = {
 	debug: {
 		enableDroneDebug: false,
 		pathVisualization: {
-			showLine: true,
-			showLabels: true,
+			showLine: false,
+			showLabels: false,
 			labelInterval: 10,
 			showStats: true
 		},
