@@ -131,6 +131,13 @@ export async function setupSceneDrone(
 
 	drone.position.copyFrom(initialPosition);
 	drone.rotation.copyFrom(initialRotation);
+	if (!drone.rotationQuaternion) drone.rotationQuaternion = new BABYLON.Quaternion();
+	BABYLON.Quaternion.RotationYawPitchRollToRef(
+		initialRotation.y,
+		initialRotation.x,
+		initialRotation.z,
+		drone.rotationQuaternion
+	);
 
 	// -------------------------------------------------------------------------
 	// 3. APPLY SCALING (optional) + CREATE PHYSICS AFTER SCALING

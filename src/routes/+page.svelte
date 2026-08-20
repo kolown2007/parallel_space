@@ -182,7 +182,7 @@
   ></canvas>
 
   {#if activeScene === 'intro'}
-    <IntroScene initialCountdown={60} onStart={startWormhole} backgroundUrl={introBackgroundUrl} />
+    <IntroScene initialCountdown={99} onStart={startWormhole} backgroundUrl={introBackgroundUrl} />
   {/if}
 
   {#if sceneTransitioning}

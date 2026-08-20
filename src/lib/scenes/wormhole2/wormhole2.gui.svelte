@@ -25,7 +25,7 @@
   let collisionDetail = $state('');
   let collisionTextClass = $state('text-slate-100');
   
-  let countdown = $state(60);
+  let countdown = $state(99);
   let countdownInterval: ReturnType<typeof setInterval> | null = null;
   let apiValue = $state(0);
   const letterOptions = '0123456789%$#@!&*+-=~<>[]{}()';

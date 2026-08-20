@@ -52,8 +52,10 @@ export function installKeyboardControls(callbacks: KeyboardCallbacks) {
         const key = event.key.toLowerCase();
 
         if (key === 'w') {
-            callbacks.onBurst?.();
-            keysPressed.w = false;
+            keysPressed.w = true;
+            if (!event.repeat) {
+                callbacks.onBurst?.();
+            }
             return;
         }
 
