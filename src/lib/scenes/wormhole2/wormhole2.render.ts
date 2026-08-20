@@ -165,6 +165,7 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 			control.progress,
 			input,
 			physicsState,
+			dt,
 			{
 				lateralForce: control.lateralForce,
 				maxFollowSpeed: Math.min(80, (control.speed / MAX_SPEED) * 80)

@@ -31,10 +31,12 @@ export interface CameraBounds {
 
 export interface DronePhysicsState {
     collisionStopUntil: number;
+    dodgeTimer?: number;    // Tracks remaining dodge duration
+    dodgeDir?: number;      // -1 for Left, +1 for Right
 }
 
 // ============================================================================
-// DEFAULT CONFIGS
+// DEFAULT CONFIGS & CONSTANTS
 // ============================================================================
 
 export const DEFAULT_PHYSICS_CONFIG: Required<DronePhysicsConfig> = {
@@ -53,18 +55,18 @@ export const DEFAULT_GIMBAL_CONFIG: CameraGimbalConfig = {
     lookAheadDistance: 5
 };
 
+const BURST_SPEED_BOOST = 25.0; // Extra speed added when bursting with W / forward
+const DODGE_DURATION = 0.75;    // Snappy dodge duration in seconds
+const DODGE_DISTANCE = 20.0;    // Lateral displacement force
+
 // ============================================================================
 // ZERO-ALLOCATION MEMORY CACHE (PERFORMANCE OPTIMIZATION)
 // ============================================================================
-// These vectors are created ONCE when the file loads. 
-// We recycle them every frame to prevent Garbage Collection stutters.
 const _tempToTarget = new BABYLON.Vector3();
 const _tempCurrentVel = new BABYLON.Vector3();
 const _tempDesiredVel = new BABYLON.Vector3();
-const _tempVelocityError = new BABYLON.Vector3();
 const _tempStabilizedVel = new BABYLON.Vector3();
 const _tempLateralForce = new BABYLON.Vector3();
-const _tempAngularVelocity = new BABYLON.Vector3();
 
 const _tempDesiredCamPos = new BABYLON.Vector3();
 const _tempToCamTarget = new BABYLON.Vector3();
@@ -80,7 +82,7 @@ const _tempUp = new BABYLON.Vector3();
 // ============================================================================
 
 /**
- * Update drone physics to follow a path with smooth velocity control.
+ * Update drone physics to follow a path with smooth velocity control, forward burst, and dynamic dodging.
  */
 export function updateDronePhysics(
     drone: BABYLON.AbstractMesh,
@@ -89,29 +91,18 @@ export function updateDronePhysics(
     pathProgress: number,
     input: DroneInputState,
     state: DronePhysicsState,
+    deltaTime: number,
     config: DronePhysicsConfig = {}
 ): void {
-    const {
-        maxFollowSpeed,
-        followStrength,
-        velocityDamping,
-        yawRate
-    } = { ...DEFAULT_PHYSICS_CONFIG, ...config };
-
+    const { maxFollowSpeed } = { ...DEFAULT_PHYSICS_CONFIG, ...config };
     const droneMetadata = ((drone as any).metadata ??= {}) as Record<string, any>;
     const collisionStopUntil = state.collisionStopUntil;
-    const wasReorienting = droneMetadata._wasReorienting as boolean | undefined;
     const isReorienting = input.brake > 0;
-    droneMetadata._wasReorienting = isReorienting;
 
-    // During collision recovery, leave separation and contact response to Havok.
-    if (performance.now() < collisionStopUntil) return;
-
-    if (isReorienting) {
-        aggregate.body.disablePreStep = false;
-
-        _tempForward.copyFrom(getDirectionOnPath(pathPoints, pathProgress));
-        _tempForward.normalize();
+    // 1. Initial Orientation Setup
+    const orientationInitialized = droneMetadata._orientationInitialized as boolean | undefined;
+    if (!orientationInitialized) {
+        _tempForward.copyFrom(getDirectionOnPath(pathPoints, pathProgress)).normalize();
         _tempUp.copyFrom(BABYLON.Axis.Y);
         BABYLON.Vector3.CrossToRef(_tempUp, _tempForward, _tempRight);
         if (_tempRight.lengthSquared() < 0.0001) {
@@ -119,9 +110,41 @@ export function updateDronePhysics(
             BABYLON.Vector3.CrossToRef(_tempUp, _tempForward, _tempRight);
         }
         _tempRight.normalize();
+        BABYLON.Matrix.FromXYZAxesToRef(
+            _tempForward.scale(-1),
+            _tempUp,
+            _tempRight,
+            _tempOrientationMatrix
+        );
+        BABYLON.Quaternion.FromRotationMatrixToRef(_tempOrientationMatrix, _tempOrientationQuat);
+        if (!drone.rotationQuaternion) drone.rotationQuaternion = new BABYLON.Quaternion();
+        drone.rotationQuaternion.copyFrom(_tempOrientationQuat);
+        aggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
+        droneMetadata._orientationInitialized = true;
+    }
+
+    // 2. Compute Direction Vectors
+    _tempForward.copyFrom(getDirectionOnPath(pathPoints, pathProgress)).normalize();
+    _tempUp.copyFrom(BABYLON.Axis.Y);
+    BABYLON.Vector3.CrossToRef(_tempUp, _tempForward, _tempRight);
+    if (_tempRight.lengthSquared() < 0.0001) {
+        _tempUp.copyFrom(BABYLON.Axis.Z);
+        BABYLON.Vector3.CrossToRef(_tempUp, _tempForward, _tempRight);
+    }
+    _tempRight.normalize();
+
+    // 3. Collision Recovery Check
+    if (performance.now() < collisionStopUntil) {
+        aggregate.body.disablePreStep = true;
+        state.dodgeTimer = 0;
+        droneMetadata._wasDodgingInput = false;
+        return;
+    }
+
+    // 4. Active Reorientation (Brake Input)
+    if (isReorienting) {
         BABYLON.Vector3.CrossToRef(_tempForward, _tempRight, _tempUp);
         _tempUp.normalize();
-
         BABYLON.Matrix.FromXYZAxesToRef(
             _tempForward.scale(-1),
             _tempUp,
@@ -132,64 +155,81 @@ export function updateDronePhysics(
         if (!drone.rotationQuaternion) drone.rotationQuaternion = new BABYLON.Quaternion();
         BABYLON.Quaternion.SlerpToRef(drone.rotationQuaternion, _tempOrientationQuat, 0.38, drone.rotationQuaternion);
         aggregate.body.setAngularVelocity(BABYLON.Vector3.Zero());
-    } else if (wasReorienting) {
-        aggregate.body.disablePreStep = true;
     }
 
-    // Get target positions
-    const targetPos = getPositionOnPath(pathPoints, pathProgress);
-    
-    // ZERO-ALLOCATION: Calculate vector to target
-    targetPos.subtractToRef(drone.position, _tempToTarget);
-    const distance = _tempToTarget.length();
+    // 5. Trigger Dodge Sequence (Jump Left / Right)
+    const isDodgingInput = input.moveX !== 0;
+    const wasDodgingInput = droneMetadata._wasDodgingInput as boolean | undefined ?? false;
+    droneMetadata._wasDodgingInput = isDodgingInput;
 
-    // Get the drone's current actual velocity safely
+    if (isDodgingInput && !wasDodgingInput && (!state.dodgeTimer || state.dodgeTimer <= 0)) {
+        state.dodgeTimer = DODGE_DURATION;
+        state.dodgeDir = Math.sign(input.moveX);
+    }
+
+    // 6. Compute Forward Velocity (Fixes Late-Game Burst Failure)
+    const targetPos = getPositionOnPath(pathPoints, pathProgress);
+    targetPos.subtractToRef(drone.position, _tempToTarget);
+    
+    const forwardOffset = BABYLON.Vector3.Dot(_tempForward, _tempToTarget);
+    const isBursting = input.moveY > 0;
+    
+    let desiredForwardSpeed: number;
+
+    if (isBursting) {
+        // Guaranteed burst velocity: always push forward during burst.
+        desiredForwardSpeed = maxFollowSpeed + BURST_SPEED_BOOST;
+    } else {
+        // Standard path tracking when not bursting.
+        // Prevent negative reverse drive when the drone is off-track vertically.
+        desiredForwardSpeed = Math.min(maxFollowSpeed, Math.max(0, forwardOffset * 8.0));
+    }
+
+    // 7. Compute Lateral Velocity (PD Controller with Anti-Overshoot Damping)
+    let desiredLateralSpeed = 0;
+    const lateralError = BABYLON.Vector3.Dot(_tempRight, _tempToTarget);
+
     const bodyVel = aggregate.body.getLinearVelocity();
+    const currentLateralSpeed = bodyVel ? BABYLON.Vector3.Dot(_tempRight, bodyVel) : 0;
+
+    if (state.dodgeTimer && state.dodgeTimer > 0) {
+        state.dodgeTimer -= deltaTime;
+        
+        const progress = 1.0 - Math.max(0, state.dodgeTimer) / DODGE_DURATION;
+        const dodgeVelocity = Math.sin(progress * 2 * Math.PI) * DODGE_DISTANCE * (state.dodgeDir ?? 1);
+        
+        const springForce = lateralError * 4.0;
+        const dampingForce = currentLateralSpeed * 0.4;
+        desiredLateralSpeed = dodgeVelocity + (springForce - dampingForce);
+        
+        if (state.dodgeTimer <= 0) {
+            state.dodgeTimer = 0;
+        }
+    } else {
+        // PD Centering Spring:
+        // 'springForce' pulls toward track, 'dampingForce' brakes to prevent overshooting 0
+        const springForce = lateralError * 8.0;
+        const dampingForce = currentLateralSpeed * 0.85;
+        
+        desiredLateralSpeed = BABYLON.Scalar.Clamp(springForce - dampingForce, -25.0, 25.0);
+    }
+
+    // 8. Combine Vectors & Apply to Havok Body
+    _tempDesiredVel.copyFrom(_tempForward).scaleInPlace(desiredForwardSpeed);
+    _tempLateralForce.copyFrom(_tempRight).scaleInPlace(desiredLateralSpeed);
+    _tempDesiredVel.addInPlace(_tempLateralForce);
+
     if (bodyVel) {
         _tempCurrentVel.copyFrom(bodyVel);
+        // Instant response during burst, smooth lerp during normal flight
+        const lerpFactor = isBursting ? 0.85 : 0.4;
+        BABYLON.Vector3.LerpToRef(_tempCurrentVel, _tempDesiredVel, lerpFactor, _tempStabilizedVel);
     } else {
-        _tempCurrentVel.setAll(0);
+        _tempStabilizedVel.copyFrom(_tempDesiredVel);
     }
 
-    if (distance > 0.02) {
-        // Dynamic scaling: If running at 20x throttle, lower the snapping force
-        const speedMultiplier = maxFollowSpeed > 100 ? 0.4 : 1.0; 
-        
-        const distanceMultiplier = Math.min(3.0, 1.0 + (distance / 5.0));
-        const effectiveStrength = followStrength * distanceMultiplier * speedMultiplier;
-        const speed = Math.min(maxFollowSpeed, distance * effectiveStrength);
-        
-        // ZERO-ALLOCATION: Normalize and scale
-        _tempToTarget.normalizeToRef(_tempDesiredVel);
-        _tempDesiredVel.scaleInPlace(speed);
-    } else {
-        _tempDesiredVel.setAll(0);
-    }
-
-    // =========================================================================
-    // APPLIED PROPORTIONAL-DERIVATIVE BRAKING (Zero-Allocation)
-    // =========================================================================
-    
-    // velocityError = desiredVel - currentVel
-    _tempDesiredVel.subtractToRef(_tempCurrentVel, _tempVelocityError);
-    
-    // At high speeds, increase damping dynamically
-    const activeDamping = maxFollowSpeed > 150 ? 0.85 : velocityDamping;
-
-    // velocityError *= (1 - activeDamping)
-    _tempVelocityError.scaleInPlace(1 - activeDamping);
-
-    // stabilizedVel = currentVel + velocityError
-    _tempCurrentVel.addToRef(_tempVelocityError, _tempStabilizedVel);
-
-    // Clamp the ultimate velocity vector so it never violates your physical max speed limits
-    if (_tempStabilizedVel.lengthSquared() > maxFollowSpeed * maxFollowSpeed) {
-        _tempStabilizedVel.normalize().scaleInPlace(maxFollowSpeed);
-    }
-
-    // Commit cleanly back to the simulation body
+    aggregate.body.disablePreStep = false;
     aggregate.body.setLinearVelocity(_tempStabilizedVel);
-
 }
 
 /**
@@ -231,22 +271,17 @@ export function updateFollowCamera(
     gimbal: CameraGimbalConfig,
     bounds?: Partial<CameraBounds>
 ): void {
-    // Calculate look-ahead point
     const lookAheadProgress = Math.min(1, pathProgress + gimbal.lookAheadDistance / pathPoints.length);
     const lookAtPoint = getPositionOnPath(pathPoints, lookAheadProgress);
 
-    // Calculate desired camera position
     const forward = getDirectionOnPath(pathPoints, pathProgress);
     
-    // ZERO-ALLOCATION: desiredCamPos = drone.pos + (forward * -distance) + height
     forward.scaleToRef(-gimbal.followDistance, _tempDesiredCamPos);
     _tempDesiredCamPos.addInPlace(drone.position);
     _tempDesiredCamPos.y += gimbal.followHeight;
 
-    // ZERO-ALLOCATION: Smooth position interpolation
     BABYLON.Vector3.LerpToRef(camera.position, _tempDesiredCamPos, gimbal.positionSmooth, camera.position);
 
-    // ZERO-ALLOCATION: Calculate and apply smooth rotation
     lookAtPoint.subtractToRef(camera.position, _tempToCamTarget);
     _tempToCamTarget.normalize();
     
@@ -266,7 +301,6 @@ export function updateFollowCamera(
         camera.rotationQuaternion
     );
 
-    // Clamp camera within torus bounds if provided
     if (bounds?.torusCenter && bounds.torusMainRadius !== undefined && bounds.torusTubeRadius !== undefined) {
         clampCameraToTorus(camera, bounds as CameraBounds);
     }
@@ -279,12 +313,10 @@ function clampCameraToTorus(camera: BABYLON.UniversalCamera, bounds: CameraBound
     try {
         const { torusCenter, torusMainRadius, torusTubeRadius, margin = 0.5 } = bounds;
 
-        // Project onto XZ plane
         const dx = camera.position.x - torusCenter.x;
         const dz = camera.position.z - torusCenter.z;
         const distXZ = Math.sqrt(dx * dx + dz * dz);
 
-        // Clamp radial distance
         const maxOffset = Math.max(0, torusTubeRadius - margin);
         const radialOffset = distXZ - torusMainRadius;
         const clampedOffset = BABYLON.Scalar.Clamp(radialOffset, -maxOffset, maxOffset);
@@ -299,12 +331,11 @@ function clampCameraToTorus(camera: BABYLON.UniversalCamera, bounds: CameraBound
             camera.position.z = torusCenter.z;
         }
 
-        // Clamp Y to tube vertical bounds
         const minY = torusCenter.y - maxOffset;
         const maxY = torusCenter.y + maxOffset;
         camera.position.y = BABYLON.Scalar.Clamp(camera.position.y, minY, maxY);
     } catch {
-        // Don't let clamping break camera updates
+        // Prevent clamping errors from breaking frame execution
     }
 }
 

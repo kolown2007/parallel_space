@@ -27,11 +27,11 @@ export function createDroneInputState(): DroneInputState {
 }
 
 export function inputFromKeys(keysPressed: KeysPressed, target = createDroneInputState()): DroneInputState {
-	target.moveX = 0;
-	target.moveY = 0;
+	target.moveX = Number(keysPressed.d) - Number(keysPressed.a);
+	target.moveY = Number(keysPressed.w);
 	target.throttle = 0;
 	target.brake = Number(keysPressed.s);
-	target.yaw = Number(keysPressed.d) - Number(keysPressed.a);
+	target.yaw = 0;
 	target.boost = false;
 	return target;
 }

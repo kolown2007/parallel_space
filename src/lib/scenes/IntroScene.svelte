@@ -3,7 +3,7 @@
   import { completedStations, totalStations } from '$lib/stores/stationProgress';
   import { getLoadingBgTextureUrl } from '$lib/assets/assetsConfig';
 
-  export let initialCountdown = 60;
+export let initialCountdown = 99;
   export let onStart: () => void;
   export let backgroundUrl = '';
 

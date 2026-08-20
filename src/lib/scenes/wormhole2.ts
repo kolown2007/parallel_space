@@ -3,7 +3,7 @@ import '@babylonjs/loaders/glTF';
 import { WaterMaterial } from '@babylonjs/materials/water';
 
 import { setupSceneDrone } from '../drone/setupDrone';
-import { getPositionOnPath } from '../wormhole/PathUtils';
+import { getPositionOnPath, getDirectionOnPath } from '../wormhole/PathUtils';
 import { createTorus } from '../wormhole/Torus';
 import { setupPhysics, setupLighting, setupCameras } from '../wormhole/sceneUtils';
 import { visualizePathDebug } from '../wormhole/debugPath';
@@ -170,15 +170,17 @@ console.warn('Billboard placement failed:', e);
 let drone: any, droneAggregate: any;
 const physicsState: DronePhysicsState = { collisionStopUntil: 0 };
 const droneStartPos = getPositionOnPath(this.pathPoints, cfg.drone.startPathPoint);
+const startDirection = getDirectionOnPath(this.pathPoints, cfg.drone.startPathPoint);
+const startYaw = Math.atan2(startDirection.z, -startDirection.x);
 
 try {
 const res = await setupSceneDrone(scene, {
 assetId: 'drone2',
 initialPosition: droneStartPos,
 initialRotation: new BABYLON.Vector3(
-cfg.drone.initialRotation.x,
-cfg.drone.initialRotation.y,
-cfg.drone.initialRotation.z
+0,
+startYaw,
+0
 ),
 mass: cfg.drone.mass,
 restitution: cfg.drone.restitution,
