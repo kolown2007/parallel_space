@@ -39,6 +39,10 @@ export function installDualShockControls(scene: BABYLON.Scene, callbacks: Keyboa
 	let dpadD = false;
 	let dpadS = false;
 	let dpadW = false;
+	let stickGamepadA = false;
+	let stickGamepadD = false;
+	let stickGamepadS = false;
+	let stickGamepadW = false;
 	let stickObserver: BABYLON.Observer<BABYLON.Scene> | null = null;
 
 	const updateSticks = (gamepad: BABYLON.Gamepad) => {
@@ -54,6 +58,14 @@ export function installDualShockControls(scene: BABYLON.Scene, callbacks: Keyboa
 			if (dpadD) keysPressed.d = true;
 			if (dpadS) keysPressed.s = true;
 			if (dpadW) keysPressed.w = true;
+			if (stickGamepadA && !dpadA) keysPressed.a = false;
+			if (stickGamepadD && !dpadD) keysPressed.d = false;
+			if (stickGamepadS && !dpadS) keysPressed.s = false;
+			if (stickGamepadW && !dpadW) keysPressed.w = false;
+			stickGamepadA = false;
+			stickGamepadD = false;
+			stickGamepadS = false;
+			stickGamepadW = false;
 			lastStickBurst = false;
 			return;
 		}
@@ -67,29 +79,39 @@ export function installDualShockControls(scene: BABYLON.Scene, callbacks: Keyboa
 		const leftA = leftX <= -threshold;
 		const leftD = leftX >= threshold;
 		const leftS = leftY >= threshold;
-		const leftBurst = leftY <= -threshold;
-
+		const leftW = leftY <= -threshold;
 		const rightA = rightX <= -threshold;
 		const rightD = rightX >= threshold;
 		const rightS = rightY >= threshold;
-		const rightBurst = rightY <= -threshold;
+		const rightW = rightY <= -threshold;
 
 		const newA = leftA || rightA || dpadA;
 		const newD = leftD || rightD || dpadD;
 		const newS = leftS || rightS || dpadS;
-		const burstPressed = leftBurst || rightBurst;
+		const newW = leftW || rightW || dpadW;
 
-		// OR with current keysPressed so keyboard input isn't wiped each frame
+		// stick-only contribution has no release event, so undo last frame's
+		// value before recombining, otherwise it latches true forever once pressed
+		if (stickGamepadA && !newA) keysPressed.a = false;
+		if (stickGamepadD && !newD) keysPressed.d = false;
+		if (stickGamepadS && !newS) keysPressed.s = false;
+		if (stickGamepadW && !newW) keysPressed.w = false;
+
 		keysPressed.a = keysPressed.a || newA;
 		keysPressed.d = keysPressed.d || newD;
 		keysPressed.s = keysPressed.s || newS;
-		// only assert w from gamepad; keyboard keyup still clears it
-		if (burstPressed || dpadW) keysPressed.w = true;
+		keysPressed.w = keysPressed.w || newW;
 
-		if (burstPressed && !lastStickBurst) {
+		stickGamepadA = newA;
+		stickGamepadD = newD;
+		stickGamepadS = newS;
+		stickGamepadW = newW;
+
+		const stickBurstPressed = leftW || rightW;
+		if (stickBurstPressed && !lastStickBurst) {
 			callbacks.onBurst?.();
 		}
-		lastStickBurst = burstPressed;
+		lastStickBurst = stickBurstPressed;
 	};
 
 	const onGamepadConnected = (gamepad: BABYLON.Gamepad) => {
