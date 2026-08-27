@@ -10,8 +10,7 @@ import type { KeysPressed } from './inputTypes';
  * - Q: Toggle wireframe
  * - R: Reset drone position
  * - C: Switch camera
- * - Arrow Up: Increase speed
- * - Arrow Down: Decrease speed
+ * - Arrow Keys: Mirror W/A/S/D movement behavior
  * - B: Constant speed addition
  * - Space: Place cube obstacle ahead
  * - F: Place model
@@ -28,8 +27,8 @@ export interface KeyboardCallbacks {
     
     // Drone control
     onReset?: () => void;            // R
-    onSpeedUp?: () => void;          // Arrow Up
-    onSpeedDown?: () => void;        // Arrow Down
+    onSpeedUp?: () => void;          // B / optional speed controls
+    onSpeedDown?: () => void;        // optional speed controls
     onBurst?: () => void;            // B - burst acceleration
     
     // Obstacle placement
@@ -52,7 +51,7 @@ export function installKeyboardControls(callbacks: KeyboardCallbacks) {
     const keydown = (event: KeyboardEvent) => {
         const key = event.key.toLowerCase();
 
-        if (key === 'w') {
+        if (key === 'w' || key === 'arrowup') {
             keysPressed.w = true;
             if (!event.repeat) {
                 callbacks.onBurst?.();
@@ -61,8 +60,18 @@ export function installKeyboardControls(callbacks: KeyboardCallbacks) {
         }
 
         // Held movement keys
-        if (['a', 's', 'd'].includes(key)) {
-            keysPressed[key] = true;
+        if (key === 'a' || key === 'arrowleft') {
+            keysPressed.a = true;
+            return;
+        }
+
+        if (key === 'd' || key === 'arrowright') {
+            keysPressed.d = true;
+            return;
+        }
+
+        if (key === 's' || key === 'arrowdown') {
+            keysPressed.s = true;
             return;
         }
 
@@ -76,12 +85,6 @@ export function installKeyboardControls(callbacks: KeyboardCallbacks) {
                 break;
             case 'c':
                 if (!isProd) callbacks.onSwitchCamera?.();
-                break;
-            case 'arrowup':
-                callbacks.onSpeedUp?.();
-                break;
-            case 'arrowdown':
-                callbacks.onSpeedDown?.();
                 break;
             case 'b':
                 callbacks.onSpeedUp?.();
@@ -107,8 +110,23 @@ export function installKeyboardControls(callbacks: KeyboardCallbacks) {
 
     const keyup = (event: KeyboardEvent) => {
         const key = event.key.toLowerCase();
-        if (['a', 's', 'd', 'w'].includes(key)) {
-            keysPressed[key] = false;
+        if (key === 'w' || key === 'arrowup') {
+            keysPressed.w = false;
+            return;
+        }
+
+        if (key === 'a' || key === 'arrowleft') {
+            keysPressed.a = false;
+            return;
+        }
+
+        if (key === 'd' || key === 'arrowright') {
+            keysPressed.d = false;
+            return;
+        }
+
+        if (key === 's' || key === 'arrowdown') {
+            keysPressed.s = false;
         }
     };
 

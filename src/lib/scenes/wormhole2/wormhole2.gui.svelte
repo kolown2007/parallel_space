@@ -313,7 +313,13 @@
             <div class="pointer-events-auto flex h-full items-center justify-center text-center px-3 {collisionTextClass}">
               <div>
                 <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Message</div>
-                <div class="text-[14px] font-semibold">The USB is inside the wormhole</div>
+                <div class="text-[14px] font-semibold">
+                  {#if lives <= 2 && lives > 0}
+                    Be careful, your life is {lives}
+                  {:else}
+                    The USB is inside the wormhole
+                  {/if}
+                </div>
               </div>
             </div>
           {:else if hiddenCells.has(cell)}
