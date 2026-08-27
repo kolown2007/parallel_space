@@ -47,6 +47,7 @@ export interface KeyboardCallbacks {
  */
 export function installKeyboardControls(callbacks: KeyboardCallbacks) {
     const { keysPressed } = callbacks;
+    const isProd = import.meta.env.PROD;
 
     const keydown = (event: KeyboardEvent) => {
         const key = event.key.toLowerCase();
@@ -68,13 +69,13 @@ export function installKeyboardControls(callbacks: KeyboardCallbacks) {
         // Action keys (single press)
         switch (key) {
             case 'q':
-                callbacks.onToggleWireframe?.();
+                if (!isProd) callbacks.onToggleWireframe?.();
                 break;
             case 'r':
                 callbacks.onReset?.();
                 break;
             case 'c':
-                callbacks.onSwitchCamera?.();
+                if (!isProd) callbacks.onSwitchCamera?.();
                 break;
             case 'arrowup':
                 callbacks.onSpeedUp?.();

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import { fade } from 'svelte/transition';
   import { displaySpeed, droneControl, droneEvents, adjustDroneSpeed, updateProgress } from '../../stores/droneControl.svelte.js';
   import { playRevolutionComplete, playCountdownBeep } from '$lib/scores/ambient';
@@ -23,9 +24,17 @@
   let currentReduction = $state(0);
   let collisionMessage = $state('');
   let collisionDetail = $state('');
+  let collisionCount = $state(0);
   let collisionTextClass = $state('text-slate-100');
+  let lives = $derived(Math.max(0, 5 - collisionCount));
+
+  $effect(() => {
+    if (lives <= 0 && !isGameOver && !isWin) {
+      handleGameOver();
+    }
+  });
   
-  let countdown = $state(99);
+  let countdown = $state(69);
   let countdownInterval: ReturnType<typeof setInterval> | null = null;
   let apiValue = $state(0);
   const letterOptions = '0123456789%$#@!&*+-=~<>[]{}()';
@@ -41,6 +50,9 @@
   const hiddenClass = 'bg-transparent border-transparent opacity-0 pointer-events-none';
 
   const apiRevUrl = 'https://kolown.net/api/chrono-escapes/1/revolution';
+  const apiIncUrl = 'https://kolown.net/api/chrono-escapes/1/increment-revolution';
+  const apiDecUrl = 'https://kolown.net/api/chrono-escapes/1/decrement-revolution';
+  const isProd = import.meta.env.PROD;
 
   async function fetchRevolutionData() {
     try {
@@ -55,8 +67,39 @@
     }
   }
 
+  async function postRevolutionApi(url: string, payload: any) {
+    if (!isProd) return;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        console.warn('Revolution API request failed:', url, response.status);
+      }
+    } catch (error) {
+      console.warn('Revolution API request error:', url, error);
+    }
+  }
+
+  function incrementRevolution() {
+    return postRevolutionApi(apiIncUrl, { loopCount: 1 });
+  }
+
+  function decrementRevolution() {
+    return postRevolutionApi(apiDecUrl, {});
+  }
+
   function clampProgressPercent(value: number) {
     return Math.max(0, Math.min(100, Math.floor(value * 100)));
+  }
+
+  function adjustCompletedStations(delta: number) {
+    const current = get(completedStations);
+    const next = Math.max(0, current + delta);
+    setCompletedStations(next);
+    apiValue = next;
   }
 
   $effect(() => {
@@ -81,6 +124,8 @@
     }, 1000);
   }
 
+
+
   onMount(() => {
     setTotalStations(totalUnits);
 
@@ -93,18 +138,19 @@
     mountDelayTimeout = setTimeout(() => {
       showUI = true;
       startCountdown();
-    }, 8000);
+    }, 2000);
 
     const unsubscribe = droneEvents.subscribe(event => {
       if (event?.type === 'collision') {
+        collisionCount++;
         if (alertTimeout) clearTimeout(alertTimeout);
         const reduction = Math.floor((event.data?.reduction ?? 0) * 100);
         const speedAfter = event.data?.speedAfter ?? 0;
         currentReduction = reduction;
         collisionTextClass = 'text-red-700';
         if (speedAfter === 0) {
-          collisionMessage = 'CUBE HIT!';
-          collisionDetail = 'SPEED ZERO';
+          collisionMessage = 'COLLISION!';
+          collisionDetail = 'HEALTH DEDUCTED';
         } else {
           collisionMessage = 'COLLISION!';
           collisionDetail = `-${currentReduction}% SPEED`;
@@ -143,6 +189,8 @@
     adjustDroneSpeed(-100); // Stop the drone
     if (countdownInterval) clearInterval(countdownInterval);
     missionFailed?.();
+    adjustCompletedStations(-1);
+    decrementRevolution();
   }
 
   function handleWin() {
@@ -152,6 +200,8 @@
     try { playRevolutionComplete(); } catch (e) { console.warn('playRevolutionComplete failed', e); }
     if (countdownInterval) clearInterval(countdownInterval);
     missionSuccess?.();
+    adjustCompletedStations(1);
+    incrementRevolution();
   }
 </script>
 
@@ -199,34 +249,41 @@
             </div>
           {:else if cell === 5}
             <div class="pointer-events-auto flex h-full items-center justify-center">
-              <img src="/parallelspace.png" alt="Parallel Space" class="max-h-full max-w-full object-contain" class:filter-red={isColliding} />
+              <img src="/parallelspace.png" alt="Parallel Space" class="max-h-[50%] max-w-[50%] object-contain" class:filter-red={isColliding} />
             </div>
-          {:else if cell === 6}
-            <div class="pointer-events-auto flex h-full items-center justify-center text-center px-3 {collisionTextClass}">
-              <div>
-                <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Info</div>
-                <div class="text-[14px] font-semibold">we are kolown</div>
-              </div>
-            </div>
+        {:else if cell === 6}
+  <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center px-3 {collisionTextClass}">
+    <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Health</div>
+    <div class="flex gap-2 items-center justify-center">
+      {#each Array(5) as _, i}
+        <div 
+          class={"w-3.5 h-3.5 rounded-full " + (isColliding ? 'filter-red ' : '') + "transition-all duration-300 " +
+            (i < lives 
+              ? 'bg-white shadow-[0_0_8px_rgba(239,68,68,0.8) ]' 
+              : 'border border-slate-500/40 opacity-20')}
+        ></div>
+      {/each}
+    </div>
+  </div>
           {:else if cell === 10}
             <div class="pointer-events-auto flex h-full items-center justify-center">
-              <img src="/unos.svg" alt="Unos" class="max-h-full max-w-full object-contain" class:filter-red={isColliding} />
+              <img src="/unos.svg" alt="Unos" class="max-h-[40%] max-w-[40%] object-contain" class:filter-red={isColliding} />
             </div>
           {:else if cell === 11}
             <div class="pointer-events-auto flex h-full items-center justify-center">
-              <img src="/bagyo.svg" alt="Bagyo" class="max-h-full max-w-full object-contain" class:filter-red={isColliding} />
+              <img src="/bagyo.svg" alt="Bagyo" class="max-h-[40%] max-w-[40%]  object-contain" class:filter-red={isColliding} />
             </div>
           {:else if cell === 15}
             <div class="pointer-events-auto flex h-full items-center justify-center">
-              <img src="/init.svg" alt="Init" class="max-h-full max-w-full object-contain" class:filter-red={isColliding} />
+              <img src="/init.svg" alt="Init" class="max-h-[40%] max-w-[40%] object-contain" class:filter-red={isColliding} />
             </div>
           {:else if cell === 16}
             <div class="pointer-events-auto flex h-full items-center justify-center">
-              <img src="/unos.svg" alt="Unos" class="max-h-full max-w-full object-contain" class:filter-red={isColliding} />
+              <img src="/unos.svg" alt="Unos" class="max-h-[40%] max-w-[40%] object-contain" class:filter-red={isColliding} />
             </div>
           {:else if cell === 20}
             <div class="pointer-events-auto flex h-full items-center justify-center">
-              <img src="/bagyo.svg" alt="Bagyo" class="max-h-full max-w-full object-contain" class:filter-red={isColliding} />
+              <img src="/bagyo.svg" alt="Bagyo" class="max-h-[40%] max-w-[40%] object-contain" class:filter-red={isColliding} />
             </div>
           {:else if cell === 17}
             <div class="pointer-events-auto flex h-full flex-col items-center justify-center {collisionTextClass}">

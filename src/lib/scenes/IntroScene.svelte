@@ -132,19 +132,12 @@ export let initialCountdown = 99;
     }
 
     return [
-      'Your Mission',
-      '......',
-      'USB should escape the year 2050 and reach the year 2026.',
-     '',
-      'Within 99 seconds, reach the USB to the next station.',
      
-       '......',
-      'Tap the screen to move the USB.',
-      '',
+     
       'Completed stations',
       `${completed} / ${total}`,
       '',
-      'Failed mission will deduct 1 station from total progress.',
+     
            '',
       `Starting in ${remaining}...`
     ].join('\n');
@@ -161,7 +154,7 @@ export let initialCountdown = 99;
     $totalStations
   );
 
-  const getButtonLabel = (): string => (slide < totalSlides ? 'NEXT' : 'OK');
+  const getButtonLabel = (): string => (slide < totalSlides ? 'O' : 'O to start');
 
   const updateTotalSlides = () => {
     totalSlides = 2 + Math.max(0, storyParagraphs.length);
@@ -242,8 +235,11 @@ export let initialCountdown = 99;
   };
 
   const handleKeydown = (event: KeyboardEvent) => {
-    if (event.key === 'Escape') {
+    const key = event.key.toLowerCase();
+    if (key === 'escape') {
       skipToMission();
+    } else if (key === 'o') {
+      handleButton();
     }
   };
 
