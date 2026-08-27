@@ -38,6 +38,7 @@ export function installDualShockControls(scene: BABYLON.Scene, callbacks: Keyboa
 	let dpadA = false;
 	let dpadD = false;
 	let dpadS = false;
+	let dpadW = false;
 	let stickObserver: BABYLON.Observer<BABYLON.Scene> | null = null;
 
 	const updateSticks = (gamepad: BABYLON.Gamepad) => {
@@ -48,11 +49,12 @@ export function installDualShockControls(scene: BABYLON.Scene, callbacks: Keyboa
 		const rawPads = navigator.getGamepads();
 		const raw = rawPads?.[gamepad.index] || null;
 		if (!raw || !raw.axes) {
-			const burstPressed = dpadS === false && false;
-			keysPressed.a = dpadA;
-			keysPressed.d = dpadD;
-			keysPressed.s = dpadS;
-			lastStickBurst = burstPressed;
+			// only assert gamepad keys; don't clear keyboard state
+			if (dpadA) keysPressed.a = true;
+			if (dpadD) keysPressed.d = true;
+			if (dpadS) keysPressed.s = true;
+			if (dpadW) keysPressed.w = true;
+			lastStickBurst = false;
 			return;
 		}
 
@@ -77,9 +79,12 @@ export function installDualShockControls(scene: BABYLON.Scene, callbacks: Keyboa
 		const newS = leftS || rightS || dpadS;
 		const burstPressed = leftBurst || rightBurst;
 
-		keysPressed.a = newA;
-		keysPressed.d = newD;
-		keysPressed.s = newS;
+		// OR with current keysPressed so keyboard input isn't wiped each frame
+		keysPressed.a = keysPressed.a || newA;
+		keysPressed.d = keysPressed.d || newD;
+		keysPressed.s = keysPressed.s || newS;
+		// only assert w from gamepad; keyboard keyup still clears it
+		if (burstPressed || dpadW) keysPressed.w = true;
 
 		if (burstPressed && !lastStickBurst) {
 			callbacks.onBurst?.();
@@ -121,6 +126,8 @@ export function installDualShockControls(scene: BABYLON.Scene, callbacks: Keyboa
 		dualShock.ondpaddown((dpad) => {
 			switch (dpad) {
 				case BABYLON.DualShockDpad.Up:
+					dpadW = true;
+					keysPressed.w = true;
 					callbacks.onBurst?.();
 					break;
 				case BABYLON.DualShockDpad.Down:
@@ -153,6 +160,8 @@ export function installDualShockControls(scene: BABYLON.Scene, callbacks: Keyboa
 					dpadD = false;
 					break;
 				case BABYLON.DualShockDpad.Up:
+					dpadW = false;
+					keysPressed.w = false;
 					break;
 			}
 		});

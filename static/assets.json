@@ -149,14 +149,31 @@
 		},
     	"billboard2": {
 			"rootUrl": "https://kolown.net/storage/library/chronoescape/billboards/",
-			"filename": "billboard_rope.png",
+			"filename": "firehose.png",
 			"type": "texture"
 		},
     	"billboard3": {
 			"rootUrl": "https://kolown.net/storage/library/chronoescape/billboards/",
-			"filename": "billboard_rope.png",
+			"filename": "start.png",
+			"type": "texture"
+			},
+    	"billboard4": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/billboards/",
+			"filename": "exit.png",
+			"type": "texture"
+		},
+    	"billboard5": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/billboards/",
+			"filename": "fortnite.png",
+			"type": "texture"
+		},
+    	"billboard6": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/billboards/",
+			"filename": "firehose.png",
 			"type": "texture"
 		}
+		
+
 	},
 	"shaders": {
 		"universe": {
