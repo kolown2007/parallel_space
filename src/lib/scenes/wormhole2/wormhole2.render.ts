@@ -1,10 +1,9 @@
 import * as BABYLON from '@babylonjs/core';
 import { get } from 'svelte/store';
-import { droneControl, updateProgress, enterPortal, FPS, MAX_SPEED } from '../../stores/droneControl.svelte';
+import { droneControl, updateProgress, enterPortal, MAX_SPEED } from '../../stores/droneControl.svelte';
 import { revolutionStore, triggerRevolutionComplete } from '../../stores/droneRevolution';
-import { playPortalSound, playCollisionNoteSingle } from '../../scores/ambient';
-import { updateDronePhysics, updateFollowCamera, type DronePhysicsState } from '../../drone/droneControllers';
-import { getPositionOnPath } from '../../wormhole/PathUtils';
+import { playPortalSound } from '../../scores/ambient';
+import { updateDronePhysics, updateFollowCamera, indexToProgress, type DronePhysicsState } from '../../drone/droneControllers';
 import type { ObstacleManager } from '../../obstacle/ObstacleManager';
 import { WORMHOLE2_CONFIG } from './wormhole2.config';
 import type { DroneInputState } from '../../input/inputTypes';
@@ -60,10 +59,16 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 
 	return () => {
 		const dt = engine.getDeltaTime() / 1000;
+		if (dt <= 0) return;
+
 		const control = get(droneControl);
 		const input = getInput();
 		const portals = getPortal();
-		const collisionStopUntil = physicsState.collisionStopUntil;
+
+		// 1. Calculate real-time path progress directly from physical drone position
+		const droneIdx = getDronePathIndex();
+		const currentProgress = indexToProgress(droneIdx, pathPoints);
+		updateProgress(currentProgress);
 
 		// Portal collision check (support multiple portals)
 		if (portals && portals.length > 0 && onPortalTrigger) {
@@ -86,7 +91,6 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 					try {
 						if (!p || typeof p.intersects !== 'function') continue;
 						if (p.intersects(usbAabb)) {
-
 							try { playPortalSound(); } catch (e) { console.warn('playPortalSound failed', e); }
 
 							console.log('✨ Drone entered portal');
@@ -103,27 +107,9 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 			}
 		}
 
-		// Check drone distance from path - pause forward progress if too far
-		const targetPathPos = getPositionOnPath(pathPoints, control.progress);
-		const distanceFromPath = BABYLON.Vector3.Distance(drone.position, targetPathPos);
-		
-		let progressMultiplier = 1.0;
-		if (distanceFromPath > WORMHOLE2_CONFIG.path.maxSafeDistance) {
-			progressMultiplier = WORMHOLE2_CONFIG.path.offTrackProgressMultiplier;
-		}
-		
-		// Scale speed by frame time so movement is consistent across variable FPS.
-		const frameFactor = Math.max(0, dt * FPS); // at 60fps dt~1/60 -> frameFactor ~1
-		const effectiveSpeed = input.brake > 0 || performance.now() < collisionStopUntil ? 0 : control.speed;
-		let newProgress = control.progress + (effectiveSpeed * progressMultiplier * frameFactor);
-		if (newProgress > 1) {
-			newProgress = 0;
-		}
-		updateProgress(newProgress);
-
 		// Revolution tracking and particle spawning
 		try {
-			revolutionStore.updateFromPathFraction(newProgress);
+			revolutionStore.updateFromPathFraction(currentProgress);
 			const loops = get(revolutionStore).loopsCompletedCount;
 			
 			if (loops !== lastLoggedLoops) {
@@ -132,10 +118,9 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 				
 				triggerRevolutionComplete(loops);
 
-				// Spawn particle bursts on revolution complete (guarded by config)
+				// Spawn particle bursts on revolution complete
 				try {
 					if (WORMHOLE2_CONFIG.particles.revolutionEnabled) {
-						const droneIdx = getDronePathIndex();
 						const aheadIdx = (droneIdx + WORMHOLE2_CONFIG.particles.revolutionAheadOffset) % pathPoints.length;
 
 						obstacles.place('particles', {
@@ -154,15 +139,12 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 			/* ignore if store missing */
 		}
 
-		// Update drone physics
-		// Do not clamp `maxFollowSpeed` to a low constant here — allow the physics
-		// defaults (or scene overrides) to control top speed so `droneControl.speed`
-		// has visible effect.
+		// Update drone physics synchronized to physical position
 		updateDronePhysics(
 			drone,
 			droneAggregate,
 			pathPoints,
-			control.progress,
+			currentProgress,
 			input,
 			physicsState,
 			dt,
@@ -172,13 +154,13 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 			}
 		);
 
-		// Update follow camera
+		// Update follow camera relative to physical drone
 		if (scene.activeCamera === followCamera) {
 			updateFollowCamera(
 				followCamera,
 				drone,
 				pathPoints,
-				control.progress,
+				currentProgress,
 				gimbal,
 				{
 					torusCenter: torusGeometry.torusCenter,
