@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import { fade } from 'svelte/transition';
   import { displaySpeed, droneControl, droneEvents, adjustDroneSpeed, updateProgress } from '../../stores/droneControl.svelte.js';
   import { playRevolutionComplete, playCountdownBeep } from '$lib/scores/ambient';
@@ -49,6 +50,9 @@
   const hiddenClass = 'bg-transparent border-transparent opacity-0 pointer-events-none';
 
   const apiRevUrl = 'https://kolown.net/api/chrono-escapes/1/revolution';
+  const apiIncUrl = 'https://kolown.net/api/chrono-escapes/1/increment-revolution';
+  const apiDecUrl = 'https://kolown.net/api/chrono-escapes/1/decrement-revolution';
+  const isProd = import.meta.env.PROD;
 
   async function fetchRevolutionData() {
     try {
@@ -63,8 +67,39 @@
     }
   }
 
+  async function postRevolutionApi(url: string, payload: any) {
+    if (!isProd) return;
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) {
+        console.warn('Revolution API request failed:', url, response.status);
+      }
+    } catch (error) {
+      console.warn('Revolution API request error:', url, error);
+    }
+  }
+
+  function incrementRevolution() {
+    return postRevolutionApi(apiIncUrl, { loopCount: 1 });
+  }
+
+  function decrementRevolution() {
+    return postRevolutionApi(apiDecUrl, {});
+  }
+
   function clampProgressPercent(value: number) {
     return Math.max(0, Math.min(100, Math.floor(value * 100)));
+  }
+
+  function adjustCompletedStations(delta: number) {
+    const current = get(completedStations);
+    const next = Math.max(0, current + delta);
+    setCompletedStations(next);
+    apiValue = next;
   }
 
   $effect(() => {
@@ -154,6 +189,8 @@
     adjustDroneSpeed(-100); // Stop the drone
     if (countdownInterval) clearInterval(countdownInterval);
     missionFailed?.();
+    adjustCompletedStations(-1);
+    decrementRevolution();
   }
 
   function handleWin() {
@@ -163,6 +200,8 @@
     try { playRevolutionComplete(); } catch (e) { console.warn('playRevolutionComplete failed', e); }
     if (countdownInterval) clearInterval(countdownInterval);
     missionSuccess?.();
+    adjustCompletedStations(1);
+    incrementRevolution();
   }
 </script>
 
