@@ -46,7 +46,7 @@ function triggerPadChord(deadline: number) {
     dough({
       s: 'sine',
       note,
-      gain: 0.08,
+      gain: 0.035,
       attack: 3,
       decay: 2,
       sustain: 0.75,
@@ -60,7 +60,7 @@ function triggerPadChord(deadline: number) {
   // brown-noise texture underneath each chord
   dough({
     s: 'white',
-    gain: 0.025,
+    gain: 0.01,
     attack: 1,
     sustain: 0.6,
     release: 4,
@@ -110,17 +110,20 @@ async function initAudioInternal(): Promise<boolean> {
 }
 
 export async function startAmbient() {
-  // Ambient background is intentionally disabled. We still initialize audio so
-  // collision / event sounds can play without the pad layer.
   const ok = await initAudioInternal()
   if (!ok) return
 
+  isRunning = true
+  lfoPhase = 0
+
   if (schedulerId !== null) {
     clearInterval(schedulerId)
-    schedulerId = null
   }
-  isRunning = false
-  lfoPhase = 0
+
+  schedulerId = setInterval(() => {
+    if (!isRunning) return
+    triggerPadChord(Date.now() + 50)
+  }, 7000)
 }
 
 export async function ensureAudioStarted(): Promise<boolean> {
