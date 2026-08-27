@@ -220,7 +220,7 @@ cfg.drone.diffuseColor.b
 		lookAheadDistance: cfg.camera.lookAheadDistance
 	};
 
-	const projectiles: Array<{ mesh: BABYLON.Mesh; aggregate: BABYLON.PhysicsAggregate | null; velocity: BABYLON.Vector3; expiry: number; light?: BABYLON.PointLight }> = [];
+	const projectiles: Array<{ mesh: BABYLON.Mesh; aggregate: BABYLON.PhysicsAggregate | null; velocity: BABYLON.Vector3; expiry: number; spawnTime: number; isProjectile: boolean; light?: BABYLON.PointLight }> = [];
 	const fireProjectile = () => {
 		try {
 			const rotation = drone.absoluteRotationQuaternion ?? drone.rotationQuaternion ?? BABYLON.Quaternion.Identity();
@@ -233,6 +233,7 @@ const halfSize = bbox
 : new BABYLON.Vector3(1, 1, 1);
 
 const origin = boxCenter.clone().add(forward.scale(Math.max(halfSize.x, halfSize.y, halfSize.z) * 0.9));
+const now = performance.now();
 
 const muzzle = BABYLON.MeshBuilder.CreateSphere('droneMuzzleFlash', { diameter: 0.45, segments: 8 }, scene);
 muzzle.position.copyFrom(origin);
@@ -243,18 +244,24 @@ muzzleMat.emissiveColor = new BABYLON.Color3(1, 0.8, 0.1);
 muzzleMat.specularColor = new BABYLON.Color3(1, 1, 1);
 muzzle.isPickable = false;
 
+const muzzleLight = new BABYLON.PointLight('droneMuzzleFlashLight', origin.clone(), scene);
+muzzleLight.diffuse = new BABYLON.Color3(1, 0.86, 0.42);
+muzzleLight.specular = new BABYLON.Color3(1, 0.75, 0.2);
+muzzleLight.intensity = 2.2;
+muzzleLight.range = 12;
+
 const projectileLight = new BABYLON.PointLight('droneProjectileLight', origin.clone(), scene);
-projectileLight.diffuse = new BABYLON.Color3(1, 0.8, 0.2);
-projectileLight.specular = new BABYLON.Color3(1, 0.7, 0.1);
-projectileLight.intensity = 0.9;
-projectileLight.range = 12;
+projectileLight.diffuse = new BABYLON.Color3(1, 0.12, 0.12);
+projectileLight.specular = new BABYLON.Color3(1, 0.08, 0.08);
+projectileLight.intensity = 2.0;
+projectileLight.range = 5;
 
 const projectile = BABYLON.MeshBuilder.CreateSphere('droneProjectile', { diameter: 0.5, segments: 12 }, scene);
 projectile.position.copyFrom(origin.clone());
 projectile.material = new BABYLON.StandardMaterial('droneProjectileMat', scene);
 const mat = projectile.material as BABYLON.StandardMaterial;
 mat.diffuseColor = new BABYLON.Color3(1, 0.2, 0.2);
-mat.emissiveColor = new BABYLON.Color3(1, 0.2, 0.2);
+mat.emissiveColor = new BABYLON.Color3(0.8, 0.08, 0.08);
 mat.specularColor = new BABYLON.Color3(1, 1, 1);
 projectile.isPickable = false;
 
@@ -272,7 +279,9 @@ projectiles.push({
 mesh: projectile,
 aggregate,
 velocity,
-expiry: performance.now() + 2000,
+expiry: now + 2000,
+spawnTime: now,
+isProjectile: true,
 light: projectileLight
 });
 
@@ -280,8 +289,10 @@ projectiles.push({
 mesh: muzzle,
 aggregate: null,
 velocity: BABYLON.Vector3.Zero(),
-expiry: performance.now() + 120,
-light: projectileLight
+expiry: now + 120,
+spawnTime: now,
+isProjectile: false,
+light: muzzleLight
 });
 
 try { playLaserFireSound(); } catch (e) { console.warn('Laser fire sound failed:', e); }
@@ -345,18 +356,25 @@ getDronePathIndex,
 const projectileUpdate = () => {
 for (let i = projectiles.length - 1; i >= 0; i--) {
 const projectile = projectiles[i];
+const now = performance.now();
 try {
 if (projectile.aggregate) {
 projectile.aggregate.body.setLinearVelocity(projectile.velocity);
 }
 if (projectile.light) {
-const elapsed = performance.now() - (projectile.expiry - 2000);
-const fade = Math.max(0, 1 - elapsed / 2000);
-projectile.light.intensity = 0.9 * fade;
-projectile.light.range = 12 * fade;
+const life = Math.max(120, projectile.expiry - projectile.spawnTime);
+const age = now - projectile.spawnTime;
+const travelFade = projectile.isProjectile ? Math.min(1, age / 180) : 1;
+const fade = projectile.isProjectile
+? Math.max(0.12, 1 - age / life)
+: Math.max(0, 1 - age / life);
+const baseIntensity = projectile.isProjectile ? 1.5 : 2.2;
+const baseRange = projectile.isProjectile ? 6 : 4;
+projectile.light.intensity = baseIntensity * Math.min(1, travelFade + fade * 0.8);
+projectile.light.range = baseRange * (travelFade * 0.7 + fade * 0.9) + (projectile.isProjectile ? 0.8 : 0.2);
 projectile.light.position.copyFrom(projectile.mesh.position);
 }
-if (performance.now() > projectile.expiry) {
+if (now > projectile.expiry) {
 if (projectile.aggregate) {
 try { projectile.aggregate.dispose(); } catch {}
 }

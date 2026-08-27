@@ -3,7 +3,7 @@
   import { completedStations, totalStations } from '$lib/stores/stationProgress';
   import { getLoadingBgTextureUrl } from '$lib/assets/assetsConfig';
 
-export let initialCountdown = 99;
+export let initialCountdown = 20;
   export let onStart: () => void;
   export let backgroundUrl = '';
 
@@ -118,10 +118,10 @@ export let initialCountdown = 99;
   ): string => {
     if (currentSlide === 1) {
       return loading
-        ? ['CHRONO ESCAPE 2050', '', 'Loading story...'].join('\n')
+        ? ['PARALLEL: CHRONO ESCAPE 2050', '', 'Loading story...'].join('\n')
         : error
-        ? ['CHRONO ESCAPE 2050', '', 'Story failed to load.', error].join('\n')
-        : ['CHRONO ESCAPE 2050', '', 'Tap next to continue.'].join('\n');
+        ? ['PARALLEL: CHRONO ESCAPE 2050', '', 'Story failed to load.', error].join('\n')
+        : ['PARALLEL: CHRONO ESCAPE 2050', '', 'Press O on controller to continue.'].join('\n');
     }
 
     if (currentSlide >= 2 && currentSlide < slidesTotal) {

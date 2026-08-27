@@ -5,14 +5,17 @@
 
   import DroneHUD from '$lib/scenes/wormhole2/wormhole2.gui.svelte';
   import OceanGUI from '$lib/scenes/ocean.gui.svelte';
+  import BootScene from '$lib/scenes/BootScene.svelte';
   import IntroScene from '$lib/scenes/IntroScene.svelte';
   import TransitionScreen from '$lib/scenes/TransitionScreen.svelte';
   import { missionRetry } from '$lib/stores/missionState';
   import { gameMode, type GameMode } from '$lib/stores/gameState';
   import { resetDrone } from '$lib/stores/droneControl.svelte';
   import { setCompletedStations, setTotalStations } from '$lib/stores/stationProgress';
+  import { ensureAudioStarted, resumeAudioOnGesture, startAmbient } from '$lib/scores/ambient';
 
   const SCENE_TO_MODE: Record<string, GameMode> = {
+    boot:    'loading',
     loading: 'loading',
     intro:   'intro',
     scene2:  'wormhole',
@@ -26,8 +29,8 @@
   let keydownCleanup: (() => void) | null = null;
 
   // Track the active scene reactively via Svelte runes
-  type AppScene = 'loading' | 'intro' | 'scene2' | 'scene1' | 'scene3';
-  let activeScene: AppScene = $state('loading');
+  type AppScene = 'boot' | 'loading' | 'intro' | 'scene2' | 'scene1' | 'scene3';
+  let activeScene: AppScene = $state('boot');
   let gameplaySessionActive = $state(false);
   let introBackgroundUrl = $state('');
   let sceneTransitioning = $state(false);
@@ -68,6 +71,21 @@
   };
 
   let scene3Result: 'success' | 'failure' = $state('failure');
+
+  const unlockAudio = async () => {
+    try {
+      resumeAudioOnGesture(document);
+      await ensureAudioStarted();
+    } catch (e) {
+      console.warn('+page: failed to unlock audio', e);
+    }
+  };
+
+  const beginIntroFromBoot = async () => {
+    await unlockAudio();
+    startAmbient();
+    changeScene('intro');
+  };
 
   const startWormhole = () => {
     resetDrone();
@@ -149,7 +167,6 @@
         }
 
         missionRetry.set(false);
-        changeScene('intro');
 
         const handleDebugKeys = (e: KeyboardEvent) => {
           if (!import.meta.env.DEV) return;
@@ -181,8 +198,12 @@
     style="pointer-events: {isGameplayActive() ? 'auto' : 'none'}"
   ></canvas>
 
+  {#if activeScene === 'boot'}
+    <BootScene backgroundUrl={introBackgroundUrl} onInitializeAudio={beginIntroFromBoot} />
+  {/if}
+
   {#if activeScene === 'intro'}
-    <IntroScene initialCountdown={99} onStart={startWormhole} backgroundUrl={introBackgroundUrl} />
+    <IntroScene initialCountdown={30} onStart={startWormhole} backgroundUrl={introBackgroundUrl} />
   {/if}
 
   {#if sceneTransitioning}
