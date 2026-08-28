@@ -25,7 +25,7 @@ var createScene = async function (
 	camera.attachControl(canvas, true, true);
 	camera.useAutoRotationBehavior = true;
 	if (camera.autoRotationBehavior) {
-		camera.autoRotationBehavior.idleRotationSpeed = 0.02;
+		camera.autoRotationBehavior.idleRotationSpeed = 0.03;
 		camera.autoRotationBehavior.idleRotationWaitTime = 0;
 		camera.autoRotationBehavior.idleRotationSpinupTime = 2000;
 	}
