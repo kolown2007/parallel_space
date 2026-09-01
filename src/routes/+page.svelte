@@ -30,7 +30,7 @@
 
   // Track the active scene reactively via Svelte runes
   type AppScene = 'boot' | 'loading' | 'intro' | 'scene2' | 'scene1' | 'scene3';
-  let activeScene: AppScene = $state('boot');
+  let activeScene: AppScene = $state('loading');
   let gameplaySessionActive = $state(false);
   let introBackgroundUrl = $state('');
   let sceneTransitioning = $state(false);
@@ -166,6 +166,7 @@
           await runtime.loadingScreen.hidden;
         }
 
+        activeScene = 'boot';
         missionRetry.set(false);
 
         const handleDebugKeys = (e: KeyboardEvent) => {
@@ -197,6 +198,10 @@
     class="babylon-canvas"
     style="pointer-events: {isGameplayActive() ? 'auto' : 'none'}"
   ></canvas>
+
+  {#if activeScene === 'loading'}
+    <TransitionScreen backgroundUrl={introBackgroundUrl} label="Loading..." />
+  {/if}
 
   {#if activeScene === 'boot'}
     <BootScene backgroundUrl={introBackgroundUrl} onInitializeAudio={beginIntroFromBoot} />
