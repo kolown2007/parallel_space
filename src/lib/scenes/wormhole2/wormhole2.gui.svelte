@@ -44,7 +44,7 @@
   })));
   let matrixInterval: ReturnType<typeof setInterval> | null = null;
   const gridCells = Array.from({ length: 20 }, (_, i) => i + 1);
-  const hiddenCells = new Set([7, 8, 9, 12, 13, 14]);
+  const hiddenCells = new Set([7, 8, 9, 12, 14]);
   const smallScreenHiddenCells = new Set([1, 6, 11, 16]);
   const visibleClass = 'bg-transparent';
   const hiddenClass = 'bg-transparent border-transparent opacity-0 pointer-events-none';
@@ -93,6 +93,10 @@
 
   function clampProgressPercent(value: number) {
     return Math.max(0, Math.min(100, Math.floor(value * 100)));
+  }
+
+  function clampGaugeDegrees(value: number) {
+    return Math.max(-100, Math.min(100, value));
   }
 
   function adjustCompletedStations(delta: number) {
@@ -211,17 +215,12 @@
       {#each gridCells as cell}
         <div class={"relative rounded-3xl border border-transparent p-4 overflow-hidden flex flex-col " + (hiddenCells.has(cell) ? hiddenClass : visibleClass) + (smallScreenHiddenCells.has(cell) ? ' invisible sm:visible' : '')}>
           {#if !hiddenCells.has(cell)}
-            <div class="absolute top-3 left-3 text-[8px] uppercase tracking-[0.4em] text-slate-300/40 opacity-30">{cell}</div>
+            <div class="absolute top-3 left-3 text-[8px] uppercase tracking-[0.4em] text-transparent opacity-0">{cell}</div>
           {/if}
 
           {#if cell === 1}
-            <div class="pointer-events-auto flex h-full flex-col justify-between gap-4">
-              <div class="text-[12px] uppercase tracking-[0.3em] text-slate-300/80"></div>
-              <div class="matrix-stream grid grid-cols-8 gap-1 w-full flex-1 text-center opacity-90 overflow-hidden {collisionTextClass}">
-                {#each matrixStream as item}
-                  <span class="text-[10px] leading-none">{item.char}</span>
-                {/each}
-              </div>
+            <div class="pointer-events-auto flex h-full items-center justify-center">
+              <img src="/parallelspace.png" alt="Parallel Space" class="max-h-[50%] max-w-[50%] object-contain" class:filter-red={isColliding} />
             </div>
           {:else if cell === 2}
             <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center {collisionTextClass}">
@@ -252,19 +251,9 @@
               <img src="/parallelspace.png" alt="Parallel Space" class="max-h-[50%] max-w-[50%] object-contain" class:filter-red={isColliding} />
             </div>
         {:else if cell === 6}
-  <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center px-3 {collisionTextClass}">
-    <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Health</div>
-    <div class="flex gap-2 items-center justify-center">
-      {#each Array(5) as _, i}
-        <div 
-          class={"w-3.5 h-3.5 rounded-full " + (isColliding ? 'filter-red ' : '') + "transition-all duration-300 " +
-            (i < lives 
-              ? 'bg-white shadow-[0_0_8px_rgba(239,68,68,0.8) ]' 
-              : 'border border-slate-500/40 opacity-20')}
-        ></div>
-      {/each}
-    </div>
-  </div>
+            <div class="pointer-events-auto flex h-full items-center justify-center">
+              <img src="/init.svg" alt="Init" class="max-h-[40%] max-w-[40%] object-contain" class:filter-red={isColliding} />
+            </div>
           {:else if cell === 10}
             <div class="pointer-events-auto flex h-full items-center justify-center">
               <img src="/unos.svg" alt="Unos" class="max-h-[40%] max-w-[40%] object-contain" class:filter-red={isColliding} />
@@ -285,18 +274,7 @@
             <div class="pointer-events-auto flex h-full items-center justify-center">
               <img src="/bagyo.svg" alt="Bagyo" class="max-h-[40%] max-w-[40%] object-contain" class:filter-red={isColliding} />
             </div>
-          {:else if cell === 17}
-            <div class="pointer-events-auto flex h-full flex-col items-center justify-center {collisionTextClass}">
-              <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Speed gauge</div>
-              <div class="w-20 h-20 border-[3px] border-dashed border-slate-300/60 rounded-full relative flex items-center justify-center">
-                <div
-                  class="w-0.75 h-11.25 bg-slate-100 absolute bottom-1/2 left-[calc(50%-1.5px)] origin-bottom transition-transform duration-100 ease-out"
-                  style="transform: rotate({-100 + ($displaySpeed * 10)}deg)"
-                ></div>
-              </div>
-              <div class="mt-3 text-sm {collisionTextClass}">{$displaySpeed} units</div>
-            </div>
-          {:else if cell === 18}
+          {:else if cell === 13}
             <div class="pointer-events-auto flex h-full flex-col justify-center text-center {collisionTextClass}">
               {#if isGameOver}
                 <div class="text-[16px] font-bold text-[#ff3e00]">MISSION FAILED</div>
@@ -304,10 +282,33 @@
               {:else if isColliding}
                 <div class="text-[16px] font-bold text-red-600">{collisionMessage}</div>
                 <div class="mt-2 text-red-400">{collisionDetail}</div>
-              {:else}
-                <div class="uppercase tracking-widest text-slate-300/80">GOAL</div>
-                <div class="mt-2 text-slate-300/80">REACH NEXT STATION</div>
               {/if}
+            </div>
+          {:else if cell === 17}
+            <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center px-3 {collisionTextClass}">
+              <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Health</div>
+              <div class="flex gap-2 items-center justify-center">
+                {#each Array(5) as _, i}
+                  <div 
+                    class={"w-3.5 h-3.5 rounded-full " + (isColliding ? 'filter-red ' : '') + "transition-all duration-300 " +
+                      (i < lives 
+                        ? 'bg-white shadow-[0_0_8px_rgba(239,68,68,0.8) ]' 
+                        : 'border border-slate-500/40 opacity-20')}
+                  ></div>
+                {/each}
+              </div>
+            </div>
+          {:else if cell === 18}
+            <div class="pointer-events-auto flex h-full flex-col items-center justify-center {collisionTextClass}">
+              <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Speed gauge</div>
+              <div class="w-20 h-20 border-[3px] border-dashed border-slate-300/60 rounded-full relative flex items-center justify-center">
+                <div class="absolute inset-2 rounded-full border border-slate-300/30"></div>
+                <div
+                  class="w-1 h-7 bg-slate-100 absolute bottom-1/2 left-[calc(50%-2px)] origin-bottom transition-transform duration-100 ease-out rounded-full"
+                  style="transform: rotate({clampGaugeDegrees(-100 + ($displaySpeed * 10))}deg)"
+                ></div>
+              </div>
+              <div class="mt-3 text-sm {collisionTextClass}">{$displaySpeed} units</div>
             </div>
           {:else if cell === 19}
             <div class="pointer-events-auto flex h-full items-center justify-center text-center px-3 {collisionTextClass}">

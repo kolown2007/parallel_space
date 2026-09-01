@@ -3,7 +3,7 @@
   import { completedStations, totalStations } from '$lib/stores/stationProgress';
   import { getLoadingBgTextureUrl } from '$lib/assets/assetsConfig';
 
-export let initialCountdown = 20;
+  export let initialCountdown = 20;
   export let onStart: () => void;
   export let backgroundUrl = '';
 
@@ -15,14 +15,32 @@ export let initialCountdown = 20;
   let storyError = '';
   let slide = 1;
   let autoAdvanceTimer: number | null = null;
-  const autoAdvanceDelay = 5000;
+  const autoAdvanceDelay = 12000;
   let countdown = initialCountdown;
   let countdownInterval: number | null = null;
   let hasStarted = false;
 
-  let totalSlides = 3;
+  type IntroSlide = {
+    id: string;
+    title?: string;
+    kind: 'story' | 'status';
+    body?: string;
+    centered?: boolean;
+  };
+
+  let totalSlides = 2;
   let rafId: number | null = null;
   let lastCirclePressed = false;
+
+  const introSlides: IntroSlide[] = [
+    { id: 'story', kind: 'story' },
+    {
+      id: 'status',
+      kind: 'status',
+      title: 'MISSION STATUS',
+      centered: true,
+    },
+  ];
 
   const normalizeStoryText = (data: any): string => {
     if (typeof data === 'string') return data;
@@ -41,57 +59,12 @@ export let initialCountdown = 20;
     return String(data);
   };
 
-  const wrapText = (text: string, maxChars = 42): string => {
-    return text
-      .split('\n')
-      .flatMap((line) => {
-        const words = line.split(' ');
-        const wrappedLines: string[] = [];
-        let current = '';
-
-        for (const word of words) {
-          const candidate = current ? `${current} ${word}` : word;
-          if (candidate.length > maxChars) {
-            if (current) wrappedLines.push(current);
-            current = word;
-          } else {
-            current = candidate;
-          }
-        }
-
-        if (current) wrappedLines.push(current);
-        return wrappedLines;
-      })
-      .join('\n');
-  };
-
-  const formatStoryText = (text: string): string => {
-    const normalized = text.trim().replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n');
-    const paragraphs = normalized
-      .split(/\n{2,}/)
-      .map((paragraph) => paragraph.trim())
-      .filter(Boolean);
-
-    if (paragraphs.length > 0) {
-      return paragraphs.map((paragraph) => wrapText(paragraph, 38)).join('\n\n');
-    }
-
-    const sentenceMatches = normalized.match(/[^.!?]+[.!?]+(?:\s|$)/g) || [normalized];
-    const paragraphChunks: string[] = [];
-    for (let i = 0; i < sentenceMatches.length; i += 2) {
-      paragraphChunks.push(sentenceMatches.slice(i, i + 2).join(' ').trim());
-    }
-
-    return paragraphChunks.map((paragraph) => wrapText(paragraph, 38)).join('\n\n');
-  };
-
   const buildStoryParagraphs = (text: string): string[] => {
     const normalized = text.trim().replace(/\r\n/g, '\n').replace(/\n{3,}/g, '\n\n');
     const paragraphs = normalized
       .split(/\n{2,}/)
       .map((paragraph) => paragraph.trim())
-      .filter(Boolean)
-      .map((paragraph) => wrapText(paragraph, 38));
+      .filter(Boolean);
 
     if (paragraphs.length > 0) {
       return paragraphs;
@@ -103,12 +76,11 @@ export let initialCountdown = 20;
       paragraphChunks.push(sentenceMatches.slice(i, i + 2).join(' ').trim());
     }
 
-    return paragraphChunks.map((paragraph) => wrapText(paragraph, 38));
+    return paragraphChunks;
   };
 
   const computeSlideText = (
     currentSlide: number,
-    slidesTotal: number,
     loading: boolean,
     error: string,
     paragraphs: string[],
@@ -116,36 +88,35 @@ export let initialCountdown = 20;
     completed: number,
     total: number
   ): string => {
-    if (currentSlide === 1) {
-      return loading
-        ? ['PARALLEL: CHRONO ESCAPE 2050', '', 'Loading story...'].join('\n')
-        : error
-        ? ['PARALLEL: CHRONO ESCAPE 2050', '', 'Story failed to load.', error].join('\n')
-        : ['PARALLEL: CHRONO ESCAPE 2050', '', 'Press O on controller to continue.'].join('\n');
+    if (loading) {
+      return ['PARALLEL: CHRONO ESCAPE 2050', '', 'Loading story...'].join('\n');
     }
 
-    if (currentSlide >= 2 && currentSlide < slidesTotal) {
-      const storySlideIndex = currentSlide - 2;
-      if (loading) return 'Loading story...';
-      if (error) return `Story failed to load. ${error}`;
-      return paragraphs[storySlideIndex] ?? 'No story text returned.';
+    if (error) {
+      return ['PARALLEL: CHRONO ESCAPE 2050', '', 'Story failed to load.', error].join('\n');
+    }
+
+    const activeSlide = introSlides[currentSlide - 1];
+    if (!activeSlide) {
+      return ['PARALLEL: CHRONO ESCAPE 2050', '', 'Starting in 0...'].join('\n');
+    }
+
+    if (activeSlide.kind === 'story') {
+      const storyTextOutput = paragraphs.length > 0 ? paragraphs.join('\n\n') : 'No story text returned.';
+      return ['PARALLEL: CHRONO ESCAPE 2050', '', storyTextOutput].join('\n');
     }
 
     return [
-     
-     
-      'Completed stations',
-      `${completed} / ${total}`,
+      activeSlide.title ?? 'MISSION STATUS',
       '',
-     
-           '',
+      `Completed stations: ${completed} / ${total}`,
+      '',
       `Starting in ${remaining}...`
     ].join('\n');
   };
 
   $: displayText = computeSlideText(
     slide,
-    totalSlides,
     storyLoading,
     storyError,
     storyParagraphs,
@@ -157,7 +128,7 @@ export let initialCountdown = 20;
   const getButtonLabel = (): string => (slide < totalSlides ? 'O' : 'O to start');
 
   const updateTotalSlides = () => {
-    totalSlides = 2 + Math.max(0, storyParagraphs.length);
+    totalSlides = introSlides.length;
   };
 
   const loadStory = async () => {
@@ -319,24 +290,26 @@ export let initialCountdown = 20;
   });
 </script>
 
-<div class="absolute inset-0 z-20 overflow-hidden">
+<div class="absolute inset-0 z-20 overflow-y-auto">
   {#if backgroundUrl}
     <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('{backgroundUrl}')"></div>
   {/if}
   <div class="relative flex min-h-full flex-col items-center justify-between px-4 py-8 sm:px-6">
-    <div class="flex h-full w-full flex-1 items-center justify-center text-center text-slate-100 sm:px-8">
+    <div class="flex h-full w-full flex-1 items-center justify-center text-center text-slate-100 px-4 sm:px-8 md:px-12">
       {#if displayText}
-        <p
-          class="mx-auto max-w-[88vw] whitespace-pre-wrap text-sm leading-relaxed tracking-wide text-cyan-100 sm:text-base md:text-lg"
-          style="font-family: 'Comic Sans MS', 'Comic Sans', cursive;"
-        >
-          {displayText}
-        </p>
+        <div class={introSlides[slide - 1]?.kind === 'story' ? 'w-full max-w-[92vw]' : 'max-w-xl'}>
+          <p
+            class={introSlides[slide - 1]?.kind === 'story' ? 'whitespace-pre-wrap text-xs leading-relaxed tracking-wide text-cyan-100 sm:text-sm md:text-base lg:text-lg' : 'whitespace-pre-wrap text-xl leading-relaxed tracking-[0.08em] text-cyan-100 sm:text-2xl md:text-3xl'}
+            style="font-family: 'Comic Sans MS', 'Comic Sans', cursive;"
+          >
+            {displayText}
+          </p>
+        </div>
       {:else}
         <h1 class="text-xl font-semibold tracking-[0.03em] sm:text-3xl">Loading...</h1>
       {/if}
     </div>
-    <div class="w-full px-4 pb-8 sm:px-8">
+    <div class="w-full px-4 pb-8 pt-6 sm:px-8">
       <button
         class="mx-auto block rounded-full border border-white/70 bg-transparent px-6 py-2.5 text-sm font-bold uppercase tracking-[0.08em] text-white transition hover:bg-red-600 sm:px-8 sm:py-3 sm:text-base"
         type="button"
