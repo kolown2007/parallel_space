@@ -21,6 +21,16 @@ var createScene = async function (
 ): Promise<BABYLON.Scene> {
 	var scene = new BABYLON.Scene(engine);
 
+	// Subtle atmospheric haze around the model and water
+	//  scene.fogMode = BABYLON.Scene.FOGMODE_LINEAR;
+	// scene.fogColor = new BABYLON.Color3(0.58, 0.68, 0.8);
+	// scene.fogDensity = 0.000003;
+	// scene.fogStart = 0;
+	// scene.fogEnd = 2.0;
+	// scene.fogEnabled = true;
+
+	//scene.ambientColor = new BABYLON.Color3(0.9, 0, 0);
+
 	var camera = new BABYLON.ArcRotateCamera("Camera", 3 * Math.PI / 2, Math.PI / 4, 550, BABYLON.Vector3.Zero(), scene);
 	camera.attachControl(canvas, true, true);
 	camera.useAutoRotationBehavior = true;
@@ -48,12 +58,12 @@ var createScene = async function (
 	var water = new WaterMaterial("water", scene, new BABYLON.Vector2(512, 512));
 	water.backFaceCulling = true;
 	water.bumpTexture = new BABYLON.Texture(WATER_BUMP_URL, scene);
-	water.windForce = -10;
+	water.windForce = 10;
 	water.waveHeight = 1.7;
 	water.bumpHeight = 0.1;
 	water.windDirection = new BABYLON.Vector2(1, 1);
-	water.waterColor = new BABYLON.Color3(0, 0, 221 / 255);
-	water.colorBlendFactor = 0.02;
+	water.waterColor = new BABYLON.Color3(0.22, 0.31, 0.28);
+	water.colorBlendFactor = 0.55;
 	water.addToRenderList(skybox);
 	waterMesh.material = water;
 
