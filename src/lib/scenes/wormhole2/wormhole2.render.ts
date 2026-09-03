@@ -16,6 +16,9 @@ export interface RenderLoopDeps {
 	followCamera: any;
 	pathPoints: BABYLON.Vector3[];
 	obstacles: ObstacleManager;
+	stationSigns?: {
+		updateVisibility: (pathIndex: number) => void;
+	};
 	getPortal: () => any[];
 	setPortal: (portal: any, remove?: boolean) => void;
 	onPortalTrigger?: () => void;
@@ -45,6 +48,7 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 		followCamera,
 		pathPoints,
 		obstacles,
+		stationSigns,
 		getPortal,
 		setPortal,
 		onPortalTrigger,
@@ -67,6 +71,7 @@ export function createRenderLoop(deps: RenderLoopDeps) {
 
 		// 1. Calculate real-time path progress directly from physical drone position
 		const droneIdx = getDronePathIndex();
+		stationSigns?.updateVisibility(droneIdx);
 		const currentProgress = indexToProgress(droneIdx, pathPoints);
 		updateProgress(currentProgress);
 

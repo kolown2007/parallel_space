@@ -11,7 +11,7 @@
   import { missionRetry } from '$lib/stores/missionState';
   import { gameMode, type GameMode } from '$lib/stores/gameState';
   import { resetDrone } from '$lib/stores/droneControl.svelte';
-  import { setCompletedStations, setTotalStations } from '$lib/stores/stationProgress';
+  import { resetStationName, setCompletedStations, setTotalStations } from '$lib/stores/stationProgress';
   import { ensureAudioStarted, resumeAudioOnGesture, startAmbient } from '$lib/scores/ambient';
 
   const SCENE_TO_MODE: Record<string, GameMode> = {
@@ -89,6 +89,7 @@
 
   const startWormhole = () => {
     resetDrone();
+    resetStationName();
     missionRetry.set(false);
     scene3Result = 'success';
     gameplaySessionActive = true;
@@ -97,6 +98,7 @@
 
   const retryMission = () => {
     resetDrone();
+    resetStationName();
     missionRetry.set(true);
     scene3Result = 'success';
     gameplaySessionActive = true;
@@ -236,6 +238,7 @@
     width: 100%;
     height: 100%;
     display: block;
-    pointer-events: none;
+    pointer-events: auto;
+    touch-action: none;
   }
 </style>

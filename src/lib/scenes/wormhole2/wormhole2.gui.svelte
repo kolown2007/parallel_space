@@ -4,7 +4,7 @@
   import { fade } from 'svelte/transition';
   import { displaySpeed, droneControl, droneEvents, adjustDroneSpeed, updateProgress } from '../../stores/droneControl.svelte.js';
   import { playRevolutionComplete, playCountdownBeep } from '$lib/scores/ambient';
-  import { completedStations, totalStations, setCompletedStations, setTotalStations } from '$lib/stores/stationProgress';
+  import { completedStations, totalStations, setCompletedStations, setTotalStations, stationName } from '$lib/stores/stationProgress';
 
   interface Props {
     missionFailed?: () => void;
@@ -26,6 +26,8 @@
   let collisionDetail = $state('');
   let collisionCount = $state(0);
   let collisionTextClass = $state('text-slate-100');
+  let goalWindowActive = $state(true);
+  let goalWindowTimer: ReturnType<typeof setTimeout> | null = null;
   let lives = $derived(Math.max(0, 5 - collisionCount));
 
   $effect(() => {
@@ -44,7 +46,7 @@
   })));
   let matrixInterval: ReturnType<typeof setInterval> | null = null;
   const gridCells = Array.from({ length: 20 }, (_, i) => i + 1);
-  const hiddenCells = new Set([7, 8, 9, 12, 14]);
+  const hiddenCells = new Set([7, 8, 9, 12]);
   const smallScreenHiddenCells = new Set([1, 6, 11, 16]);
   const visibleClass = 'bg-transparent';
   const hiddenClass = 'bg-transparent border-transparent opacity-0 pointer-events-none';
@@ -141,6 +143,11 @@
 
     mountDelayTimeout = setTimeout(() => {
       showUI = true;
+      goalWindowActive = true;
+      if (goalWindowTimer) clearTimeout(goalWindowTimer);
+      goalWindowTimer = setTimeout(() => {
+        goalWindowActive = false;
+      }, 5000);
       startCountdown();
     }, 2000);
 
@@ -184,6 +191,7 @@
       if (apiInterval) clearInterval(apiInterval);
       if (countdownInterval) clearInterval(countdownInterval);
       if (alertTimeout) clearTimeout(alertTimeout);
+      if (goalWindowTimer) clearTimeout(goalWindowTimer);
       if (matrixInterval) clearInterval(matrixInterval);
     };
   });
@@ -282,8 +290,13 @@
               {:else if isColliding}
                 <div class="text-[16px] font-bold text-red-600">{collisionMessage}</div>
                 <div class="mt-2 text-red-400">{collisionDetail}</div>
+              {:else if goalWindowActive}
+                <div class="text-[14px] font-bold uppercase tracking-[0.25em] text-slate-200/70">Your Goal</div>
+                <div class="mt-2 text-[16px] font-bold text-slate-100">Reach Station {$stationName}</div>
               {/if}
             </div>
+          {:else if cell === 14}
+            <div class="pointer-events-auto flex h-full items-center justify-center"></div>
           {:else if cell === 17}
             <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center px-3 {collisionTextClass}">
               <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Health</div>
@@ -313,9 +326,11 @@
           {:else if cell === 19}
             <div class="pointer-events-auto flex h-full items-center justify-center text-center px-3 {collisionTextClass}">
               <div>
-                <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Message</div>
+                <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Destination</div>
                 <div class="text-[14px] font-semibold">
-                  {#if lives <= 2 && lives > 0}
+                  {#if !goalWindowActive}
+                    {$stationName}
+                  {:else if lives <= 2 && lives > 0}
                     Be careful, your life is {lives}
                   {:else}
                     The USB is inside the wormhole

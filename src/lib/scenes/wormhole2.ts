@@ -22,6 +22,7 @@ import { createKeyboardHandlers } from './wormhole2/wormhole2.keyboard';
 import { setupDroneCollision } from './wormhole2/wormhole2.collision';
 import type { DronePhysicsState } from '../drone/droneControllers';
 import { createRenderLoop } from './wormhole2/wormhole2.render';
+import { StationSigns } from './wormhole2/StationSigns';
 
 export class WormHoleScene2 {
 public pathPoints: BABYLON.Vector3[] = [];
@@ -72,6 +73,9 @@ materialTextureId: randomFrom('loading3', 'rag', 'mat', 'cube3', 'collage1', 'wo
 this.pathPoints = pathPoints;
 const torusCenter = torus.getAbsolutePosition();
 const torusMaterial = torus.material as BABYLON.StandardMaterial;
+
+const TimeStationMarker = new StationSigns(scene, pathPoints, 360, 50);
+this.registerCleanup(() => TimeStationMarker.dispose());
 
 // Texture pool for revolution changes
 const textureIds = ['loading3', 'rag', 'mat', 'cube3', 'collage1', 'wood'];
@@ -324,12 +328,20 @@ const autoCubeInterval = setInterval(() => {
 }, 3000);
 this.registerCleanup(() => clearInterval(autoCubeInterval));
 
-const onTap = (e: TouchEvent) => {
-e.preventDefault();
-keyboardHandlers.onBurst?.();
+let lastBurstAt = 0;
+const onBurstTap = (e: Event) => {
+	const now = performance.now();
+	if (now - lastBurstAt < 120) return;
+	lastBurstAt = now;
+	e.preventDefault();
+	keyboardHandlers.onBurst?.();
 };
-this.canvas.addEventListener('touchstart', onTap, { passive: false });
-this.registerCleanup(() => this.canvas.removeEventListener('touchstart', onTap));
+window.addEventListener('touchstart', onBurstTap, { passive: false });
+window.addEventListener('pointerdown', onBurstTap, { passive: false });
+this.registerCleanup(() => {
+	window.removeEventListener('touchstart', onBurstTap);
+	window.removeEventListener('pointerdown', onBurstTap);
+});
 
 const dronePosLogger = setInterval(() => {
 // getDronePathIndex(); // Uncomment to enable debug position logging
@@ -344,6 +356,7 @@ droneAggregate,
 followCamera,
 pathPoints,
 obstacles,
+stationSigns: TimeStationMarker,
 getPortal,
 setPortal,
 onPortalTrigger,
