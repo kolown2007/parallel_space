@@ -5,6 +5,7 @@
   import { displaySpeed, droneControl, droneEvents, adjustDroneSpeed, updateProgress } from '../../stores/droneControl.svelte.js';
   import { playRevolutionComplete, playCountdownBeep } from '$lib/scores/ambient';
   import { completedStations, totalStations, setCompletedStations, setTotalStations, stationName } from '$lib/stores/stationProgress';
+  import { isTouchDevice, setTouchStabilize, triggerTouchBurst, triggerTouchFire } from '../../input/touchControls';
 
   interface Props {
     missionFailed?: () => void;
@@ -16,6 +17,7 @@
 
   // 1. New visibility flag controlled by our startup timer
   let showUI = $state(false);
+  let showTouchControls = $state(false);
 
   let isColliding = $state(false);
   let isGameOver = $state(false);
@@ -143,6 +145,7 @@
 
     mountDelayTimeout = setTimeout(() => {
       showUI = true;
+      showTouchControls = isTouchDevice();
       goalWindowActive = true;
       if (goalWindowTimer) clearTimeout(goalWindowTimer);
       goalWindowTimer = setTimeout(() => {
@@ -219,6 +222,38 @@
 
 {#if showUI}
   <div class="absolute inset-0 pointer-events-none font-mono z-10" transition:fade={{ duration: 1000 }}>
+    {#if showTouchControls}
+      <div class="pointer-events-auto absolute bottom-[25%] left-1/2 z-20 flex w-[86%] max-w-[420px] -translate-x-1/2 items-end justify-between gap-2 px-1 sm:hidden">
+        <button
+          type="button"
+          class="h-16 w-16 rounded-full border border-white/20 bg-slate-900/70 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-100 shadow-[0_0_20px_rgba(0,0,0,0.35)] backdrop-blur-sm"
+          onclick={triggerTouchBurst}
+        >
+          Burst
+        </button>
+
+        <button
+          type="button"
+          class="h-14 w-14 rounded-full border border-white/20 bg-slate-900/70 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-100 shadow-[0_0_20px_rgba(0,0,0,0.35)] backdrop-blur-sm"
+          onclick={() => setTouchStabilize(true)}
+          onpointerdown={() => setTouchStabilize(true)}
+          onpointerup={() => setTouchStabilize(false)}
+          onpointerleave={() => setTouchStabilize(false)}
+          onpointercancel={() => setTouchStabilize(false)}
+        >
+          Stabilize
+        </button>
+
+        <button
+          type="button"
+          class="h-16 w-16 rounded-full border border-white/20 bg-slate-900/70 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-100 shadow-[0_0_20px_rgba(0,0,0,0.35)] backdrop-blur-sm"
+          onclick={triggerTouchFire}
+        >
+          Fire
+        </button>
+      </div>
+    {/if}
+
     <div class="grid grid-cols-[0_1fr_1fr_1fr_0] sm:grid-cols-5 h-full gap-1 px-0.5 py-0.5 sm:gap-2 sm:px-1 sm:py-1" style="grid-template-rows:repeat(4,minmax(0,1fr));">
       {#each gridCells as cell}
         <div class={"relative rounded-2xl border border-transparent p-1.5 overflow-hidden flex flex-col sm:rounded-2xl sm:p-2 " + (hiddenCells.has(cell) ? hiddenClass : visibleClass) + (smallScreenHiddenCells.has(cell) ? ' invisible sm:visible' : '')}>
