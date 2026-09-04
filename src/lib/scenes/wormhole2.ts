@@ -334,7 +334,12 @@ const onBurstTap = (e: Event) => {
 	if (now - lastBurstAt < 120) return;
 	lastBurstAt = now;
 	e.preventDefault();
+	const burstWasPressed = keyboardHandlers.keysPressed.w;
+	keyboardHandlers.keysPressed.w = true;
 	keyboardHandlers.onBurst?.();
+	setTimeout(() => {
+		keyboardHandlers.keysPressed.w = burstWasPressed;
+	}, 120);
 };
 window.addEventListener('touchstart', onBurstTap, { passive: false });
 window.addEventListener('pointerdown', onBurstTap, { passive: false });

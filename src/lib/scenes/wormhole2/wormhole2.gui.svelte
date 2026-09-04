@@ -218,10 +218,10 @@
 </script>
 
 {#if showUI}
-  <div class="absolute top-0 left-0 w-full h-full pointer-events-none font-mono z-10" transition:fade={{ duration: 1000 }}>
-    <div class="grid grid-cols-[0_1fr_1fr_1fr_0] sm:grid-cols-5 h-full gap-4 px-2 py-2" style="grid-template-rows:repeat(4,minmax(0,1fr));">
+  <div class="absolute inset-0 pointer-events-none font-mono z-10" transition:fade={{ duration: 1000 }}>
+    <div class="grid grid-cols-[0_1fr_1fr_1fr_0] sm:grid-cols-5 h-full gap-1 px-0.5 py-0.5 sm:gap-2 sm:px-1 sm:py-1" style="grid-template-rows:repeat(4,minmax(0,1fr));">
       {#each gridCells as cell}
-        <div class={"relative rounded-3xl border border-transparent p-4 overflow-hidden flex flex-col " + (hiddenCells.has(cell) ? hiddenClass : visibleClass) + (smallScreenHiddenCells.has(cell) ? ' invisible sm:visible' : '')}>
+        <div class={"relative rounded-2xl border border-transparent p-1.5 overflow-hidden flex flex-col sm:rounded-2xl sm:p-2 " + (hiddenCells.has(cell) ? hiddenClass : visibleClass) + (smallScreenHiddenCells.has(cell) ? ' invisible sm:visible' : '')}>
           {#if !hiddenCells.has(cell)}
             <div class="absolute top-3 left-3 text-[8px] uppercase tracking-[0.4em] text-transparent opacity-0">{cell}</div>
           {/if}
@@ -232,8 +232,8 @@
             </div>
           {:else if cell === 2}
             <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center {collisionTextClass}">
-              <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Completed stations</div>
-              <div class="text-[20px] font-bold">{apiValue} / {totalUnits}</div>
+              <div class="mb-1 text-[8px] uppercase tracking-[0.2em] text-slate-300/80 sm:mb-2 sm:text-[10px] sm:tracking-[0.3em]">Completed stations</div>
+              <div class="text-[10px] font-bold sm:text-[10px]">{apiValue} / {totalUnits}</div>
             </div>
           {:else if cell === 3}
             <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center {collisionTextClass}">
@@ -242,15 +242,16 @@
             </div>
           {:else if cell === 4}
             <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center {collisionTextClass}">
-              <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Station progress</div>
-              <div class="relative h-28 w-6">
-                <div class="absolute left-0 w-full h-0.5 bg-slate-300/60 top-0"></div>
-                <div class="absolute left-0 w-full h-0.5 bg-slate-300/60 bottom-0"></div>
-                <div class="absolute left-1/2 -translate-x-1/2 flex flex-col items-center" style="bottom: calc({clampProgressPercent($droneControl.progress)}% - 12px)">
+              <div class="mb-2 text-[8px] uppercase tracking-[0.2em] text-slate-300/80 sm:mb-3 sm:text-[10px] sm:tracking-[0.3em]">To {$stationName} Station</div>
+              <div class="flex w-full max-w-35 items-center gap-2 sm:gap-3">
+                <div class={"relative h-2 flex-1 overflow-hidden rounded-full " + (isColliding ? 'bg-red-500/30' : 'bg-slate-300/30')}>
                   <div
-                    class="w-0 h-0 border-l-8 border-l-transparent border-r-8 border-r-transparent border-b-12 border-b-slate-300 transition-[bottom] duration-100 ease-out"
+                    class={"absolute inset-y-0 left-0 rounded-full transition-[width] duration-200 ease-out " + (isColliding ? 'bg-red-500' : 'bg-white')}
+                    style="width: {clampProgressPercent($droneControl.progress)}%"
                   ></div>
-                  <div class="mt-2 text-[10px] text-center {collisionTextClass}">{clampProgressPercent($droneControl.progress)}%</div>
+                </div>
+                <div class={"text-[10px] font-medium " + (isColliding ? 'text-red-500' : 'text-slate-100')}>
+                  {clampProgressPercent($droneControl.progress)}%
                 </div>
               </div>
             </div>
@@ -292,18 +293,18 @@
                 <div class="mt-2 text-red-400">{collisionDetail}</div>
               {:else if goalWindowActive}
                 <div class="text-[14px] font-bold uppercase tracking-[0.25em] text-slate-200/70">Your Goal</div>
-                <div class="mt-2 text-[16px] font-bold text-slate-100">Reach Station {$stationName}</div>
+                <div class="mt-2 text-[16px] font-bold text-slate-100">Reach <br/> Station {$stationName}</div>
               {/if}
             </div>
           {:else if cell === 14}
             <div class="pointer-events-auto flex h-full items-center justify-center"></div>
           {:else if cell === 17}
             <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center px-3 {collisionTextClass}">
-              <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Health</div>
-              <div class="flex gap-2 items-center justify-center">
+              <div class="mb-1 text-[8px] uppercase tracking-[0.2em] text-slate-300/80 sm:mb-2 sm:text-[10px] sm:tracking-[0.3em]">Health</div>
+              <div class="flex w-full max-w-22 items-center justify-between gap-1 sm:max-w-27 sm:gap-1.5">
                 {#each Array(5) as _, i}
                   <div 
-                    class={"w-3.5 h-3.5 rounded-full " + (isColliding ? 'filter-red ' : '') + "transition-all duration-300 " +
+                    class={"w-2.5 h-2.5 rounded-full sm:w-3 sm:h-3 " + (isColliding ? 'filter-red ' : '') + "transition-all duration-300 " +
                       (i < lives 
                         ? 'bg-white shadow-[0_0_8px_rgba(239,68,68,0.8) ]' 
                         : 'border border-slate-500/40 opacity-20')}
@@ -313,25 +314,25 @@
             </div>
           {:else if cell === 18}
             <div class="pointer-events-auto flex h-full flex-col items-center justify-center {collisionTextClass}">
-              <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Speed gauge</div>
-              <div class="w-20 h-20 border-[3px] border-dashed border-slate-300/60 rounded-full relative flex items-center justify-center">
+              <div class="mb-1 text-[8px] uppercase tracking-[0.2em] text-slate-300/80 sm:mb-2 sm:text-[10px] sm:tracking-[0.3em]">Speed</div>
+              <div class="w-16 h-16 border-[3px] border-dashed border-slate-300/60 rounded-full relative flex items-center justify-center sm:w-20 sm:h-20">
                 <div class="absolute inset-2 rounded-full border border-slate-300/30"></div>
                 <div
                   class="w-1 h-7 bg-slate-100 absolute bottom-1/2 left-[calc(50%-2px)] origin-bottom transition-transform duration-100 ease-out rounded-full"
                   style="transform: rotate({clampGaugeDegrees(-100 + ($displaySpeed * 10))}deg)"
                 ></div>
               </div>
-              <div class="mt-3 text-sm {collisionTextClass}">{$displaySpeed} units</div>
+              <div class="mt-2 text-[10px] sm:mt-3 sm:text-sm {collisionTextClass}">{$displaySpeed} units</div>
             </div>
           {:else if cell === 19}
             <div class="pointer-events-auto flex h-full items-center justify-center text-center px-3 {collisionTextClass}">
               <div>
-                <div class="text-[10px] uppercase tracking-[0.3em] text-slate-300/80 mb-2">Destination</div>
-                <div class="text-[14px] font-semibold">
-                  {#if !goalWindowActive}
-                    {$stationName}
-                  {:else if lives <= 2 && lives > 0}
+                <div class="mb-1 text-[8px] uppercase tracking-[0.2em] text-slate-300/80 sm:mb-2 sm:text-[10px] sm:tracking-[0.3em]">SMS</div>
+                <div class="text-[11px] font-semibold sm:text-[14px]">
+                  {#if lives <= 2 && lives > 0}
                     Be careful, your life is {lives}
+                  {:else if !goalWindowActive}
+                    Destination <br> {$stationName}
                   {:else}
                     The USB is inside the wormhole
                   {/if}

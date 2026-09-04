@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { installKeyboardControls } from './keyboardControls';
+import { installKeyboardControls, triggerMomentaryBurst } from './keyboardControls';
 import { createDroneInputState, inputFromKeys } from './inputTypes';
 import { burstAccelerate, droneControl, DEFAULT_SPEED } from '../stores/droneControl.svelte';
 
@@ -58,6 +58,22 @@ describe('keyboard control mapping', () => {
     expect(speedUp).toHaveBeenCalledTimes(1);
 
     cleanup();
+  });
+
+  it('momentarily sets the forward input while a burst is triggered', () => {
+    vi.useFakeTimers();
+    const keysPressed = { w: false, a: false, s: false, d: false };
+    const burst = vi.fn();
+
+    triggerMomentaryBurst(keysPressed, burst, 150);
+
+    expect(burst).toHaveBeenCalledTimes(1);
+    expect(inputFromKeys(keysPressed, createDroneInputState()).moveY).toBe(1);
+
+    vi.advanceTimersByTime(151);
+    expect(inputFromKeys(keysPressed, createDroneInputState()).moveY).toBe(0);
+
+    vi.useRealTimers();
   });
 
   it('applies a 10-unit burst and restores the previous speed after 500ms', () => {
