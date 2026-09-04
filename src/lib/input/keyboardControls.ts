@@ -44,6 +44,27 @@ export interface KeyboardCallbacks {
  * Install keyboard controls with centralized handlers
  * Returns cleanup function to remove listeners
  */
+export function triggerMomentaryBurst(
+    keysPressed: KeysPressed,
+    onBurst?: () => void,
+    durationMs = 120
+) {
+    if (!keysPressed.w) {
+        keysPressed.w = true;
+    }
+    onBurst?.();
+
+    if (typeof window !== 'undefined') {
+        const release = () => {
+            keysPressed.w = false;
+        };
+        if ((release as any).__burstTimer) {
+            clearTimeout((release as any).__burstTimer);
+        }
+        (release as any).__burstTimer = setTimeout(release, durationMs);
+    }
+}
+
 export function installKeyboardControls(callbacks: KeyboardCallbacks) {
     const { keysPressed } = callbacks;
     const isProd = import.meta.env.PROD;

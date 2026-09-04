@@ -328,21 +328,6 @@ const autoCubeInterval = setInterval(() => {
 }, 3000);
 this.registerCleanup(() => clearInterval(autoCubeInterval));
 
-let lastBurstAt = 0;
-const onBurstTap = (e: Event) => {
-	const now = performance.now();
-	if (now - lastBurstAt < 120) return;
-	lastBurstAt = now;
-	e.preventDefault();
-	keyboardHandlers.onBurst?.();
-};
-window.addEventListener('touchstart', onBurstTap, { passive: false });
-window.addEventListener('pointerdown', onBurstTap, { passive: false });
-this.registerCleanup(() => {
-	window.removeEventListener('touchstart', onBurstTap);
-	window.removeEventListener('pointerdown', onBurstTap);
-});
-
 const dronePosLogger = setInterval(() => {
 // getDronePathIndex(); // Uncomment to enable debug position logging
 }, cfg.debug.droneLogIntervalMs);

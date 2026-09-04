@@ -7,6 +7,7 @@
   export let backgroundUrl = '';
   export let textureId = '';
   export let label = 'Loading...';
+  export let loading = true;
 
   let resolvedUrl = backgroundUrl;
 
@@ -26,5 +27,48 @@
   {#if resolvedUrl}
     <div class="absolute inset-0 bg-cover bg-center" style="background-image: url('{resolvedUrl}')"></div>
   {/if}
-  <p class="relative text-sm tracking-[0.2em] text-white uppercase">{label}</p>
+
+  <div class="relative flex flex-col items-center gap-4">
+    {#if loading}
+      <div class="loading-track" aria-label="Loading">
+        <div class="loading-bar"></div>
+      </div>
+    {/if}
+    <p class="text-sm tracking-[0.2em] text-white uppercase">{label}</p>
+  </div>
 </div>
+
+<style>
+  .loading-track {
+    position: relative;
+    width: 180px;
+    height: 4px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 9999px;
+  }
+
+  .loading-bar {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 42%;
+    background: #ffffff;
+    border-radius: inherit;
+    animation: loadingPulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes loadingPulse {
+    0% {
+      transform: translateX(-10%);
+      opacity: 0.5;
+    }
+    50% {
+      transform: translateX(120%);
+      opacity: 1;
+    }
+    100% {
+      transform: translateX(240%);
+      opacity: 0.5;
+    }
+  }
+</style>
