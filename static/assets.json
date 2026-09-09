@@ -67,6 +67,27 @@
 			"filename": "mat.png",
 			"type": "texture"
 		},
+		"nostop": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/torus/",
+			"filename": "nostopping.jpg",
+			"type": "texture"
+		},
+		"dvd": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/torus/",
+			"filename": "dvd.jpg",
+			"type": "texture"
+		},
+		"nodata": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/torus/",
+			"filename": "nodata.jpg",
+			"type": "texture"
+		},
+		"noposts": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/torus/",
+			"filename": "noposts.jpg",
+			"type": "texture"
+		},
+
 		"paint1": {
 			"rootUrl": "https://kolown.net/storage/library/chronoescape/torus/",
 			"filename": "paint1.png",

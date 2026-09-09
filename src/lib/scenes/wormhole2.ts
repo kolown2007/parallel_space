@@ -68,7 +68,7 @@ resumeAudioOnGesture(document);
 // Torus track
 const { torus, torusPlane, torusMainRadius, torusTubeRadius, pathPoints } = await createTorus(scene, {
 ...cfg.torus,
-materialTextureId: randomFrom('loading3', 'rag', 'mat', 'cube3', 'collage1', 'wood')
+materialTextureId: randomFrom('noposts', 'nodata', 'dvd', 'nostop', 'collage1')
 });
 this.pathPoints = pathPoints;
 const torusCenter = torus.getAbsolutePosition();
@@ -78,7 +78,7 @@ const TimeStationMarker = new StationSigns(scene, pathPoints, 360, 50);
 this.registerCleanup(() => TimeStationMarker.dispose());
 
 // Texture pool for revolution changes
-const textureIds = ['loading3', 'rag', 'mat', 'cube3', 'collage1', 'wood'];
+const textureIds = ['noposts', 'nodata', 'dvd', 'nostop', 'collage1'];
 const texturePool = new Map<string, BABYLON.Texture>();
 await Promise.all(textureIds.map(async id => {
 try {
