@@ -325,7 +325,7 @@ this.registerCleanup(() => cleanupDroneControl(true));
 
 const autoCubeInterval = setInterval(() => {
 	keyboardHandlers.onPlaceCube?.();
-}, 3000);
+}, 4000);
 this.registerCleanup(() => clearInterval(autoCubeInterval));
 
 const dronePosLogger = setInterval(() => {
@@ -435,7 +435,7 @@ try {
 					thrustMs: 3000,
 					thrustSpeed: -30,
 					autoDisposeMs: 60000,
-					faceUVTextureId: randomFrom('metal', 'cube3', 'cube4', 'cube5', 'collage1', 'cube6'),
+					faceUVTextureId: randomFrom('cube8', 'cube9'),
 					faceUVLayout: 'grid'
 				});
 			},

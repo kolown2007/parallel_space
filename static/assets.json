@@ -138,6 +138,11 @@
 			"filename": "cube8.png",
 			"type": "texture"
 		},
+			"cube9": {
+			"rootUrl": "https://kolown.net/storage/library/chronoescape/cubes/",
+			"filename": "cube9.png",
+			"type": "texture"
+		},
 		"portal1": {
 			"rootUrl": "https://kolown.net/storage/library/chronoescape/portals/",
 			"filename": "portal1.png",
@@ -175,7 +180,7 @@
 		},
     	"billboard3": {
 			"rootUrl": "https://kolown.net/storage/library/chronoescape/billboards/",
-			"filename": "start.png",
+			"filename": "usb2.png",
 			"type": "texture"
 			},
     	"billboard4": {
