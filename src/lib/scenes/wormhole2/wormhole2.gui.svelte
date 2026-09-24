@@ -30,7 +30,7 @@
   let collisionTextClass = $state('text-slate-100');
   let goalWindowActive = $state(true);
   let goalWindowTimer: ReturnType<typeof setTimeout> | null = null;
-  let lives = $derived(Math.max(0, 5 - collisionCount));
+  let lives = $derived(Math.max(0, 15 - collisionCount));
 
   $effect(() => {
     if (lives <= 0 && !isGameOver && !isWin) {
@@ -336,8 +336,8 @@
           {:else if cell === 17}
             <div class="pointer-events-auto flex h-full flex-col items-center justify-center text-center px-3 {collisionTextClass}">
               <div class="mb-1 text-[8px] uppercase tracking-[0.2em] text-slate-300/80 sm:mb-2 sm:text-[10px] sm:tracking-[0.3em]">Health</div>
-              <div class="flex w-full max-w-22 items-center justify-between gap-1 sm:max-w-27 sm:gap-1.5">
-                {#each Array(5) as _, i}
+              <div class="grid w-full max-w-24 grid-cols-5 gap-1 sm:max-w-28 sm:gap-1.5">
+                {#each Array(15) as _, i}
                   <div 
                     class={"w-2.5 h-2.5 rounded-full sm:w-3 sm:h-3 " + (isColliding ? 'filter-red ' : '') + "transition-all duration-300 " +
                       (i < lives 
