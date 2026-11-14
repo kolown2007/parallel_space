@@ -56,7 +56,7 @@
   const apiRevUrl = 'https://kolown.net/api/chrono-escapes/1/revolution';
   const apiIncUrl = 'https://kolown.net/api/chrono-escapes/1/increment-revolution';
   const apiDecUrl = 'https://kolown.net/api/chrono-escapes/1/decrement-revolution';
-  const isProd = import.meta.env.PROD;
+  const writeApiEnabled = false;
 
   async function fetchRevolutionData() {
     try {
@@ -72,7 +72,7 @@
   }
 
   async function postRevolutionApi(url: string, payload: any) {
-    if (!isProd) return;
+    if (!writeApiEnabled) return;
     try {
       const response = await fetch(url, {
         method: 'POST',
