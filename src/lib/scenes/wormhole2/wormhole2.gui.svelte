@@ -32,6 +32,15 @@
   let goalWindowTimer: ReturnType<typeof setTimeout> | null = null;
   let lives = $derived(Math.max(0, 15 - collisionCount));
 
+  let smsControlMessage = $state([
+    'CONTROLS',
+    'W  = Burst forward',
+    'A  = Drift left',
+    'D  = Drift right',
+    'S  = Brake / Stabilize',
+    'L  = Shoot'
+  ].join('\n'));
+
   $effect(() => {
     if (lives <= 0 && !isGameOver && !isWin) {
       handleGameOver();
@@ -223,7 +232,7 @@
 {#if showUI}
   <div class="absolute inset-0 pointer-events-none font-mono z-10" transition:fade={{ duration: 1000 }}>
     {#if showTouchControls}
-      <div class="pointer-events-auto absolute bottom-[25%] left-1/2 z-20 flex w-[86%] max-w-[420px] -translate-x-1/2 items-end justify-between gap-2 px-1 sm:hidden">
+      <div class="pointer-events-auto absolute bottom-[25%] left-1/2 z-20 flex w-[86%] max-w-105 -translate-x-1/2 items-end justify-between gap-2 px-1 sm:hidden">
         <button
           type="button"
           class="h-16 w-16 rounded-full border border-white/20 bg-slate-900/70 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-100 shadow-[0_0_20px_rgba(0,0,0,0.35)] backdrop-blur-sm"
@@ -363,8 +372,10 @@
             <div class="pointer-events-auto flex h-full items-center justify-center text-center px-3 {collisionTextClass}">
               <div>
                 <div class="mb-1 text-[8px] uppercase tracking-[0.2em] text-slate-300/80 sm:mb-2 sm:text-[10px] sm:tracking-[0.3em]">SMS</div>
-                <div class="text-[11px] font-semibold sm:text-[14px]">
-                  {#if lives <= 2 && lives > 0}
+                <div class="text-[11px] font-semibold whitespace-pre-line sm:text-[14px]">
+                  {#if smsControlMessage}
+                    {smsControlMessage}
+                  {:else if lives <= 2 && lives > 0}
                     Be careful, your life is {lives}
                   {:else if !goalWindowActive}
                     Destination <br> {$stationName}
