@@ -23,12 +23,12 @@
   type IntroSlide = {
     id: string;
     title?: string;
-    kind: 'story' | 'controls' | 'status';
+    kind: 'story' | 'controls' | 'note' | 'status';
     body?: string;
     centered?: boolean;
   };
 
-  let totalSlides = 3;
+  let totalSlides = 4;
   let rafId: number | null = null;
   let lastCirclePressed = false;
 
@@ -44,8 +44,14 @@
         'D  = Drift right',
         'S  = Brake / Stabilize',
         'L  = Shoot',
-       
       ].join('\n'),
+      centered: true,
+    },
+    {
+      id: 'browser-note',
+      kind: 'note',
+      title: 'BROWSER NOTE',
+      body: 'Best played on desktop Chrome. Mobile browsers may not provide the best experience.',
       centered: true,
     },
     {
@@ -125,6 +131,16 @@
         activeSlide.title ?? 'DRONE CONTROLS',
         '',
         activeSlide.body ?? '',
+        '',
+        'Press O to continue.'
+      ].join('\n');
+    }
+
+    if (activeSlide.kind === 'note') {
+      return [
+        activeSlide.title ?? 'BROWSER NOTE',
+        '',
+        activeSlide.body ?? 'Best played on desktop Chrome.',
         '',
         'Press O to continue.'
       ].join('\n');

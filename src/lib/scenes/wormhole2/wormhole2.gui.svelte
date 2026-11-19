@@ -232,7 +232,7 @@
 {#if showUI}
   <div class="absolute inset-0 pointer-events-none font-mono z-10" transition:fade={{ duration: 1000 }}>
     {#if showTouchControls}
-      <div class="pointer-events-auto absolute bottom-[25%] left-1/2 z-20 flex w-[86%] max-w-[420px] -translate-x-1/2 items-end justify-between gap-2 px-1 sm:hidden">
+      <div class="pointer-events-auto absolute bottom-[25%] left-1/2 z-20 flex w-[86%] max-w-105 -translate-x-1/2 items-end justify-between gap-2 px-1 sm:hidden">
         <button
           type="button"
           class="h-16 w-16 rounded-full border border-white/20 bg-slate-900/70 text-[9px] font-bold uppercase tracking-[0.2em] text-slate-100 shadow-[0_0_20px_rgba(0,0,0,0.35)] backdrop-blur-sm"
