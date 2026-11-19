@@ -23,17 +23,31 @@
   type IntroSlide = {
     id: string;
     title?: string;
-    kind: 'story' | 'status';
+    kind: 'story' | 'controls' | 'status';
     body?: string;
     centered?: boolean;
   };
 
-  let totalSlides = 2;
+  let totalSlides = 3;
   let rafId: number | null = null;
   let lastCirclePressed = false;
 
   const introSlides: IntroSlide[] = [
     { id: 'story', kind: 'story' },
+    {
+      id: 'controls',
+      kind: 'controls',
+      title: 'PC CONTROLS',
+      body: [
+        'W  = Burst forward',
+        'A  = Drift left',
+        'D  = Drift right',
+        'S  = Brake / Stabilize',
+        'L  = Shoot',
+       
+      ].join('\n'),
+      centered: true,
+    },
     {
       id: 'status',
       kind: 'status',
@@ -104,6 +118,16 @@
     if (activeSlide.kind === 'story') {
       const storyTextOutput = paragraphs.length > 0 ? paragraphs.join('\n\n') : 'No story text returned.';
       return ['PARALLEL: CHRONO ESCAPE 2050', '', storyTextOutput].join('\n');
+    }
+
+    if (activeSlide.kind === 'controls') {
+      return [
+        activeSlide.title ?? 'DRONE CONTROLS',
+        '',
+        activeSlide.body ?? '',
+        '',
+        'Press O to continue.'
+      ].join('\n');
     }
 
     return [

@@ -32,6 +32,15 @@
   let goalWindowTimer: ReturnType<typeof setTimeout> | null = null;
   let lives = $derived(Math.max(0, 15 - collisionCount));
 
+  let smsControlMessage = $state([
+    'CONTROLS',
+    'W  = Burst forward',
+    'A  = Drift left',
+    'D  = Drift right',
+    'S  = Brake / Stabilize',
+    'L  = Shoot'
+  ].join('\n'));
+
   $effect(() => {
     if (lives <= 0 && !isGameOver && !isWin) {
       handleGameOver();
@@ -363,8 +372,10 @@
             <div class="pointer-events-auto flex h-full items-center justify-center text-center px-3 {collisionTextClass}">
               <div>
                 <div class="mb-1 text-[8px] uppercase tracking-[0.2em] text-slate-300/80 sm:mb-2 sm:text-[10px] sm:tracking-[0.3em]">SMS</div>
-                <div class="text-[11px] font-semibold sm:text-[14px]">
-                  {#if lives <= 2 && lives > 0}
+                <div class="text-[11px] font-semibold whitespace-pre-line sm:text-[14px]">
+                  {#if smsControlMessage}
+                    {smsControlMessage}
+                  {:else if lives <= 2 && lives > 0}
                     Be careful, your life is {lives}
                   {:else if !goalWindowActive}
                     Destination <br> {$stationName}
